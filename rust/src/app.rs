@@ -1,6 +1,7 @@
 use crate::audio::{input_device_names, AudioEngine, Microphone};
 use crate::editor::{spawn_raw_pitch_track, Editor, EditorEvent, VOCAL_BINS_PER_SECOND, RAW_PITCH_SAMPLE_RATE};
 use crate::library::*;
+use crate::map_package::MapPackage;
 use crate::model::*;
 use crate::pitch::{detect_pitch, PitchReading, PitchTracker};
 use eframe::egui::{
@@ -17,6 +18,7 @@ use std::time::Duration;
 
 const DESIGN_WIDTH: f32 = 1600.0;
 const DESIGN_HEIGHT: f32 = 980.0;
+const MAP_BROWSER_URL: &str = "https://rgbeans.github.io/karaokemachine/";
 
 const BG: Color32 = Color32::from_rgb(5, 7, 14);
 const INK: Color32 = Color32::from_rgb(244, 247, 251);
@@ -65,6 +67,7 @@ fn pitch_col(t: f32) -> Color32 {
 enum DrawerViewRust {
     Albums,
     Imports,
+    Maps,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -87,6 +90,10 @@ enum Action {
     RetrySong,
     OpenLibraryFromResults,
     OpenUpload,
+    ShowMaps,
+    InstallMap,
+    OpenMapBrowser,
+    EditSong(usize),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -582,6 +589,7 @@ struct UploadState {
     cover_fetch_rx: Option<Receiver<Result<PathBuf, String>>>,
     cover_message: String,
     cover_error: bool,
+    pending_map: Option<MapPackage>,
     fetch_rx: Option<Receiver<Result<TrackInfo, String>>>,
     import_rx: Option<Receiver<ImportMessage>>,
 }
@@ -744,6 +752,10 @@ impl KaraokeMachineApp {
         match setting_env("DRAWER").as_deref() {
             Some("imports") => {
                 app.drawer_view = DrawerViewRust::Imports;
+                app.drawer_open = true;
+            }
+            Some("maps") => {
+                app.drawer_view = DrawerViewRust::Maps;
                 app.drawer_open = true;
             }
             Some("album") => {
@@ -1171,6 +1183,21 @@ impl KaraokeMachineApp {
                 self.drawer_open = true;
                 self.drawer_view = DrawerViewRust::Imports;
                 self.selected_album = None;
+            }
+            Action::ShowMaps => {
+                self.drawer_view = DrawerViewRust::Maps;
+                self.selected_album = None;
+                self.drawer_scroll = 0.0;
+            }
+            Action::InstallMap => self.install_map_file(now, ctx),
+            Action::OpenMapBrowser => {
+                if let Err(error) = open_external(MAP_BROWSER_URL) {
+                    self.toast(format!("Could not open the map browser: {error}"), now);
+                }
+            }
+            Action::EditSong(index) => {
+                self.drawer_open = false;
+                self.open_editor(index, now);
             }
         }
     }
@@ -1776,6 +1803,8 @@ impl KaraokeMachineApp {
         p.text(panel.left_top() + Vec2::new(20.0, 22.0), Align2::LEFT_TOP, "KARAOKEMACHINE · LIBRARY", FontId::monospace(8.0), MUTED2);
         let drawer_title = if self.drawer_view == DrawerViewRust::Imports {
             "Imports"
+        } else if self.drawer_view == DrawerViewRust::Maps {
+            "Map browser"
         } else if self.selected_album.is_some() {
             "Album"
         } else {
@@ -1804,6 +1833,8 @@ impl KaraokeMachineApp {
         p.text(body.left_top(), Align2::LEFT_TOP, " ", FontId::proportional(1.0), Color32::TRANSPARENT);
         if self.drawer_view == DrawerViewRust::Imports {
             self.draw_drawer_imports(ui, &p, body, actions);
+        } else if self.drawer_view == DrawerViewRust::Maps {
+            self.draw_drawer_maps(ui, &p, body, actions);
         } else if let Some(index) = self.selected_album {
             self.draw_album_detail(ui, &p, body, index, actions);
         } else {
@@ -1813,14 +1844,32 @@ impl KaraokeMachineApp {
         let foot = Rect::from_min_max(Pos2::new(panel.left(), panel.bottom() - 60.0), panel.right_bottom());
         p.rect_filled(foot, 0.0, Color32::from_rgb(8, 12, 21));
         p.line_segment([foot.left_top(), foot.right_top()], Stroke::new(1.0f32, Color32::from_white_alpha(22)));
-        let btn_w = foot.width() / 3.0 - 10.0;
-        for (i, (label, view)) in [("ALBUMS", 0usize), ("IMPORTS", 1), ("SETTINGS", 2)].iter().enumerate() {
-            let br = Rect::from_min_size(Pos2::new(foot.left() + 8.0 + i as f32 * (btn_w + 4.0), foot.top() + 11.0), Vec2::new(btn_w, 34.0));
-            paint_toggle(ui, br, label, (*view == 0 && self.drawer_view == DrawerViewRust::Albums && self.selected_album.is_none()) || (*view == 1 && self.drawer_view == DrawerViewRust::Imports));
+        let btn_w = foot.width() / 4.0 - 8.0;
+        for (i, (label, view)) in [
+            ("ALBUMS", 0usize),
+            ("IMPORTS", 1),
+            ("MAPS", 2),
+            ("SETTINGS", 3),
+        ]
+        .iter()
+        .enumerate()
+        {
+            let br = Rect::from_min_size(Pos2::new(foot.left() + 6.0 + i as f32 * (btn_w + 4.0), foot.top() + 11.0), Vec2::new(btn_w, 34.0));
+            paint_toggle(
+                ui,
+                br,
+                label,
+                (*view == 0
+                    && self.drawer_view == DrawerViewRust::Albums
+                    && self.selected_album.is_none())
+                    || (*view == 1 && self.drawer_view == DrawerViewRust::Imports)
+                    || (*view == 2 && self.drawer_view == DrawerViewRust::Maps),
+            );
             if click(ui, br, ("drawer_footer", i)) {
                 match view {
                     0 => actions.push(Action::ShowAlbums),
                     1 => actions.push(Action::ShowImports),
+                    2 => actions.push(Action::ShowMaps),
                     _ => actions.push(Action::OpenSettings),
                 }
             }
@@ -1957,20 +2006,68 @@ impl KaraokeMachineApp {
             };
             p.text(row.left_center() + Vec2::new(30.0, 9.0), Align2::LEFT_CENTER, sub, FontId::monospace(7.0), if song.mapped { MUTED2 } else { PINK });
             let meta = format!("{} · {}", song.bpm.map(|b| format!("{b:.0} BPM · ")).unwrap_or_default(), format_time(song.duration()));
-            p.text(Pos2::new(row.right() - 74.0, row.center().y), Align2::RIGHT_CENTER, meta, FontId::monospace(7.0), MUTED2);
-            p.text(Pos2::new(row.right() - 48.0, row.center().y), Align2::RIGHT_CENTER, if song.mapped { "PLAY" } else { "MAP" }, FontId::monospace(7.0), if song.mapped { MINT } else { PINK });
-            if !song.mapped {
-                let edit = Rect::from_min_size(Pos2::new(row.right() - 36.0, row.top() + 9.0), Vec2::new(30.0, 24.0));
-                paint_toggle(ui, edit, "EDIT", true);
-                if click(ui, edit, ("track_edit", song_index)) {
-                    actions.push(Action::PlaySong(song_index));
-                }
+            p.text(Pos2::new(row.right() - 104.0, row.center().y), Align2::RIGHT_CENTER, meta, FontId::monospace(7.0), MUTED2);
+            p.text(Pos2::new(row.right() - 66.0, row.center().y), Align2::RIGHT_CENTER, if song.mapped { "PLAY" } else { "MAP" }, FontId::monospace(7.0), if song.mapped { MINT } else { PINK });
+            let edit = Rect::from_min_size(Pos2::new(row.right() - 36.0, row.top() + 9.0), Vec2::new(30.0, 24.0));
+            paint_toggle(ui, edit, "EDIT", !song.mapped);
+            if click(ui, edit, ("track_edit", song_index)) {
+                actions.push(Action::EditSong(song_index));
             }
             let main = Rect::from_min_max(row.min, Pos2::new(row.right() - 42.0, row.bottom()));
             if click(ui, main, ("track", song_index)) {
                 actions.push(Action::PlaySong(song_index));
             }
         }
+    }
+
+    fn draw_drawer_maps(&self, ui: &mut egui::Ui, p: &egui::Painter, body: Rect, actions: &mut Vec<Action>) {
+        p.text(body.left_top(), Align2::LEFT_TOP, "COMMUNITY MAPPINGS", FontId::monospace(8.0), MUTED2);
+        p.text(body.left_top() + Vec2::new(0.0, 18.0), Align2::LEFT_TOP, "Maps, not media.", FontId::proportional(26.0), INK);
+        let intro = p.layout(
+            "A map package contains notes, lyrics, cover art, and the original source link. No audio is hosted or downloaded with the package.".to_string(),
+            FontId::proportional(10.0),
+            MUTED,
+            body.width(),
+        );
+        p.galley(body.left_top() + Vec2::new(0.0, 54.0), intro, MUTED);
+        p.text(
+            body.left_top() + Vec2::new(0.0, 108.0),
+            Align2::LEFT_TOP,
+            "Installing a map fetches its audio from the source link when needed.",
+            FontId::proportional(10.0),
+            MUTED2,
+        );
+        let browse = Rect::from_min_size(body.left_top() + Vec2::new(0.0, 140.0), Vec2::new(body.width(), 44.0));
+        paint_button(ui, browse, "OPEN MAP BROWSER", true);
+        if click(ui, browse, "maps_browse") {
+            actions.push(Action::OpenMapBrowser);
+        }
+        let install = Rect::from_min_size(body.left_top() + Vec2::new(0.0, 194.0), Vec2::new(body.width(), 38.0));
+        paint_button(ui, install, "INSTALL MAP FILE", false);
+        if click(ui, install, "maps_install") {
+            actions.push(Action::InstallMap);
+        }
+        p.text(
+            body.left_top() + Vec2::new(0.0, 254.0),
+            Align2::LEFT_TOP,
+            "EXPORT YOUR OWN MAP",
+            FontId::monospace(8.0),
+            MUTED2,
+        );
+        let instructions = p.layout(
+            "Play or edit a mapped song, open the editor, then use EXPORT MAP. Put the resulting JSON in site/maps and open a pull request.".to_string(),
+            FontId::proportional(10.0),
+            MUTED,
+            body.width(),
+        );
+        p.galley(body.left_top() + Vec2::new(0.0, 272.0), instructions, MUTED);
+        p.text(
+            body.left_bottom() + Vec2::new(0.0, -24.0),
+            Align2::LEFT_BOTTOM,
+            "Only mappings are shared. Audio remains tied to its source link.",
+            FontId::monospace(7.0),
+            MUTED2,
+        );
     }
 
     fn draw_drawer_imports(&self, ui: &mut egui::Ui, p: &egui::Painter, body: Rect, actions: &mut Vec<Action>) {
@@ -2027,6 +2124,142 @@ impl KaraokeMachineApp {
         p.text(body.left_bottom() + Vec2::new(0.0, -24.0), Align2::LEFT_BOTTOM, "Audio stays local. Vocals are optional.", FontId::monospace(8.0), MUTED2);
     }
 
+
+
+    fn install_map_file(&mut self, now: f64, ctx: &egui::Context) {
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("KaraokeMachine map", &["json"])
+            .pick_file()
+        else {
+            return;
+        };
+        match MapPackage::load(&path) {
+            Ok(map) => self.install_map(map, now, ctx),
+            Err(error) => self.toast(error, now),
+        }
+    }
+
+    fn install_map(&mut self, map: MapPackage, now: f64, ctx: &egui::Context) {
+        if map.source_url.trim().is_empty() {
+            self.toast("This map has no audio source link.", now);
+            return;
+        }
+        if let Some(existing) = self
+            .songs
+            .iter()
+            .find(|song| {
+                song.id == map.id
+                    || song.youtube_url.as_deref() == Some(map.source_url.as_str())
+            })
+            .cloned()
+        {
+            let dir = self.root.join("assets/songs").join(&existing.id);
+            let backing = song_audio_path(&self.root, &existing, "backing");
+            if backing.exists() {
+                let mut song = existing.clone();
+                match map.save_cover(&dir) {
+                    Ok(cover) => {
+                        if cover.is_some() {
+                            song.cover = cover;
+                        }
+                    }
+                    Err(error) => {
+                        self.toast(error, now);
+                        return;
+                    }
+                }
+                if let Err(error) = map.apply_to_song(&mut song) {
+                    self.toast(error, now);
+                    return;
+                }
+                if let Err(error) = write_song_file(&dir, &song) {
+                    self.toast(error, now);
+                    return;
+                }
+                self.reload_library(ctx, now);
+                if let Some(index) = self.songs.iter().position(|song| song.id == existing.id) {
+                    self.drawer_open = false;
+                    self.open_song(index, now);
+                    self.toast("Map installed on the existing local audio.", now);
+                } else {
+                    self.toast("Map saved. Reload the library to see it.", now);
+                }
+                return;
+            }
+        }
+
+        let work = self.root.join(".work/map-cover");
+        let cover = if let Err(error) = std::fs::create_dir_all(&work) {
+            self.toast(format!("Could not prepare the map installer: {error}"), now);
+            return;
+        } else {
+            match map.save_cover(&work) {
+                Ok(Some(name)) => Some(work.join(name)),
+                Ok(None) => None,
+                Err(error) => {
+                    self.toast(error, now);
+                    return;
+                }
+            }
+        };
+        let lyrics = map
+            .lines
+            .iter()
+            .map(|line| line.text.clone())
+            .collect::<Vec<_>>()
+            .join("\n");
+        self.upload.url = map.source_url.clone();
+        self.upload.audio_url = map.source_url.clone();
+        self.upload.title = map.title.clone();
+        self.upload.artist = map.artist.clone().unwrap_or_default();
+        self.upload.album = map.album.clone().unwrap_or_default();
+        self.upload.release_date = map.release_date.clone().unwrap_or_default();
+        self.upload.lyrics = lyrics;
+        self.upload.cover = cover
+            .as_ref()
+            .map(|path| path.to_string_lossy().to_string())
+            .unwrap_or_default();
+        self.upload.cover_preview_path = cover;
+        self.upload.cover_preview_loaded = None;
+        self.upload.cover_preview_tex = None;
+        self.upload.cover_error = false;
+        self.upload.info_loaded = true;
+        self.upload.message = "Map loaded. Downloading audio from the source link…".into();
+        self.upload.open = true;
+        self.upload.pending_map = Some(map);
+        self.start_import(now);
+    }
+
+    fn export_editor_map(&mut self, now: f64) {
+        let result: Result<Option<PathBuf>, String> = if let Some(editor) = &self.editor {
+            if !editor.song.mapped {
+                Err("Submit the mapping before exporting it.".into())
+            } else {
+                MapPackage::from_song(&self.root, &editor.song, None).and_then(|map| {
+                    let default_name = map.file_name();
+                    let Some(path) = rfd::FileDialog::new()
+                        .set_file_name(default_name)
+                        .add_filter("KaraokeMachine map", &["json"])
+                        .save_file()
+                    else {
+                        return Ok(None);
+                    };
+                    map.save(&path)?;
+                    Ok(Some(path))
+                })
+            }
+        } else {
+            Ok(None)
+        };
+        match result {
+            Ok(Some(path)) => self.toast(
+                format!("Map exported to {}", path.display()),
+                now,
+            ),
+            Ok(None) => {}
+            Err(error) => self.toast(error, now),
+        }
+    }
 
     fn poll_upload(&mut self, ctx: &egui::Context, now: f64) {
         let mut cover_result: Option<Result<PathBuf, String>> = None;
@@ -2152,12 +2385,44 @@ impl KaraokeMachineApp {
             match result {
                 Some(Ok(id)) => {
                     self.upload.open = false;
-                    self.reload_library(ctx, now);
-                    if let Some(index) = self.songs.iter().position(|song| song.id == id) {
-                        self.open_editor(index, now);
-                        self.toast("Song prepared. The manual editor is ready.", now);
+                    let pending_map = self.upload.pending_map.take();
+                    if let Some(map) = pending_map {
+                        let dir = self.root.join("assets/songs").join(&id);
+                        let result: Result<(), String> = (|| {
+                            let path = dir.join("song.json");
+                            let raw = std::fs::read_to_string(&path)
+                                .map_err(|error| format!("Could not read the imported song: {error}"))?;
+                            let mut song: Song = serde_json::from_str(&raw)
+                                .map_err(|error| format!("Could not parse the imported song: {error}"))?;
+                            if let Some(cover) = map.save_cover(&dir)? {
+                                song.cover = Some(cover);
+                            }
+                            map.apply_to_song(&mut song)?;
+                            write_song_file(&dir, &song)
+                        })();
+                        match result {
+                            Ok(()) => {
+                                self.reload_library(ctx, now);
+                                if let Some(index) = self.songs.iter().position(|song| song.id == id) {
+                                    self.open_song(index, now);
+                                    self.toast(
+                                        "Map installed. Audio was downloaded from its source link.",
+                                        now,
+                                    );
+                                } else {
+                                    self.toast("Map installed, but the song was not found after reload.", now);
+                                }
+                            }
+                            Err(error) => self.toast(error, now),
+                        }
                     } else {
-                        self.toast("Song imported, but it was not found after reload.", now);
+                        self.reload_library(ctx, now);
+                        if let Some(index) = self.songs.iter().position(|song| song.id == id) {
+                            self.open_editor(index, now);
+                            self.toast("Song prepared. The manual editor is ready.", now);
+                        } else {
+                            self.toast("Song imported, but it was not found after reload.", now);
+                        }
                     }
                 }
                 Some(Err(error)) => {
@@ -3315,6 +3580,7 @@ impl eframe::App for KaraokeMachineApp {
                 self.drawer_open = true;
                 self.toast("Draft saved. The song remains UNMAPPED.", now);
             }
+            EditorEvent::ExportMap => self.export_editor_map(now),
             EditorEvent::SaveDraft => {
                 let result = if let Some(editor) = &mut self.editor {
                     if editor.song.mapped {
@@ -3588,6 +3854,31 @@ fn paint_cover_preview(
         ),
         StrokeKind::Inside,
     );
+}
+
+fn write_song_file(dir: &Path, song: &Song) -> Result<(), String> {
+    let path = dir.join("song.json");
+    let raw = serde_json::to_string_pretty(song).map_err(|error| error.to_string())?;
+    std::fs::write(&path, raw)
+        .map_err(|error| format!("Could not write {}: {error}", path.display()))
+}
+
+fn open_external(url: &str) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    let mut command = Command::new("xdg-open");
+    #[cfg(target_os = "macos")]
+    let mut command = Command::new("open");
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let mut command = Command::new("cmd");
+        command.args(["/C", "start", ""]);
+        command
+    };
+    command
+        .arg(url)
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| error.to_string())
 }
 
 fn run_song_info(root: &Path, url: &str) -> Result<TrackInfo, String> {

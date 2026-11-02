@@ -4,13 +4,13 @@
 # Run this yourself when you want a Windows package:
 #     ./scripts/build-windows.sh
 #
-# It cross-compiles from Linux, stages the exe with the current assets folder,
-# and writes:
+# It cross-compiles from Linux, stages the exe with only the generated warm-up
+# library (never the commercial local library), and writes:
 #     dist-windows/KaraokeMachine-Windows-x64.zip
 #
 # Prerequisites:
 #   rustup target add x86_64-pc-windows-gnu
-#   sudo apt install mingw-w64 zip rsync
+#   sudo apt install mingw-w64 zip
 #
 # The script never uploads or publishes anything. It only writes under
 # dist-windows/.
@@ -70,17 +70,23 @@ mkdir -p "$DIST_DIR"
 install -m 755 "$BUILT" "$DIST_EXE"
 cp "$PACKAGING_README" "$DIST_DIR/README-WINDOWS.txt"
 
-# Refresh the whole live library. rsync is faster and removes files that were
-# deleted from assets; fall back to cp on machines without rsync.
-if command -v rsync >/dev/null 2>&1; then
-  rsync -a --delete "$ROOT/assets/" "$DIST_DIR/assets/"
-else
-  cp -a "$ROOT/assets" "$DIST_DIR/assets"
-fi
-
+# Ship the app and the generated warm-ups only. Commercial audio and the local
+# library must never be included in a distributed package. Users obtain songs
+# through the map browser or the upload flow, with audio fetched from its source.
+mkdir -p "$DIST_DIR/assets/songs"
 if [[ -f "$ROOT/assets/icon.png" ]]; then
+  cp "$ROOT/assets/icon.png" "$DIST_DIR/assets/icon.png"
   cp "$ROOT/assets/icon.png" "$DIST_DIR/icon.png"
 fi
+if [[ -f "$ROOT/assets/songs/scales.json" ]]; then
+  cp "$ROOT/assets/songs/scales.json" "$DIST_DIR/assets/songs/scales.json"
+fi
+shopt -s nullglob
+for warmup in "$ROOT"/assets/songs/scale-*; do
+  [[ -d "$warmup" ]] || continue
+  cp -a "$warmup" "$DIST_DIR/assets/songs/"
+done
+shopt -u nullglob
 
 SONGS=$(find "$DIST_DIR/assets/songs" -name song.json | wc -l | tr -d ' ')
 if [[ "$SONGS" -eq 0 ]]; then

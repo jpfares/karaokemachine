@@ -14,3 +14,10 @@ dist-windows/
 assets/songs/*
 !assets/songs/scales.json
 !assets/songs/scale-*/
+
+# Map packages are JSON only. Never commit audio alongside a map.
+site/maps/*.mp3
+site/maps/*.wav
+site/maps/*.ogg
+site/maps/*.m4a
+site/maps/*.flac

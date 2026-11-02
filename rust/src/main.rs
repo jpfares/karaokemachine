@@ -4,6 +4,7 @@ mod app;
 mod audio;
 mod editor;
 mod library;
+mod map_package;
 mod model;
 mod pitch;
 

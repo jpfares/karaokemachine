@@ -11,25 +11,33 @@ QUICK START
    Settings -> Privacy & security -> Microphone -> Let desktop apps access
    your microphone.
 
-IMPORTANT: EVERY SONG STARTS UNMAPPED
+IMPORTANT: NO COMMERCIAL AUDIO IS BUNDLED
 - Keep the "assets" folder next to karaokemachine.exe.
-- Every song, including the warm-ups, starts as UNMAPPED and cannot be
-  played until you manually map it.
+- This portable build ships only the app and the generated warm-up tracks.
+  It does not contain commercial recordings.
+- Use Library -> Maps -> Open Map Browser to find community mappings, then
+  install the downloaded map file. The app downloads the audio from the map's
+  source link and applies the mapping locally.
+- Every included warm-up starts as UNMAPPED and cannot be played until mapped.
 - Click an UNMAPPED song in the library to open the manual level editor.
   The old automatic chart is shown translucently as a guide only; it is not
   playable until you draw the notes and place every lyric word yourself.
 - Press SUBMIT MAPPING only when the editor says the mapping is complete.
   After that the song becomes playable in the normal singing stage.
 
-UPLOADING NEW SONGS
-- Imports need Node.js 22+, ffmpeg, yt-dlp and Demucs. They are not bundled
-  with this portable build.
+MAPS AND AUDIO
+- A map package contains notes, lyrics, cover art, and the original source
+  link. It never contains audio.
+- Library -> Maps -> Install Map File applies a downloaded JSON map. If the
+  audio is not local, the app fetches it from the source link and separates it.
+- Uploading a brand new song also needs Node.js 22+, ffmpeg, yt-dlp and Demucs.
+  They are not bundled with this portable build.
 - If those tools are installed on PATH, paste a YouTube, Spotify or
   SoundCloud link in Library -> Imports -> Upload Song. KaraokeMachine will
   fetch editable metadata and lyrics, download the audio, separate the
   backing and vocal stems, and open the editor automatically.
-- If the tools are missing, the upload form explains what to install.
-  Mapping the songs already in the "assets" folder does not need them.
+- If the tools are missing, the upload and map-install flows explain what to
+  install. Mapping the bundled warm-ups does not need them.
 
 EDITOR QUICK REFERENCE
   Top toolbar              Icon-only; hover an icon for its name.
@@ -50,6 +58,7 @@ EDITOR QUICK REFERENCE
   Left / Right arrows      Seek 1 second (Shift: 5 seconds)
   SAVE AS DRAFT            Saves the current mapping without leaving the editor.
   Ctrl+S                   Save as draft.
+  EXPORT MAP               Export a submitted map package (JSON; no audio).
   Ctrl+Z                   Undo
   Ctrl+Shift+Z / Ctrl+Y    Redo
   Delete                   Delete the selection

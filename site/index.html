@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KaraokeMachine — Map Browser</title>
+  <meta name="description" content="Community-made KaraokeMachine mappings. Maps only — no audio is hosted.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="hero">
+    <nav class="nav">
+      <a class="brand" href="./">KaraokeMachine</a>
+      <div class="nav-links">
+        <a href="https://github.com/rgbeans/karaokemachine">GitHub</a>
+        <a href="https://github.com/rgbeans/karaokemachine/blob/main/CONTRIBUTING.md">Submit a map</a>
+      </div>
+    </nav>
+    <div class="hero-content">
+      <p class="eyebrow">COMMUNITY MAP BROWSER</p>
+      <h1>Maps, not media.</h1>
+      <p class="lede">
+        Every package here contains a mapping, its lyrics, cover art, and the original
+        source link. No audio is hosted. When a map is installed, KaraokeMachine fetches
+        the audio from the source link and applies the mapping locally.
+      </p>
+      <div class="hero-actions">
+        <a class="button primary" href="https://github.com/rgbeans/karaokemachine">Get KaraokeMachine</a>
+        <a class="button ghost" href="https://github.com/rgbeans/karaokemachine/blob/main/CONTRIBUTING.md">How to share a map</a>
+      </div>
+      <div class="notice">
+        <strong>No copyrighted audio ships with this site.</strong>
+        <span>Mapping packages are JSON only. Cover art and lyrics are part of the contributed map.</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="toolbar" aria-label="Map filters">
+      <div>
+        <p class="eyebrow">BROWSE THE LIBRARY</p>
+        <h2>Community maps</h2>
+      </div>
+      <label class="search">
+        <span class="sr-only">Search maps</span>
+        <input id="search" type="search" placeholder="Search title, artist, or album…" autocomplete="off">
+      </label>
+    </section>
+
+    <div class="status" id="status">Loading maps…</div>
+    <section class="grid" id="map-grid" aria-live="polite"></section>
+
+    <section class="howto">
+      <p class="eyebrow">INSTALL A MAP</p>
+      <h2>From download to singing</h2>
+      <ol>
+        <li>Download the <code>.json</code> map package from this page.</li>
+        <li>Open <strong>KaraokeMachine → Library → Maps → Install Map File</strong>.</li>
+        <li>If the audio is not already local, KaraokeMachine downloads it from the map's source link, separates the stems, and installs the mapping.</li>
+        <li>Sing it. The mapping is now playable locally.</li>
+      </ol>
+      <p class="fineprint">
+        Audio is never part of a map package. The source link is the only audio reference,
+        and availability depends on the source platform.
+      </p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>KaraokeMachine · community mappings</span>
+    <span><a href="https://github.com/rgbeans/karaokemachine">Source</a> · <a href="https://github.com/rgbeans/karaokemachine/blob/main/LICENSE">MIT</a></span>
+  </footer>
+
+  <script src="app.js" defer></script>
+</body>
+</html>

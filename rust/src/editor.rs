@@ -65,6 +65,7 @@ pub enum EditorEvent {
     None,
     Back,
     SaveDraft,
+    ExportMap,
     Submit,
 }
 
@@ -2281,10 +2282,15 @@ impl Editor {
             Pos2::new(x, r.bottom() - 96.0),
             Vec2::new(r.width() - 28.0, 32.0),
         );
+        let export = Rect::from_min_size(
+            Pos2::new(x, r.bottom() - 134.0),
+            Vec2::new(r.width() - 28.0, 28.0),
+        );
         let submit = Rect::from_min_size(
             Pos2::new(x, r.bottom() - 52.0),
             Vec2::new(r.width() - 28.0, 38.0),
         );
+        let top_action = if self.song.mapped { export.top() } else { save.top() };
         let ok = self.validate().is_ok();
         if let Err(reason) = self.validate() {
             let galley = p.layout(
@@ -2294,15 +2300,20 @@ impl Editor {
                 r.width() - 28.0,
             );
             let h = galley.size().y;
-            p.galley(Pos2::new(x, save.top() - h - 4.0), galley, PINK);
+            p.galley(Pos2::new(x, top_action - h - 4.0), galley, PINK);
         } else {
             p.text(
-                Pos2::new(x, save.top() - 16.0),
+                Pos2::new(x, top_action - 16.0),
                 Align2::LEFT_BOTTOM,
                 "Ready to submit.",
                 FontId::proportional(9.0),
                 MINT,
             );
+        }
+        if self.song.mapped {
+            if paint_button(ui, export, "EXPORT MAP", false, true) {
+                *event = EditorEvent::ExportMap;
+            }
         }
         if paint_button(ui, save, "SAVE AS DRAFT", false, true) {
             *event = EditorEvent::SaveDraft;

@@ -9,6 +9,18 @@ sing. The level editor exists for one reason: to turn a song into a playable kar
 ![Singing stage](docs/stage.png)
 ![Album library](docs/menu.png)
 
+## Map browser
+
+**https://rgbeans.github.io/karaokemachine/**
+
+The public map browser shares mappings only: notes, ribbons, lyrics, cover art, and the
+original source link. It hosts **no audio**. Install a downloaded map through
+**Library → Maps → Install Map File**; if the audio is not already local, KaraokeMachine
+fetches it from the map's source link and applies the mapping.
+
+To share a map, submit a mapping made in the editor. See
+[CONTRIBUTING.md](CONTRIBUTING.md). Exported map packages contain no audio files.
+
 ## Sing
 
 - **Pitch scoring, not word memorization.** Notes are judged by cents and hold time.
@@ -95,6 +107,7 @@ move the yellow now-playing line continuously.
 | Play / pause | `Space` |
 | Seek | Arrow keys, or click/drag the time ruler |
 | Save draft | **SAVE AS DRAFT** in the inspector, or `Ctrl+S` |
+| Export a shared map | Open a mapped song → **EDIT** → **EXPORT MAP** |
 | Undo / redo | `Ctrl+Z` / `Ctrl+Shift+Z` or `Ctrl+Y` |
 | Select tool | Keys `1`–`5` |
 | Delete selection | `Delete` / `Backspace` |
@@ -186,7 +199,8 @@ commands on `PATH`.
 
 ## Windows package
 
-The Windows build is made only when you run the script:
+The Windows build is made only when you run the script. The package contains the app and
+the generated warm-ups only; it never bundles the local commercial library.
 
 ```bash
 # prerequisites: rustup target add x86_64-pc-windows-gnu, mingw-w64, zip, rsync
@@ -225,7 +239,8 @@ tools/
   analyze_vocals.py    suggested-melody extraction
   clean_charts.py      legacy suggestion cleanup
 src/main/              TypeScript import pipeline (download, Demucs, lyrics, metadata)
-scripts/               tooling, warm-up generation, Windows packaging
+scripts/               tooling, map index, warm-up generation, Windows packaging
+site/                  GitHub Pages map browser and JSON map packages
 packaging/             Windows README copied into the portable zip
 docs/                  screenshots
 ```
