@@ -12,7 +12,12 @@ function fail(file, message) {
 
 async function main() {
   const entries = [];
-  const files = (await fs.readdir(mapsDir).catch(() => []))
+  const allFiles = await fs.readdir(mapsDir).catch(() => []);
+  const forbidden = allFiles.find((file) => /\.(mp3|wav|ogg|flac|m4a|opus|aac)$/i.test(file));
+  if (forbidden) {
+    throw new Error(`site/maps must contain JSON only; found audio file ${forbidden}`);
+  }
+  const files = allFiles
     .filter((file) => file.endsWith('.json') && file !== 'index.json')
     .sort();
 
