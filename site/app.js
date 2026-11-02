@@ -32,15 +32,15 @@ function render() {
   });
   grid.replaceChildren();
   status.textContent = visible.length === 1
-    ? `${visible.length} map available`
-    : `${visible.length} maps available`;
+    ? '1 map'
+    : `${visible.length} maps`;
 
   if (!visible.length) {
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.innerHTML = maps.length
+    empty.textContent = maps.length
       ? 'No maps match that search.'
-      : 'No community maps yet. Export one from KaraokeMachine and submit a pull request.';
+      : 'No community maps yet.';
     grid.append(empty);
     return;
   }
