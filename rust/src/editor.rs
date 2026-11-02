@@ -1425,15 +1425,19 @@ impl Editor {
                     Color32::from_white_alpha(10),
                 );
             }
-            if midi % 12 == 0 || lane_h >= 16.0 {
-                p.text(
-                    Pos2::new(layout.rail.right() - 8.0, y),
-                    Align2::RIGHT_CENTER,
-                    note_name(midi),
-                    FontId::monospace((lane_h * 0.42).clamp(6.5, 9.5)),
-                    if midi % 12 == 0 { alpha(INK, 135) } else { alpha(INK, 55) },
-                );
-            }
+            p.text(
+                Pos2::new(layout.rail.right() - 8.0, y),
+                Align2::RIGHT_CENTER,
+                note_name(midi),
+                FontId::monospace((lane_h * 0.5).clamp(5.0, 9.5)),
+                if midi % 12 == 0 {
+                    alpha(INK, 150)
+                } else if black {
+                    alpha(INK, 88)
+                } else {
+                    alpha(INK, 108)
+                },
+            );
         }
         p.text(
             Pos2::new(layout.rail.left() + 7.0, layout.wave.top() + 4.0),
