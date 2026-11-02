@@ -14,8 +14,8 @@ sing. The level editor exists for one reason: to turn a song into a playable kar
 - **Pitch scoring, not word memorization.** Notes are judged by cents and hold time.
   Perfect holds build a combo. The right note in another octave counts as a hit, keeps
   the combo, and is capped at **OCTAVE** instead of **PERFECT**.
-- **Word-level voice ribbons.** A word held across several notes can glide as one visual
-  ribbon, while separate words and phrases stay distinct.
+- **Vocal ribbons.** Connect a run of notes into one smooth visual ribbon; separate runs
+  stay distinct. Lyrics float independently as decorations over the level.
 - **Decorative karaoke lyrics.** Lyrics are positioned independently of notes, so a word
   can sit over the melody or float anywhere that reads well on screen.
 - **Backing and guide vocals.** Demucs splits the song into a vocal-free backing and an
