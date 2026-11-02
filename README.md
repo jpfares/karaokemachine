@@ -1,74 +1,36 @@
 # KaraokeMachine
 
-**A karaoke level editor first, a singing coach second.**
+**KaraokeMachine: an app to help you sing your favorite songs in karaoke :)**
 
-KaraokeMachine is a native Rust/egui desktop app for building karaoke levels by hand.
-Every song starts as **UNMAPPED** and cannot be played until a human has drawn the vocal
-notes and placed every lyric word in the level editor. The old automatic chart is kept
-only as a translucent suggestion behind your work.
+KaraokeMachine is a native desktop karaoke machine. It plays a vocal-free backing track,
+draws the melody and lyrics, listens through your microphone, and scores the notes you
+sing. The level editor exists for one reason: to turn a song into a playable karaoke map.
 
-![Manual level editor](docs/editor.png)
-![Upload and metadata form](docs/upload.png)
-![Album library](docs/album.png)
+![Singing stage](docs/stage.png)
+![Album library](docs/menu.png)
 
-## What it does
+## Sing
 
-- **Manual level editor.** Draw notes, resize them, connect them into word ribbons, erase
-  them, select and move them, drag words out of a chronological word bank, scroll and
-  zoom the timeline, and preview at variable speed. The raw suggested vocal notes remain
-  visible in the background.
-- **Submission gate.** A mapping is only accepted once every lyric word has been placed
-  and at least one note exists. Submitted songs become playable; unfinished work is saved
-  as a draft and stays UNMAPPED.
-- **Word-level ribbons.** Each word is a rounded capsule or a connected run of capsules.
-  Words are split automatically from the lyrics, and a word disappears from the bank once
-  it is placed.
-- **Upload and import.** Paste a YouTube, Spotify or SoundCloud link, fetch editable
-  metadata and lyrics, choose an existing artist/album or fill in new ones, then download,
-  split the backing and vocal stems, and open the editor automatically.
-- **Native singing stage.** Pitch scoring, combos, per-song vertical fit, a mic-device
-  picker, backing/vocal toggles, a vocal-range test, octave-aware scoring, and an
-  **OCTAVE** cap when you sing the right note in the wrong octave.
-- **Albums and warm-ups.** Album covers, release dates, track ordering, imported-song
-  queue, and six built-in warm-up tracks.
+- **Pitch scoring, not word memorization.** Notes are judged by cents and hold time.
+  Perfect holds build a combo. The right note in another octave counts as a hit, keeps
+  the combo, and is capped at **OCTAVE** instead of **PERFECT**.
+- **Word-level voice ribbons.** A word held across several notes can glide as one visual
+  ribbon, while separate words and phrases stay distinct.
+- **Decorative karaoke lyrics.** Lyrics are positioned independently of notes, so a word
+  can sit over the melody or float anywhere that reads well on screen.
+- **Backing and guide vocals.** Demucs splits the song into a vocal-free backing and an
+  isolated guide vocal. Toggle either one live from the transport.
+- **Microphone picker and input gain.** Choose the input device in Settings.
+- **Vocal-range test and octave fit.** Sing a comfortable low and high note, save the
+  range, then use **Fit current song to my range** to move the chart into it.
+- **Per-song vertical fit.** The pitch lane fits the melody, so high and low songs remain
+  readable without scrolling vertically.
+- **Six warm-up tracks.** Major scale, pentatonic scales, blues, chromatic climb, and a
+  maj7 arpeggio, with synthesized backing and guide vocals.
+- **Native and offline.** Rust + `egui`/`eframe`, `cpal` audio, `symphonia` decoding. The
+  singing app does not need a browser or Electron.
 
-## Why everything is UNMAPPED
-
-Automatic vocal transcription is good at finding *a* melody, but it is not good enough to
-be a karaoke level. It doubles guitar lines, misses quiet syllables, and puts words on the
-wrong notes. KaraokeMachine therefore treats the automatic analysis as **suggestions only**:
-
-- `notes`: the manual mapping that the singing stage uses.
-- `suggestedNotes`: the old automatic chart, drawn translucently in the editor.
-- `draftNotes`: unfinished manual work.
-- `mapped`: false until **Submit Mapping** succeeds.
-
-All existing songs in a library start with `mapped: false`. Clicking one opens the editor
-instead of the stage.
-
-## Editor controls
-
-| Action | Control |
-| --- | --- |
-| Pan | `PAN` tool, or middle-drag from any tool |
-| Draw a note | `NOTE` tool: click or drag on a lane; pitch stays fixed, drag sets length |
-| Make a ribbon | `RIBBON` tool: drag across notes, then drop one word on the selection |
-| Erase | `ERASER` tool: click or sweep over notes |
-| Select / move / resize | `SELECT` tool: drag the body to move, drag either end to resize |
-| Place a lyric word | Drag it from the word bank onto a note or ribbon selection |
-| Scroll timeline | Mouse wheel |
-| Zoom | Ctrl + wheel, or the `−` / `+` buttons |
-| Play / pause | `Space` |
-| Seek | Arrow keys, or click/drag the time ruler |
-| Undo / redo | `Ctrl+Z` / `Ctrl+Shift+Z` or `Ctrl+Y` |
-| Select tool | Keys `1`–`5` |
-| Delete selection | `Delete` / `Backspace` |
-| Leave editor | `Esc` or `← LIBRARY` (saves a draft for unmapped songs) |
-
-The editor's speed buttons (0.5×–1.5×) are a **varispeed preview** for timing work; they
-change pitch with speed. They are not a pitch-preserving transpose.
-
-## Singing stage controls
+## Karaoke controls
 
 | Action | Key |
 | --- | --- |
@@ -81,17 +43,86 @@ change pitch with speed. They are not a pitch-preserving transpose.
 | Seek back/forward 5 s | `←` / `→` |
 | Seek | Click the timeline |
 
-Settings also contains the microphone picker, input gain, vocal-range test, octave shift,
-and **Fit current song to my range**.
+Settings also contains the input microphone, backing/vocal levels, count-in, sync trim,
+mic latency, octave shift, and the vocal-range test.
+
+## How a song becomes playable
+
+Every song starts **UNMAPPED** and cannot be sung until a person maps it. The old
+automatic chart is only a translucent suggestion.
+
+1. Click an UNMAPPED song in the library.
+2. Draw or correct the vocal notes over the suggestion.
+3. Connect notes into ribbons where a word or vocal run should glide.
+4. Drag lyric words anywhere onto the level as decorations.
+5. Place every word, then press **SUBMIT MAPPING**.
+6. The song becomes playable in the normal singing stage.
+
+Unfinished work is saved as a draft and remains UNMAPPED. Submitted maps are stored in
+the song's `song.json`.
+
+## Level editor
+
+![Manual level editor](docs/editor.png)
+
+The top toolbar is icon-only; hover an icon for its name.
+
+| Action | Control |
+| --- | --- |
+| Pan | Pan icon, or middle-drag from any tool |
+| Move the now-playing line | **Right-click** anywhere in the level or ruler |
+| Draw a note | Note icon: click or drag on a pitch lane; drag sets length |
+| Make a ribbon | Ribbon icon: drag across notes, release over the last note |
+| Erase | Eraser icon: click or sweep over notes or words |
+| Select / move / resize | Select icon: drag a note body to move, drag either end to resize |
+| Move a lyric word | Select icon: drag the word anywhere in the level |
+| Place a lyric word | Drag it from the word bank, or click it and then click the level |
+| Add a custom word | **+** at the right of the word bank; it goes to the front of the bank |
+| Scroll timeline | Mouse wheel |
+| Zoom | Ctrl + wheel, or the − / + magnifier icons |
+| Play / pause | `Space` |
+| Seek | Arrow keys, or click/drag the time ruler |
+| Undo / redo | `Ctrl+Z` / `Ctrl+Shift+Z` or `Ctrl+Y` |
+| Select tool | Keys `1`–`5` |
+| Delete selection | `Delete` / `Backspace` |
+| Leave editor | `Esc` or the back arrow (saves a draft for unmapped songs) |
+
+Word decorations are completely independent of notes. Dropping a word on a note snaps it
+there for convenience, but it can then be dragged anywhere horizontally or vertically.
+The **+** button adds custom words to the front of the bank; custom words can be placed
+and moved exactly like lyric words.
+
+The editor's speed buttons (0.5×–1.5×) are a varispeed timing preview; they change pitch
+with speed.
+
+## Upload a new song
+
+![Upload and metadata form](docs/upload.png)
+
+Open **Library → Imports → Upload Song**, paste one of these links, and press **Fetch
+Details**:
+
+- YouTube video
+- SoundCloud track
+- Spotify track (Spotify supplies metadata; KaraokeMachine finds a matching public audio
+  source for the stems)
+
+Everything fetched remains editable: title, artist, album, release date, cover art,
+artist/album bios, and lyrics. You can copy metadata from an existing artist/album or
+create new values. Then **Download & Open Editor** downloads the audio, separates the
+backing and guide vocals, and opens the manual mapper.
+
+Lyrics are fetched from LRCLIB, lyrics.ovh, or Genius, with manual editing always
+available. The automatic chart is stored only as an editor suggestion; the imported song
+is still UNMAPPED.
 
 ## Run it
 
-Prerequisites for the desktop app:
+Prerequisites:
 
 - Rust stable with Cargo
-- Linux desktop with X11/Wayland and a working OpenGL driver (or Windows)
-- Node.js 22+ and the TypeScript tools for the import pipeline
-- `ffmpeg`, `yt-dlp`, and Python 3 with **Demucs** for uploads
+- Node.js 22+ for the import tools
+- `ffmpeg`, `yt-dlp`, and Python 3 with **Demucs** for uploading new songs
 
 ```bash
 git clone https://github.com/rgbeans/karaokemachine
@@ -108,58 +139,35 @@ For development:
 cargo run --release --manifest-path rust/Cargo.toml
 ```
 
-If a GPU driver misbehaves, force Mesa software GL:
+To force Mesa software GL on a misbehaving driver:
 
 ```bash
 KARAOKEMACHINE_SOFTWARE_GL=1 ./launch.sh
 ```
 
-### Import dependencies
-
-The app looks for `.venv/bin/yt-dlp` and `.venv/bin/demucs` first, then falls back to
-commands on `PATH`. A typical setup is:
+A typical upload-tool setup:
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -U demucs yt-dlp
-# ffmpeg must also be installed system-wide
+# ffmpeg must also be available on PATH
 ```
 
-The upload form accepts:
-
-- YouTube video links
-- SoundCloud track links
-- Spotify track links (resolved through Spotify oEmbed + a YouTube audio match)
-
-Spotify's audio is DRM-protected, so the app uses Spotify for titles/artist/artwork and
-finds a matching public audio source for the stems. Every metadata field remains editable.
+The app looks for `.venv/bin/yt-dlp` and `.venv/bin/demucs` first, then falls back to
+commands on `PATH`.
 
 ## Import pipeline
 
 1. Resolve the link to a downloadable audio URL.
 2. Download audio with `yt-dlp`.
 3. Separate vocals and backing with Demucs (`--two-stems=vocals`).
-4. Normalize and encode 192 kbps backing and 160 kbps guide MP3s.
+4. Encode a 192 kbps backing and a 160 kbps guide MP3.
 5. Trace the vocal melody for the translucent editor suggestions.
-6. Fetch lyrics from LRCLIB, lyrics.ovh, or a Genius fallback; the user can edit them.
-7. Fetch album metadata and artwork from iTunes, or accept a custom cover URL/file.
-8. Write the song with `mapped: false`, empty `notes`, and the automatic chart in
+6. Fetch lyrics from LRCLIB, lyrics.ovh, or Genius; the mapper can edit them.
+7. Fetch album metadata/artwork from iTunes, or accept a custom cover URL/file.
+8. Write the song as `mapped: false` with empty `notes` and the automatic chart in
    `suggestedNotes`.
-9. Open the level editor automatically.
-
-## Repository and media
-
-The public repository contains the application, tools, documentation and the six
-generated warm-up tracks. It **does not** contain the copyrighted commercial recordings
-used during development. Commercial tracks under `assets/songs/*` are gitignored; use the
-upload flow or place licensed audio in your local library.
-
-Two useful paths:
-
-```text
-assets/songs/            local library (commercial imports are not committed)
-dist-windows/            Windows package output (not committed)
-```
+9. Open the level editor.
 
 ## Windows package
 
@@ -176,21 +184,28 @@ It cross-compiles `karaokemachine.exe`, stages the current `assets/` folder, and
 dist-windows/KaraokeMachine-Windows-x64.zip
 ```
 
-The script prints the zip size and SHA-256. It does not upload anything. The portable
-build requires Node, ffmpeg, yt-dlp and Demucs for **new uploads**; mapping existing songs
-in the bundled library does not require them.
+The script prints the zip size and SHA-256 and does not upload anything. The portable
+build needs Node, ffmpeg, yt-dlp, and Demucs for **new uploads**; mapping songs already in
+the bundled library does not.
+
+## Repository and media
+
+The public repository contains the app, tools, documentation, and the six generated
+warm-up tracks. It does **not** contain the commercial recordings used during
+development. Commercial tracks under `assets/songs/*` are gitignored; use the upload flow
+or place licensed audio in your local library.
 
 ## Project layout
 
 ```text
 rust/
   src/main.rs          native entry point
-  src/app.rs           library, stage, settings, upload form
-  src/editor.rs        manual level editor, word bank, submission gate
+  src/app.rs           library, singing stage, settings, upload form
+  src/editor.rs        manual level editor, word decorations, ribbons, submission gate
   src/audio.rs         cpal output/mic, symphonia decoding, varispeed playback
   src/pitch.rs         native YIN pitch detector
   src/library.rs       song scan, albums, settings, scores
-  src/model.rs         song, notes, lyrics, mappings and settings
+  src/model.rs         songs, notes, ribbons, placed words, settings
 tools/
   analyze_vocals.py    suggested-melody extraction
   clean_charts.py      legacy suggestion cleanup
@@ -200,18 +215,14 @@ packaging/             Windows README copied into the portable zip
 docs/                  screenshots
 ```
 
-The desktop runtime is Rust only. The TypeScript under `src/` is the offline/import
-toolchain invoked by the upload form.
-
 ## Known limits
 
-- A mapping is only as good as the time you put into it. Suggestions can be wrong; the
-  editor is designed for correcting them by hand.
+- A map is only as good as the time put into it. Suggestions can be wrong; the editor is
+  for correcting them by hand.
 - The editor speed control changes pitch. Pitch-preserving time-stretch is not implemented.
-- Spotify imports need a public YouTube/SoundCloud audio match. If none is found, use a
-  YouTube or SoundCloud link for that track.
-- Successful lyric lookup depends on LRCLIB/lyrics.ovh/Genius coverage. If lyrics are
-  missing, paste or edit them in the upload form.
+- Spotify imports need a public YouTube/SoundCloud audio match.
+- Successful lyric lookup depends on LRCLIB/lyrics.ovh/Genius coverage. Missing lyrics can
+  be pasted or edited in the upload form.
 - Headphones give the cleanest score; speaker bleed can register as pitch.
 - The Windows build is unsigned, so SmartScreen may show a warning.
 

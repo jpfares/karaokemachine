@@ -1,10 +1,10 @@
 use crate::audio::AudioEngine;
-use crate::model::{format_time, note_name, pitch_color, LyricLine, Note, Song};
+use crate::model::{format_time, note_name, pitch_color, CustomWord, LyricLine, Note, PlacedWord, Song};
 use eframe::egui::{
-    self, Align2, Color32, FontId, Id, LayerId, Order, PointerButton, Pos2, Rect, Sense,
+    self, Align2, Color32, FontId, Id, LayerId, Order, PointerButton, Pos2, Rect, RichText, Sense,
     Stroke, StrokeKind, Ui, Vec2,
 };
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -29,25 +29,31 @@ pub enum EditorTool {
 }
 
 impl EditorTool {
-    fn label(self) -> &'static str {
-        match self {
-            EditorTool::Pan => "PAN",
-            EditorTool::Note => "NOTE",
-            EditorTool::Ribbon => "RIBBON",
-            EditorTool::Eraser => "ERASER",
-            EditorTool::Select => "SELECT",
-        }
-    }
-
     fn hint(self) -> &'static str {
         match self {
-            EditorTool::Pan => "Drag to pan. Middle-click pans from any tool.",
+            EditorTool::Pan => "Drag to pan. Middle-drag pans from any tool. Right-click moves the now-playing line.",
             EditorTool::Note => "Click or drag on the lane to draw one pitch. Drag sets length.",
-            EditorTool::Ribbon => "Drag across notes to select a ribbon, then drop a word on it.",
-            EditorTool::Eraser => "Click or sweep over notes to erase them.",
-            EditorTool::Select => "Click notes to select. Drag the body to move, the edges to resize.",
+            EditorTool::Ribbon => "Drag across notes to connect them into one visual ribbon.",
+            EditorTool::Eraser => "Click or sweep over notes and word decorations to erase them.",
+            EditorTool::Select => "Select notes, ribbons, or word decorations. Drag note ends to resize.",
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum EditorIcon {
+    Pan,
+    Note,
+    Ribbon,
+    Eraser,
+    Select,
+    Snap,
+    Suggestions,
+    Follow,
+    ZoomOut,
+    ZoomIn,
+    Plus,
+    Back,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -60,10 +66,18 @@ pub enum EditorEvent {
 #[derive(Clone, Debug)]
 struct WordToken {
     text: String,
-    line: usize,
-    index: usize,
+    line: Option<usize>,
+    index: Option<usize>,
+    custom_id: Option<u32>,
     start: f64,
     placed: bool,
+}
+
+#[derive(Clone)]
+struct Snapshot {
+    notes: Vec<Note>,
+    words: Vec<PlacedWord>,
+    custom_words: Vec<CustomWord>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -85,6 +99,11 @@ enum Drag {
         index: usize,
         start: f64,
     },
+    MoveWord {
+        index: usize,
+        grab_time: f64,
+        grab_y: f32,
+    },
     Ribbon {
         anchor_start: f64,
     },
@@ -104,6 +123,8 @@ pub struct Editor {
     pub song: Song,
     suggestions: Vec<Note>,
     notes: Vec<Note>,
+    words: Vec<PlacedWord>,
+    custom_words: Vec<CustomWord>,
     word_bank: Vec<WordToken>,
     tool: EditorTool,
     scroll: f64,
@@ -114,11 +135,12 @@ pub struct Editor {
     low: i32,
     high: i32,
     selected: BTreeSet<usize>,
+    selected_word: Option<usize>,
     drag: Option<Drag>,
     word_drag: Option<usize>,
     pending_word: Option<usize>,
-    history: Vec<Vec<Note>>,
-    redo: Vec<Vec<Note>>,
+    history: Vec<Snapshot>,
+    redo: Vec<Snapshot>,
     dirty: bool,
     audio_ready: bool,
     backing_on: bool,
@@ -127,6 +149,11 @@ pub struct Editor {
     follow: bool,
     snap: bool,
     duration: f64,
+    next_ribbon_id: u32,
+    next_custom_id: u32,
+    custom_word_open: bool,
+    custom_word_input: String,
+    custom_word_focus: bool,
     status: String,
     last_seek: f64,
 }
@@ -135,12 +162,32 @@ impl Editor {
     pub fn new(
         mut song: Song,
         suggestions: Vec<Note>,
-        initial_notes: Vec<Note>,
+        mut initial_notes: Vec<Note>,
         duration: f64,
     ) -> Self {
         song.notes.clear();
         let duration = duration.max(song.duration()).max(1.0);
-        let word_bank = build_word_bank(&song, &initial_notes);
+        let mut words = song.placed_words.clone();
+        let custom_words = song.custom_words.clone();
+        let mut next_ribbon_id = initial_notes
+            .iter()
+            .chain(suggestions.iter())
+            .filter_map(|note| note.ribbon)
+            .max()
+            .unwrap_or(0)
+            + 1;
+        if words.is_empty() {
+            migrate_legacy_notes(&song, &mut initial_notes, &mut words, &mut next_ribbon_id);
+        } else {
+            migrate_legacy_ribbons(&mut initial_notes, &mut next_ribbon_id);
+        }
+        let next_custom_id = custom_words
+            .iter()
+            .map(|word| word.id)
+            .max()
+            .unwrap_or(0)
+            + 1;
+        let word_bank = build_word_bank(&song.lines, &custom_words, &words);
         let mut low = song.low.max(0);
         let mut high = song.high.min(127);
         let mut source: Vec<i32> = suggestions
@@ -174,14 +221,16 @@ impl Editor {
             0.0
         };
         let status = if initial_notes.is_empty() {
-            "Draw notes over the translucent suggestions, then place every word from the bank."
+            "Draw notes over the translucent suggestions. Drag lyric words anywhere as decorations."
         } else {
-            "Draft loaded. Finish the word bank and submit when the mapping is complete."
+            "Draft loaded. Finish the notes, ribbons, and word decorations, then submit."
         };
         Self {
             song,
             suggestions,
             notes: initial_notes,
+            words,
+            custom_words,
             word_bank,
             tool: EditorTool::Note,
             scroll,
@@ -192,6 +241,7 @@ impl Editor {
             low,
             high,
             selected: BTreeSet::new(),
+            selected_word: None,
             drag: None,
             word_drag: None,
             pending_word: None,
@@ -205,6 +255,11 @@ impl Editor {
             follow: true,
             snap: true,
             duration,
+            next_ribbon_id,
+            next_custom_id,
+            custom_word_open: false,
+            custom_word_input: String::new(),
+            custom_word_focus: false,
             status: status.to_string(),
             last_seek: 0.0,
         }
@@ -225,6 +280,7 @@ impl Editor {
             return Ok(());
         }
         self.notes.sort_by(note_order);
+        self.sync_words_to_song();
         self.song.notes.clear();
         self.song.draft_notes = self.notes.clone();
         self.song.suggested_notes = self.suggestions.clone();
@@ -240,6 +296,12 @@ impl Editor {
             self.song.low = (*lo - 2).clamp(0, 108);
             self.song.high = (*hi + 2).clamp(self.song.low + 12, 127);
         }
+        for note in &mut self.notes {
+            note.word = None;
+            note.word_index = None;
+            note.line = None;
+        }
+        self.sync_words_to_song();
         self.song.notes = self.notes.clone();
         self.song.draft_notes.clear();
         self.song.suggested_notes = self.suggestions.clone();
@@ -252,6 +314,11 @@ impl Editor {
         write_song(root, &self.song)
     }
 
+    fn sync_words_to_song(&mut self) {
+        self.song.placed_words = self.words.clone();
+        self.song.custom_words = self.custom_words.clone();
+    }
+
     fn validate(&self) -> Result<(), String> {
         if self.notes.is_empty() {
             return Err("Place at least one vocal note before submitting.".into());
@@ -260,7 +327,7 @@ impl Editor {
             let missing: Vec<&WordToken> = self.word_bank.iter().filter(|w| !w.placed).collect();
             if let Some(first) = missing.first() {
                 return Err(format!(
-                    "{} word{} still in the bank (next: “{}”). Place every lyric word first.",
+                    "{} word{} left in the bank — next: “{}”.",
                     missing.len(),
                     if missing.len() == 1 { "" } else { "s" },
                     first.text
@@ -327,6 +394,7 @@ impl Editor {
         self.draw_transport(ui, &p, &layout, audio);
         self.draw_word_bank(ui, &p, &layout, audio);
         self.draw_inspector(ui, &p, &layout, &mut event);
+        self.draw_custom_word_dialog(&ctx);
 
         if self.playing || self.drag.is_some() || self.word_drag.is_some() {
             ctx.request_repaint_after(Duration::from_millis(16));
@@ -389,6 +457,13 @@ impl Editor {
         layout: &Layout,
         event: &mut EditorEvent,
     ) {
+        if self.custom_word_open {
+            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.custom_word_open = false;
+                self.custom_word_input.clear();
+            }
+            return;
+        }
         if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
             *event = EditorEvent::Back;
         }
@@ -508,13 +583,23 @@ impl Editor {
             return;
         };
 
-        // A word clicked in the bank can be placed with the next note click.
+        // Right-click brings the now-playing line to the clicked part of the
+        // level without changing the current tool or selection.
+        if response.clicked_by(PointerButton::Secondary) && layout.note_area.contains(pos) {
+            let time = self
+                .x_to_time(pos.x, layout)
+                .clamp(0.0, self.duration);
+            self.seek(time, audio);
+            self.status = format!("Playhead moved to {}.", format_time(time));
+            return;
+        }
+
+        // A word armed with a click in the bank drops at the next click,
+        // anywhere in the note area.
         if response.clicked_by(PointerButton::Primary) {
             if let Some(token) = self.pending_word.take() {
-                if let Some(note) = self.hit_note(pos, layout) {
-                    self.assign_word(token, vec![note], None, layout, audio);
-                } else if layout.note_area.contains(pos) {
-                    self.assign_word(token, Vec::new(), Some(pos), layout, audio);
+                if layout.note_area.contains(pos) {
+                    self.place_word(token, pos, layout, audio);
                 } else {
                     self.pending_word = Some(token);
                 }
@@ -538,8 +623,10 @@ impl Editor {
                         word_index: None,
                         line: None,
                         vel: None,
+                        ribbon: None,
                     });
                     self.selected.clear();
+                    self.selected_word = None;
                     self.selected.insert(index);
                     self.drag = Some(Drag::NewNote { index, start });
                     self.dirty = true;
@@ -555,18 +642,34 @@ impl Editor {
                         word_index: None,
                         line: None,
                         vel: None,
+                        ribbon: None,
                     });
                     self.selected.clear();
+                    self.selected_word = None;
                     self.selected.insert(self.notes.len() - 1);
                     self.dirty = true;
-                    self.status = "Note placed. Drag with NOTE for a longer syllable.".into();
+                    self.status = "Note placed. Use RIBBON to connect notes into one vocal run.".into();
                 }
             }
             EditorTool::Select => {
                 if response.drag_started_by(PointerButton::Primary) {
-                    if let Some(index) = self.hit_note(pos, layout) {
+                    if let Some(word_index) = self.hit_word(pos, layout) {
+                        self.selected.clear();
+                        self.selected_word = Some(word_index);
+                        let word = &self.words[word_index];
+                        let grab_time = self.x_to_time(pos.x, layout) - word.start;
+                        let grab_y = (pos.y - layout.note_area.top()) / layout.note_area.height().max(1.0)
+                            - word.y;
+                        self.push_history();
+                        self.drag = Some(Drag::MoveWord {
+                            index: word_index,
+                            grab_time,
+                            grab_y,
+                        });
+                    } else if let Some(index) = self.hit_note(pos, layout) {
                         self.selected.clear();
                         self.selected.insert(index);
+                        self.selected_word = None;
                         let (note_start, note_dur, note_midi) = {
                             let note = &self.notes[index];
                             (note.start, note.dur, note.midi)
@@ -591,9 +694,16 @@ impl Editor {
                                 midi_offset: self.midi_at_y(pos.y, layout) - note_midi,
                             })
                         };
+                    } else {
+                        self.selected.clear();
+                        self.selected_word = None;
                     }
                 } else if response.clicked_by(PointerButton::Primary) {
-                    if let Some(index) = self.hit_note(pos, layout) {
+                    if let Some(word_index) = self.hit_word(pos, layout) {
+                        self.selected.clear();
+                        self.selected_word = Some(word_index);
+                    } else if let Some(index) = self.hit_note(pos, layout) {
+                        self.selected_word = None;
                         if ui.input(|i| i.modifiers.shift) {
                             if !self.selected.insert(index) {
                                 self.selected.remove(&index);
@@ -604,6 +714,7 @@ impl Editor {
                         }
                     } else {
                         self.selected.clear();
+                        self.selected_word = None;
                     }
                 }
             }
@@ -612,13 +723,15 @@ impl Editor {
                     if let Some(index) = self.hit_note(pos, layout) {
                         self.selected.clear();
                         self.selected.insert(index);
+                        self.selected_word = None;
                         self.drag = Some(Drag::Ribbon {
                             anchor_start: self.notes[index].start,
                         });
-                        self.status = "Ribbon selection — release over the last note, then drop a word.".into();
+                        self.status = "Ribbon selection — release over the last note to connect the run.".into();
                     }
                 } else if response.clicked_by(PointerButton::Primary) {
                     if let Some(index) = self.hit_note(pos, layout) {
+                        self.selected_word = None;
                         if !ui.input(|i| i.modifiers.shift) {
                             self.selected.clear();
                         }
@@ -627,18 +740,19 @@ impl Editor {
                         }
                     } else {
                         self.selected.clear();
+                        self.selected_word = None;
                     }
                 }
             }
             EditorTool::Eraser => {
                 if response.drag_started_by(PointerButton::Primary) {
-                    if self.hit_note(pos, layout).is_some() {
+                    if self.hit_word(pos, layout).is_some() || self.hit_note(pos, layout).is_some() {
                         self.push_history();
                         self.drag = Some(Drag::Erase);
                         self.erase_at(pos, layout);
                     }
                 } else if response.clicked_by(PointerButton::Primary) {
-                    if self.hit_note(pos, layout).is_some() {
+                    if self.hit_word(pos, layout).is_some() || self.hit_note(pos, layout).is_some() {
                         self.push_history();
                         self.erase_at(pos, layout);
                     }
@@ -660,7 +774,7 @@ impl Editor {
                     }
                     self.drag = None;
                     self.sort_notes();
-                    self.status = "Note placed. Add a word from the bank to make it singable.".into();
+                    self.status = "Note placed. Use RIBBON to connect notes into one vocal run.".into();
                 }
             }
             Some(Drag::Move {
@@ -704,6 +818,27 @@ impl Editor {
                     self.sort_notes();
                 }
             }
+            Some(Drag::MoveWord {
+                index,
+                grab_time,
+                grab_y,
+            }) => {
+                if response.dragged_by(PointerButton::Primary) {
+                    let start = self.snap_time(self.x_to_time(pos.x, layout) - grab_time);
+                    let y = ((pos.y - layout.note_area.top())
+                        / layout.note_area.height().max(1.0)
+                        - grab_y)
+                        .clamp(0.02, 0.98);
+                    if let Some(word) = self.words.get_mut(index) {
+                        word.start = start.max(0.0);
+                        word.y = y;
+                    }
+                    self.dirty = true;
+                } else if response.drag_stopped_by(PointerButton::Primary) {
+                    self.drag = None;
+                    self.status = "Word moved. Words are decorative and can float anywhere.".into();
+                }
+            }
             Some(Drag::Ribbon { anchor_start }) => {
                 if response.dragged_by(PointerButton::Primary) {
                     let end = self.x_to_time(pos.x, layout);
@@ -721,10 +856,21 @@ impl Editor {
                 } else if response.drag_stopped_by(PointerButton::Primary) {
                     self.drag = None;
                     if self.selected.len() > 1 {
+                        self.push_history();
+                        let ribbon = self.next_ribbon_id;
+                        self.next_ribbon_id = self.next_ribbon_id.saturating_add(1);
+                        for index in self.selected.iter().copied() {
+                            if let Some(note) = self.notes.get_mut(index) {
+                                note.ribbon = Some(ribbon);
+                            }
+                        }
                         self.status = format!(
-                            "{} notes selected — drop a lyric word on any of them.",
+                            "{} notes connected into one ribbon.",
                             self.selected.len()
                         );
+                        self.dirty = true;
+                    } else if self.selected.len() == 1 {
+                        self.status = "Select at least two notes to make a ribbon.".into();
                     }
                 }
             }
@@ -747,25 +893,32 @@ impl Editor {
             [header.left_bottom(), header.right_bottom()],
             Stroke::new(1.0f32, Color32::from_white_alpha(24)),
         );
-        if paint_button(ui, Rect::from_min_size(Pos2::new(16.0, 14.0), Vec2::new(82.0, 32.0)), "← LIBRARY", false, true) {
+        if paint_icon_button(
+            ui,
+            Rect::from_min_size(Pos2::new(16.0, 14.0), Vec2::new(38.0, 32.0)),
+            EditorIcon::Back,
+            false,
+            true,
+            "Back to the library",
+        ) {
             *event = EditorEvent::Back;
         }
         p.text(
-            Pos2::new(116.0, 13.0),
+            Pos2::new(70.0, 13.0),
             Align2::LEFT_TOP,
             "KARAOKEMACHINE · MANUAL LEVEL EDITOR",
             FontId::monospace(8.0),
             MUTED2,
         );
         p.text(
-            Pos2::new(116.0, 26.0),
+            Pos2::new(70.0, 26.0),
             Align2::LEFT_TOP,
             &self.song.title,
             FontId::proportional(20.0),
             INK,
         );
         p.text(
-            Pos2::new(116.0, 48.0),
+            Pos2::new(70.0, 48.0),
             Align2::LEFT_TOP,
             format!(
                 "{}   ·   {}   ·   {} notes",
@@ -828,22 +981,24 @@ impl Editor {
             Stroke::new(1.0f32, Color32::from_white_alpha(18)),
         );
         let mut x = 16.0;
-        for tool in [
-            EditorTool::Pan,
-            EditorTool::Note,
-            EditorTool::Ribbon,
-            EditorTool::Eraser,
-            EditorTool::Select,
+        for (tool, icon, tip) in [
+            (EditorTool::Pan, EditorIcon::Pan, "Pan — drag; middle-drag works from any tool"),
+            (EditorTool::Note, EditorIcon::Note, "Note — click or drag to draw one pitch"),
+            (EditorTool::Ribbon, EditorIcon::Ribbon, "Ribbon — drag across notes to connect them"),
+            (EditorTool::Eraser, EditorIcon::Eraser, "Eraser — click or sweep over notes and words"),
+            (EditorTool::Select, EditorIcon::Select, "Select — move notes, words, and note ends"),
         ] {
-            let w = 72.0;
-            let r = Rect::from_min_size(Pos2::new(x, bar.top() + 6.0), Vec2::new(w, 32.0));
-            if paint_toggle(ui, r, tool.label(), self.tool == tool) {
+            let r = Rect::from_min_size(Pos2::new(x, bar.top() + 6.0), Vec2::new(38.0, 32.0));
+            if paint_icon_button(ui, r, icon, self.tool == tool, true, tip) {
                 self.tool = tool;
                 self.status = tool.hint().to_string();
             }
-            x += w + 6.0;
+            x += 42.0;
         }
-        let hint = Rect::from_min_size(Pos2::new(x + 10.0, bar.top() + 10.0), Vec2::new(300.0, 24.0));
+        let hint = Rect::from_min_max(
+            Pos2::new(x + 8.0, bar.top() + 4.0),
+            Pos2::new(bar.right() - 344.0, bar.bottom() - 4.0),
+        );
         p.text(
             hint.left_center(),
             Align2::LEFT_CENTER,
@@ -851,28 +1006,49 @@ impl Editor {
             FontId::monospace(7.0),
             MUTED2,
         );
-        let snap = Rect::from_min_size(Pos2::new(bar.right() - 430.0, bar.top() + 6.0), Vec2::new(88.0, 32.0));
-        if paint_toggle(ui, snap, if self.snap { "SNAP ON" } else { "SNAP OFF" }, self.snap) {
+        let snap = Rect::from_min_size(Pos2::new(bar.right() - 332.0, bar.top() + 6.0), Vec2::new(38.0, 32.0));
+        if paint_icon_button(
+            ui,
+            snap,
+            EditorIcon::Snap,
+            self.snap,
+            true,
+            if self.snap { "Snap to the grid — on" } else { "Snap to the grid — off" },
+        ) {
             self.snap = !self.snap;
         }
-        let sugg = Rect::from_min_size(Pos2::new(bar.right() - 334.0, bar.top() + 6.0), Vec2::new(104.0, 32.0));
-        if paint_toggle(ui, sugg, "SUGGESTIONS", self.show_suggestions) {
+        let sugg = Rect::from_min_size(Pos2::new(bar.right() - 290.0, bar.top() + 6.0), Vec2::new(38.0, 32.0));
+        if paint_icon_button(
+            ui,
+            sugg,
+            EditorIcon::Suggestions,
+            self.show_suggestions,
+            true,
+            "Show or hide the translucent suggested chart",
+        ) {
             self.show_suggestions = !self.show_suggestions;
         }
-        let follow = Rect::from_min_size(Pos2::new(bar.right() - 222.0, bar.top() + 6.0), Vec2::new(80.0, 32.0));
-        if paint_toggle(ui, follow, "FOLLOW", self.follow) {
+        let follow = Rect::from_min_size(Pos2::new(bar.right() - 248.0, bar.top() + 6.0), Vec2::new(38.0, 32.0));
+        if paint_icon_button(
+            ui,
+            follow,
+            EditorIcon::Follow,
+            self.follow,
+            true,
+            "Follow the playhead while previewing",
+        ) {
             self.follow = !self.follow;
         }
-        let zoom_out = Rect::from_min_size(Pos2::new(bar.right() - 132.0, bar.top() + 6.0), Vec2::new(28.0, 32.0));
-        let zoom_in = Rect::from_min_size(Pos2::new(bar.right() - 98.0, bar.top() + 6.0), Vec2::new(28.0, 32.0));
-        if paint_button(ui, zoom_out, "−", false, true) {
+        let zoom_out = Rect::from_min_size(Pos2::new(bar.right() - 190.0, bar.top() + 6.0), Vec2::new(38.0, 32.0));
+        let zoom_in = Rect::from_min_size(Pos2::new(bar.right() - 148.0, bar.top() + 6.0), Vec2::new(38.0, 32.0));
+        if paint_icon_button(ui, zoom_out, EditorIcon::ZoomOut, false, true, "Zoom out") {
             self.zoom = (self.zoom / 1.25).clamp(24.0, 420.0);
         }
-        if paint_button(ui, zoom_in, "+", false, true) {
+        if paint_icon_button(ui, zoom_in, EditorIcon::ZoomIn, false, true, "Zoom in") {
             self.zoom = (self.zoom * 1.25).clamp(24.0, 420.0);
         }
         p.text(
-            Pos2::new(bar.right() - 62.0, bar.center().y),
+            Pos2::new(bar.right() - 102.0, bar.center().y),
             Align2::LEFT_CENTER,
             format!("{:.0}px/s", self.zoom),
             FontId::monospace(7.0),
@@ -958,7 +1134,9 @@ impl Editor {
             let c = pitch_color(t);
             let color = Color32::from_rgb(c[0], c[1], c[2]);
             if let Some((prev_i, prev_x1, prev_y)) = previous {
-                if same_word(&self.notes[prev_i], note) && note.start - (self.notes[prev_i].start + self.notes[prev_i].dur) <= 3.0 {
+                if self.notes[prev_i].shares_ribbon(note)
+                    && note.start - (self.notes[prev_i].start + self.notes[prev_i].dur) <= 3.0
+                {
                     painter.line_segment(
                         [Pos2::new(prev_x1, prev_y), Pos2::new(x0, y)],
                         Stroke::new((h * 0.34).max(2.0), alpha(color, 150)),
@@ -986,30 +1164,41 @@ impl Editor {
                         );
                     }
                 }
-                if let Some(word) = &note.word {
-                    if !is_word_continuation(&self.notes, i) {
-                        let text_w = word.chars().count() as f32 * 6.4;
-                        if r.width() > text_w + 6.0 && h >= 13.0 {
-                            painter.text(
-                                r.center(),
-                                Align2::CENTER_CENTER,
-                                word,
-                                FontId::proportional((h * 0.58).clamp(8.0, 12.0)),
-                                Color32::from_rgb(6, 12, 21),
-                            );
-                        } else {
-                            painter.text(
-                                Pos2::new(r.center().x, r.top() - 2.0),
-                                Align2::CENTER_BOTTOM,
-                                word,
-                                FontId::proportional(9.0),
-                                alpha(INK, 190),
-                            );
-                        }
-                    }
-                }
             }
             previous = Some((i, x1, y));
+        }
+
+        // Decorative words are not attached to notes. They are drawn on top of
+        // the note layer and can be moved to any time or vertical position.
+        for (index, word) in self.words.iter().enumerate() {
+            let rect = self.word_rect(word, layout);
+            if rect.right() < area.left() - 4.0 || rect.left() > area.right() + 4.0 {
+                continue;
+            }
+            let selected = self.selected_word == Some(index);
+            let custom = word.custom_id.is_some();
+            let fill = Color32::from_rgba_unmultiplied(8, 13, 23, 235);
+            let border = if selected {
+                Color32::WHITE
+            } else if custom {
+                alpha(GOLD, 150)
+            } else {
+                alpha(MINT, 100)
+            };
+            painter.rect_filled(rect, 11.0, fill);
+            painter.rect_stroke(
+                rect,
+                11.0,
+                Stroke::new(if selected { 1.6f32 } else { 0.9f32 }, border),
+                StrokeKind::Inside,
+            );
+            painter.text(
+                rect.center(),
+                Align2::CENTER_CENTER,
+                &word.text,
+                FontId::proportional(12.0),
+                if selected { Color32::WHITE } else { INK },
+            );
         }
 
         // Playhead.
@@ -1108,6 +1297,15 @@ impl Editor {
             );
         }
         let response = ui.interact(ruler, Id::new("editor_ruler"), Sense::click_and_drag());
+        if response.clicked_by(PointerButton::Secondary) {
+            if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
+                let t = self
+                    .x_to_time(pos.x.clamp(ruler.left(), ruler.right()), layout)
+                    .clamp(0.0, self.duration);
+                self.seek(t, audio);
+                self.status = format!("Playhead moved to {}.", format_time(t));
+            }
+        }
         if (response.clicked() || response.dragged()) && ui.input(|i| i.pointer.primary_down()) {
             if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
                 let t = self.x_to_time(pos.x.clamp(ruler.left(), ruler.right()), layout).clamp(0.0, self.duration);
@@ -1206,15 +1404,32 @@ impl Editor {
         p.text(
             Pos2::new(bank.left() + 94.0, bank.top() + 10.0),
             Align2::LEFT_TOP,
-            format!("{remaining} remaining · drag a word onto a note, or click it and then click a note"),
+            format!("{remaining} remaining · drag a word anywhere on the level"),
             FontId::proportional(10.0),
             MUTED,
         );
+        let add = Rect::from_min_size(
+            Pos2::new(bank.right() - 50.0, bank.top() + 10.0),
+            Vec2::new(34.0, 34.0),
+        );
+        if paint_icon_button(
+            ui,
+            add,
+            EditorIcon::Plus,
+            self.custom_word_open,
+            true,
+            "Add a custom word to the front of the bank",
+        ) {
+            self.custom_word_open = true;
+            self.custom_word_input.clear();
+            self.custom_word_focus = true;
+            self.status = "Type a custom word. It will go to the front of the bank.".into();
+        }
         if self.word_bank.is_empty() {
             p.text(
                 Pos2::new(bank.left() + 16.0, bank.top() + 38.0),
                 Align2::LEFT_TOP,
-                "No lyric words were found. This is an instrumental mapping — draw the vocal melody and submit.",
+                "No lyric words were found. Draw the melody, add custom words with + if needed, then submit.",
                 FontId::proportional(12.0),
                 GOLD,
             );
@@ -1222,7 +1437,7 @@ impl Editor {
         }
         let inner = Rect::from_min_max(
             Pos2::new(bank.left() + 12.0, bank.top() + 32.0),
-            Pos2::new(bank.right() - 12.0, bank.bottom() - 8.0),
+            Pos2::new(bank.right() - 62.0, bank.bottom() - 8.0),
         );
         let mut chip_actions: Vec<(usize, bool)> = Vec::new();
         ui.allocate_new_ui(egui::UiBuilder::new().max_rect(inner), |ui| {
@@ -1230,27 +1445,36 @@ impl Editor {
                 .id_salt("editor_word_bank_scroll")
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        let mut last_line = usize::MAX;
+                        let mut last_line: Option<usize> = None;
                         for (i, token) in self.word_bank.iter().enumerate() {
                             if token.placed {
                                 continue;
                             }
-                            if token.line != last_line {
-                                if last_line != usize::MAX {
-                                    let (sep, _) = ui.allocate_exact_size(Vec2::new(8.0, 34.0), Sense::hover());
-                                    let painter = ui.painter();
-                                    painter.line_segment(
-                                        [sep.center_top() + Vec2::new(4.0, 3.0), sep.center_bottom() - Vec2::new(4.0, 3.0)],
-                                        Stroke::new(1.0f32, Color32::from_white_alpha(25)),
-                                    );
+                            if let Some(line) = token.line {
+                                if last_line != Some(line) {
+                                    if last_line.is_some() {
+                                        let (sep, _) = ui.allocate_exact_size(Vec2::new(8.0, 34.0), Sense::hover());
+                                        let painter = ui.painter();
+                                        painter.line_segment(
+                                            [sep.center_top() + Vec2::new(4.0, 3.0), sep.center_bottom() - Vec2::new(4.0, 3.0)],
+                                            Stroke::new(1.0f32, Color32::from_white_alpha(25)),
+                                        );
+                                    }
+                                    last_line = Some(line);
                                 }
-                                last_line = token.line;
                             }
                             let width = (token.text.chars().count() as f32 * 8.0 + 26.0).clamp(48.0, 150.0);
                             let (chip, response) = ui.allocate_exact_size(Vec2::new(width, 34.0), Sense::click_and_drag());
                             let active = self.pending_word == Some(i);
+                            let custom = token.custom_id.is_some();
                             let fill = if active { alpha(MINT, 44) } else { PANEL2 };
-                            let border = if active { MINT } else { Color32::from_white_alpha(30) };
+                            let border = if active {
+                                MINT
+                            } else if custom {
+                                alpha(GOLD, 120)
+                            } else {
+                                Color32::from_white_alpha(30)
+                            };
                             let painter = ui.painter();
                             painter.rect_filled(chip, 9.0, fill);
                             painter.rect_stroke(chip, 9.0, Stroke::new(1.0f32, border), StrokeKind::Inside);
@@ -1261,13 +1485,23 @@ impl Editor {
                                 FontId::proportional(12.0),
                                 if active { MINT } else { INK },
                             );
-                            painter.text(
-                                chip.right_top() + Vec2::new(-6.0, 3.0),
-                                Align2::RIGHT_TOP,
-                                format!("{}", token.line + 1),
-                                FontId::monospace(5.5),
-                                MUTED2,
-                            );
+                            if let Some(line) = token.line {
+                                painter.text(
+                                    chip.right_top() + Vec2::new(-6.0, 3.0),
+                                    Align2::RIGHT_TOP,
+                                    format!("{}", line + 1),
+                                    FontId::monospace(5.5),
+                                    MUTED2,
+                                );
+                            } else {
+                                painter.text(
+                                    chip.right_top() + Vec2::new(-6.0, 3.0),
+                                    Align2::RIGHT_TOP,
+                                    "NEW",
+                                    FontId::monospace(5.5),
+                                    GOLD,
+                                );
+                            }
                             if response.drag_started() {
                                 chip_actions.push((i, true));
                             }
@@ -1282,17 +1516,14 @@ impl Editor {
             if dragged {
                 self.word_drag = Some(token);
                 self.pending_word = None;
-                self.status = "Drag the word onto a note (or a ribbon selection).".into();
-            } else if self.selected.is_empty() {
+                self.status = "Drag the word anywhere in the level; notes are only a guide.".into();
+            } else {
                 self.pending_word = if self.pending_word == Some(token) { None } else { Some(token) };
                 self.status = if self.pending_word.is_some() {
-                    "Word armed — click a note to place it.".into()
+                    "Word armed — click anywhere in the level to place it.".into()
                 } else {
                     "Word selection cleared.".into()
                 };
-            } else {
-                let targets: Vec<usize> = self.selected.iter().copied().collect();
-                self.assign_word(token, targets, None, layout, audio);
             }
         }
 
@@ -1313,22 +1544,74 @@ impl Editor {
             if ui.input(|i| !i.pointer.any_down()) {
                 if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
                     if layout.note_area.contains(pos) {
-                        if let Some(note) = self.hit_note(pos, layout) {
-                            let targets = if self.selected.contains(&note) && self.selected.len() > 1 {
-                                self.selected.iter().copied().collect()
-                            } else {
-                                vec![note]
-                            };
-                            self.assign_word(token, targets, None, layout, audio);
-                        } else {
-                            self.assign_word(token, Vec::new(), Some(pos), layout, audio);
-                        }
+                        self.place_word(token, pos, layout, audio);
                     } else {
                         self.status = "Word returned to the bank.".into();
                     }
                 }
                 self.word_drag = None;
             }
+        }
+    }
+
+    fn draw_custom_word_dialog(&mut self, ctx: &egui::Context) {
+        if !self.custom_word_open {
+            return;
+        }
+        let mut open = self.custom_word_open;
+        let mut add_clicked = false;
+        let mut cancel_clicked = false;
+        egui::Window::new("Add custom word")
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
+            .show(ctx, |ui| {
+                ui.set_min_width(340.0);
+                ui.label(
+                    RichText::new(
+                        "The word goes to the front of the bank. Place it anywhere in the level as a decoration.",
+                    )
+                    .size(10.0)
+                    .color(MUTED),
+                );
+                let response = ui.add(
+                    egui::TextEdit::singleline(&mut self.custom_word_input)
+                        .hint_text("custom word")
+                        .desired_width(f32::INFINITY),
+                );
+                if self.custom_word_focus {
+                    response.request_focus();
+                    self.custom_word_focus = false;
+                }
+                if ui.input(|i| i.key_pressed(egui::Key::Enter))
+                    && !self.custom_word_input.trim().is_empty()
+                {
+                    add_clicked = true;
+                }
+                let _ = response;
+                ui.horizontal(|ui| {
+                    if ui
+                        .add_enabled(
+                            !self.custom_word_input.trim().is_empty(),
+                            egui::Button::new("ADD"),
+                        )
+                        .clicked()
+                    {
+                        add_clicked = true;
+                    }
+                    if ui.button("CANCEL").clicked() {
+                        cancel_clicked = true;
+                    }
+                });
+            });
+        if !open || cancel_clicked {
+            self.custom_word_open = false;
+            self.custom_word_input.clear();
+            return;
+        }
+        if add_clicked {
+            self.add_custom_word();
         }
     }
 
@@ -1359,7 +1642,7 @@ impl Editor {
         p.text(
             Pos2::new(x, y),
             Align2::LEFT_TOP,
-            format!("{} notes · {} lines", self.notes.len(), self.song.lines.len()),
+            format!("{} notes · {} ribbons · {} lines", self.notes.len(), self.ribbon_count(), self.song.lines.len()),
             FontId::monospace(8.0),
             MUTED,
         );
@@ -1367,7 +1650,52 @@ impl Editor {
         p.line_segment([Pos2::new(x, y), Pos2::new(r.right() - 14.0, y)], Stroke::new(1.0f32, Color32::from_white_alpha(18)));
         y += 12.0;
 
-        if !self.selected.is_empty() {
+        if let Some(index) = self.selected_word {
+            let word = self.words.get(index).cloned();
+            if let Some(word) = word {
+                p.text(
+                    Pos2::new(x, y),
+                    Align2::LEFT_TOP,
+                    "WORD DECORATION",
+                    FontId::monospace(7.0),
+                    MUTED2,
+                );
+                y += 18.0;
+                p.text(
+                    Pos2::new(x, y),
+                    Align2::LEFT_TOP,
+                    format!("“{}”", word.text),
+                    FontId::proportional(20.0),
+                    GOLD,
+                );
+                y += 30.0;
+                p.text(
+                    Pos2::new(x, y),
+                    Align2::LEFT_TOP,
+                    format!(
+                        "{} · lane {:.0}%",
+                        format_time(word.start),
+                        word.y.clamp(0.0, 1.0) * 100.0
+                    ),
+                    FontId::monospace(8.0),
+                    MUTED,
+                );
+                y += 18.0;
+                p.text(
+                    Pos2::new(x, y),
+                    Align2::LEFT_TOP,
+                    "Decorative: not attached to a note.",
+                    FontId::proportional(10.0),
+                    MUTED2,
+                );
+                y += 28.0;
+                let delete = Rect::from_min_size(Pos2::new(x, y), Vec2::new(r.width() - 28.0, 30.0));
+                if paint_button(ui, delete, "DELETE WORD", false, true) {
+                    self.delete_selected();
+                }
+                y += 40.0;
+            }
+        } else if !self.selected.is_empty() {
             let count = self.selected.len();
             p.text(
                 Pos2::new(x, y),
@@ -1396,12 +1724,16 @@ impl Editor {
                         MUTED,
                     );
                     y += 18.0;
+                    let ribbon = note
+                        .ribbon
+                        .map(|id| format!("ribbon {id}"))
+                        .unwrap_or_else(|| "no ribbon".into());
                     p.text(
                         Pos2::new(x, y),
                         Align2::LEFT_TOP,
-                        note.word.as_deref().unwrap_or("no word"),
+                        ribbon,
                         FontId::proportional(13.0),
-                        if note.word.is_some() { MINT } else { MUTED2 },
+                        if note.ribbon.is_some() { MINT } else { MUTED2 },
                     );
                     y += 24.0;
                 }
@@ -1409,7 +1741,7 @@ impl Editor {
                 p.text(
                     Pos2::new(x, y),
                     Align2::LEFT_TOP,
-                    format!("{count} notes in ribbon selection"),
+                    format!("{count} notes selected"),
                     FontId::proportional(13.0),
                     MINT,
                 );
@@ -1423,9 +1755,13 @@ impl Editor {
                 }
             }
             y += 38.0;
-            let clear = Rect::from_min_size(Pos2::new(x, y), Vec2::new(r.width() - 28.0, 28.0));
-            if paint_button(ui, clear, "CLEAR WORD", false, true) {
-                self.clear_selected_words();
+            let detach = Rect::from_min_size(Pos2::new(x, y), Vec2::new(r.width() - 28.0, 28.0));
+            let has_ribbon = self
+                .selected
+                .iter()
+                .any(|index| self.notes.get(*index).and_then(|note| note.ribbon).is_some());
+            if paint_button(ui, detach, "DETACH RIBBON", false, has_ribbon) && has_ribbon {
+                self.detach_selected_ribbons();
             }
             y += 36.0;
             let delete = Rect::from_min_size(Pos2::new(x, y), Vec2::new(r.width() - 28.0, 28.0));
@@ -1437,7 +1773,7 @@ impl Editor {
             p.text(
                 Pos2::new(x, y),
                 Align2::LEFT_TOP,
-                "Select a note or ribbon to edit it.",
+                "Select a note, ribbon, or word.",
                 FontId::proportional(11.0),
                 MUTED,
             );
@@ -1463,9 +1799,10 @@ impl Editor {
             "1–5  tools",
             "Space  play / pause",
             "← →  seek 1s (Shift 5s)",
-            "Ctrl+Z / Ctrl+Shift+Z  undo",
+            "Right-click  move now line",
+            "Ctrl+Z / ⇧Z  undo",
             "Delete  remove selection",
-            "Middle-drag  pan from any tool",
+            "Middle-drag  pan",
         ] {
             p.text(Pos2::new(x, y), Align2::LEFT_TOP, line, FontId::monospace(7.5), MUTED2);
             y += 15.0;
@@ -1498,6 +1835,14 @@ impl Editor {
         }
     }
 
+    fn ribbon_count(&self) -> usize {
+        self.notes
+            .iter()
+            .filter_map(|note| note.ribbon)
+            .collect::<BTreeSet<_>>()
+            .len()
+    }
+
     fn word_progress(&self) -> f32 {
         if self.word_bank.is_empty() {
             if self.notes.is_empty() { 0.0 } else { 1.0 }
@@ -1523,6 +1868,26 @@ impl Editor {
     fn midi_at_y(&self, y: f32, layout: &Layout) -> i32 {
         let lane_h = layout.note_area.height() / (self.high - self.low + 1) as f32;
         (self.high - ((y - layout.note_area.top()) / lane_h).floor() as i32).clamp(self.low, self.high)
+    }
+
+    fn word_rect(&self, word: &PlacedWord, layout: &Layout) -> Rect {
+        let x = self.time_to_x(word.start, layout);
+        let y = layout.note_area.top()
+            + word.y.clamp(0.0, 1.0) * layout.note_area.height().max(1.0);
+        let width = (word.text.chars().count() as f32 * 8.0 + 28.0).clamp(52.0, 190.0);
+        Rect::from_center_size(Pos2::new(x, y), Vec2::new(width, 24.0))
+    }
+
+    fn hit_word(&self, pos: Pos2, layout: &Layout) -> Option<usize> {
+        if !layout.note_area.contains(pos) {
+            return None;
+        }
+        self.words
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, word)| self.word_rect(word, layout).contains(pos))
+            .map(|(index, _)| index)
     }
 
     fn snap_time(&self, time: f64) -> f64 {
@@ -1556,6 +1921,14 @@ impl Editor {
     }
 
     fn erase_at(&mut self, pos: Pos2, layout: &Layout) {
+        if let Some(index) = self.hit_word(pos, layout) {
+            self.words.remove(index);
+            self.selected_word = None;
+            self.refresh_word_bank();
+            self.dirty = true;
+            self.status = "Word decoration erased and returned to the bank.".into();
+            return;
+        }
         if let Some(index) = self.hit_note(pos, layout) {
             self.notes.remove(index);
             self.selected.clear();
@@ -1602,8 +1975,26 @@ impl Editor {
         }
     }
 
+    fn snapshot(&self) -> Snapshot {
+        Snapshot {
+            notes: self.notes.clone(),
+            words: self.words.clone(),
+            custom_words: self.custom_words.clone(),
+        }
+    }
+
+    fn restore(&mut self, snapshot: Snapshot) {
+        self.notes = snapshot.notes;
+        self.words = snapshot.words;
+        self.custom_words = snapshot.custom_words;
+        self.selected.clear();
+        self.selected_word = None;
+        self.rebuild_word_bank();
+        self.refresh_word_bank();
+    }
+
     fn push_history(&mut self) {
-        self.history.push(self.notes.clone());
+        self.history.push(self.snapshot());
         if self.history.len() > 100 {
             self.history.remove(0);
         }
@@ -1613,10 +2004,8 @@ impl Editor {
 
     fn undo(&mut self) {
         if let Some(previous) = self.history.pop() {
-            self.redo.push(self.notes.clone());
-            self.notes = previous;
-            self.selected.clear();
-            self.refresh_word_bank();
+            self.redo.push(self.snapshot());
+            self.restore(previous);
             self.dirty = true;
             self.status = "Undo.".into();
         }
@@ -1624,16 +2013,25 @@ impl Editor {
 
     fn redo(&mut self) {
         if let Some(next) = self.redo.pop() {
-            self.history.push(self.notes.clone());
-            self.notes = next;
-            self.selected.clear();
-            self.refresh_word_bank();
+            self.history.push(self.snapshot());
+            self.restore(next);
             self.dirty = true;
             self.status = "Redo.".into();
         }
     }
 
     fn delete_selected(&mut self) {
+        if let Some(index) = self.selected_word {
+            self.push_history();
+            if index < self.words.len() {
+                self.words.remove(index);
+            }
+            self.selected_word = None;
+            self.refresh_word_bank();
+            self.dirty = true;
+            self.status = "Word decoration deleted and returned to the bank.".into();
+            return;
+        }
         if self.selected.is_empty() {
             return;
         }
@@ -1666,28 +2064,24 @@ impl Editor {
         self.status = format!("Transposed {} semitones.", semitones);
     }
 
-    fn clear_selected_words(&mut self) {
+    fn detach_selected_ribbons(&mut self) {
         if self.selected.is_empty() {
             return;
         }
         self.push_history();
         for index in self.selected.iter().copied() {
             if let Some(note) = self.notes.get_mut(index) {
-                note.word = None;
-                note.word_index = None;
-                note.line = None;
+                note.ribbon = None;
             }
         }
-        self.refresh_word_bank();
         self.dirty = true;
-        self.status = "Word removed from selection; it is back in the bank.".into();
+        self.status = "Selected notes detached from their ribbon.".into();
     }
 
-    fn assign_word(
+    fn place_word(
         &mut self,
         token_index: usize,
-        mut targets: Vec<usize>,
-        create_at: Option<Pos2>,
+        pos: Pos2,
         layout: &Layout,
         audio: &Option<AudioEngine>,
     ) {
@@ -1695,39 +2089,36 @@ impl Editor {
             return;
         };
         self.push_history();
-        if targets.is_empty() {
-            if let Some(pos) = create_at {
-                let midi = self.midi_at_y(pos.y, layout);
-                let start = self.snap_time(self.x_to_time(pos.x, layout));
-                self.notes.push(Note {
-                    start,
-                    dur: 0.32,
-                    midi,
-                    word: None,
-                    word_index: None,
-                    line: None,
-                    vel: None,
-                });
-                targets.push(self.notes.len() - 1);
-            }
-        }
-        for index in targets.iter().copied() {
-            if let Some(note) = self.notes.get_mut(index) {
-                note.word = Some(token.text.clone());
-                note.word_index = Some(token.index);
-                note.line = Some(token.line);
-            }
-        }
-        self.selected = targets.iter().copied().collect();
+        let (start, y) = if let Some(index) = self.hit_note(pos, layout) {
+            let note = &self.notes[index];
+            let y = ((self.midi_to_y(note.midi, layout) - layout.note_area.top())
+                / layout.note_area.height().max(1.0))
+                .clamp(0.02, 0.98);
+            (note.start, y)
+        } else {
+            (
+                self.snap_time(self.x_to_time(pos.x, layout)),
+                ((pos.y - layout.note_area.top()) / layout.note_area.height().max(1.0))
+                    .clamp(0.02, 0.98),
+            )
+        };
+        self.words.push(PlacedWord {
+            text: token.text.clone(),
+            start,
+            y,
+            line: token.line,
+            word_index: token.index,
+            custom_id: token.custom_id,
+        });
+        self.selected.clear();
+        self.selected_word = Some(self.words.len() - 1);
         self.pending_word = None;
         self.word_drag = None;
         self.refresh_word_bank();
         self.dirty = true;
         self.status = format!(
-            "Placed “{}” on {} note{}.",
-            token.text,
-            targets.len(),
-            if targets.len() == 1 { "" } else { "s" }
+            "Placed “{}” as a decorative word. Drag it anywhere with SELECT.",
+            token.text
         );
         if self.playing {
             if let Some(audio) = audio {
@@ -1736,13 +2127,33 @@ impl Editor {
         }
     }
 
+    fn add_custom_word(&mut self) {
+        let text = self.custom_word_input.trim().to_string();
+        if text.is_empty() {
+            return;
+        }
+        self.push_history();
+        let id = self.next_custom_id;
+        self.next_custom_id = self.next_custom_id.saturating_add(1);
+        self.custom_words.insert(0, CustomWord { id, text: text.clone() });
+        self.rebuild_word_bank();
+        self.custom_word_input.clear();
+        self.custom_word_open = false;
+        self.dirty = true;
+        self.status = format!("Added custom word “{text}” to the front of the bank.");
+    }
+
+    fn rebuild_word_bank(&mut self) {
+        self.word_bank = build_word_bank(&self.song.lines, &self.custom_words, &self.words);
+        self.pending_word = None;
+        self.word_drag = None;
+    }
+
     fn refresh_word_bank(&mut self) {
         for token in &mut self.word_bank {
-            token.placed = self.notes.iter().any(|note| {
-                (note.line == Some(token.line) && note.word_index == Some(token.index))
-                    || (note.line == Some(token.line)
-                        && note.word_index.is_none()
-                        && note.word.as_deref() == Some(token.text.as_str()))
+            token.placed = self.words.iter().any(|word| match token.custom_id {
+                Some(id) => word.custom_id == Some(id),
+                None => word.line == token.line && word.word_index == token.index,
             });
         }
     }
@@ -1772,51 +2183,130 @@ fn note_order(a: &Note, b: &Note) -> std::cmp::Ordering {
         .then_with(|| a.midi.cmp(&b.midi))
 }
 
-fn same_word(a: &Note, b: &Note) -> bool {
-    if a.word.is_none() || b.word.is_none() || a.word != b.word || a.line != b.line {
-        return false;
-    }
-    match (a.word_index, b.word_index) {
-        (Some(left), Some(right)) => left == right,
-        _ => true,
+fn legacy_key(note: &Note) -> Option<(usize, Option<usize>, String)> {
+    let word = note.word.clone()?;
+    Some((note.line.unwrap_or(usize::MAX), note.word_index, word))
+}
+
+fn word_y_for_midi(song: &Song, midi: i32) -> f32 {
+    let low = if song.high > song.low { song.low } else { 48 };
+    let high = if song.high > song.low { song.high } else { 84 };
+    (1.0 - (midi - low) as f32 / (high - low).max(1) as f32).clamp(0.04, 0.96)
+}
+
+fn migrate_legacy_notes(
+    song: &Song,
+    notes: &mut [Note],
+    words: &mut Vec<PlacedWord>,
+    next_ribbon_id: &mut u32,
+) {
+    let mut seen_words: BTreeSet<(usize, Option<usize>, String)> = BTreeSet::new();
+    let mut ribbons: BTreeMap<(usize, Option<usize>, String), u32> = BTreeMap::new();
+    for note in notes.iter_mut() {
+        let Some(key) = legacy_key(note) else {
+            note.word = None;
+            note.word_index = None;
+            note.line = None;
+            continue;
+        };
+        if seen_words.insert(key.clone()) {
+            words.push(PlacedWord {
+                text: key.2.clone(),
+                start: note.start,
+                y: word_y_for_midi(song, note.midi),
+                line: note.line,
+                word_index: note.word_index,
+                custom_id: None,
+            });
+        }
+        if note.ribbon.is_none() {
+            let ribbon = *ribbons.entry(key).or_insert_with(|| {
+                let ribbon = *next_ribbon_id;
+                *next_ribbon_id = next_ribbon_id.saturating_add(1);
+                ribbon
+            });
+            note.ribbon = Some(ribbon);
+        }
+        note.word = None;
+        note.word_index = None;
+        note.line = None;
     }
 }
 
-fn is_word_continuation(notes: &[Note], index: usize) -> bool {
-    index > 0 && same_word(&notes[index - 1], &notes[index])
+fn migrate_legacy_ribbons(notes: &mut [Note], next_ribbon_id: &mut u32) {
+    let mut ribbons: BTreeMap<(usize, Option<usize>, String), u32> = BTreeMap::new();
+    for note in notes.iter() {
+        if note.ribbon.is_some() {
+            continue;
+        }
+        if let Some(key) = legacy_key(note) {
+            ribbons.entry(key).or_insert_with(|| {
+                let ribbon = *next_ribbon_id;
+                *next_ribbon_id = next_ribbon_id.saturating_add(1);
+                ribbon
+            });
+        }
+    }
+    for note in notes.iter_mut() {
+        if note.ribbon.is_none() {
+            if let Some(key) = legacy_key(note) {
+                if let Some(ribbon) = ribbons.get(&key) {
+                    note.ribbon = Some(*ribbon);
+                }
+            }
+        }
+        note.word = None;
+        note.word_index = None;
+        note.line = None;
+    }
 }
 
 fn alpha(color: Color32, a: u8) -> Color32 {
     Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), a)
 }
 
-fn build_word_bank(song: &Song, notes: &[Note]) -> Vec<WordToken> {
+fn build_word_bank(
+    lines: &[LyricLine],
+    custom_words: &[CustomWord],
+    words: &[PlacedWord],
+) -> Vec<WordToken> {
     let mut bank = Vec::new();
-    for (line_index, line) in song.lines.iter().enumerate() {
+    // Custom words are inserted at the front by the + button and stay first.
+    for custom in custom_words {
+        bank.push(WordToken {
+            text: custom.text.clone(),
+            line: None,
+            index: None,
+            custom_id: Some(custom.id),
+            start: 0.0,
+            placed: words.iter().any(|word| word.custom_id == Some(custom.id)),
+        });
+    }
+    let mut lyric_tokens = Vec::new();
+    for (line_index, line) in lines.iter().enumerate() {
         for (word_index, (text, start, _end)) in split_line_words(line).into_iter().enumerate() {
-            bank.push(WordToken {
+            lyric_tokens.push(WordToken {
                 text,
-                line: line_index,
-                index: word_index,
+                line: Some(line_index),
+                index: Some(word_index),
+                custom_id: None,
                 start,
                 placed: false,
             });
         }
     }
-    bank.sort_by(|a, b| {
+    lyric_tokens.sort_by(|a, b| {
         a.start
             .partial_cmp(&b.start)
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| a.line.cmp(&b.line))
             .then_with(|| a.index.cmp(&b.index))
     });
-    for token in &mut bank {
-        token.placed = notes.iter().any(|note| {
-            (note.line == Some(token.line) && note.word_index == Some(token.index))
-                || (note.line == Some(token.line)
-                    && note.word_index.is_none()
-                    && note.word.as_deref() == Some(token.text.as_str()))
+    for mut token in lyric_tokens {
+        token.placed = words.iter().any(|word| {
+            word.line == token.line && word.word_index == token.index
         });
+        bank.push(token);
     }
     bank
 }
@@ -1866,6 +2356,206 @@ fn write_song(root: &Path, song: &Song) -> Result<(), String> {
     let path = PathBuf::from(root).join("assets/songs").join(&song.id).join("song.json");
     let raw = serde_json::to_string_pretty(song).map_err(|error| error.to_string())?;
     fs::write(&path, raw).map_err(|error| format!("Could not save {}: {error}", path.display()))
+}
+
+fn paint_icon_button(
+    ui: &mut Ui,
+    rect: Rect,
+    icon: EditorIcon,
+    active: bool,
+    enabled: bool,
+    tooltip: &str,
+) -> bool {
+    let response = ui
+        .interact(
+            rect,
+            Id::new((
+                "editor_icon",
+                icon as u8,
+                rect.left() as i32,
+                rect.top() as i32,
+            )),
+            if enabled { Sense::click() } else { Sense::hover() },
+        )
+        .on_hover_text(tooltip);
+    let p = ui.painter();
+    let fill = if active {
+        Color32::from_rgba_unmultiplied(124, 247, 196, 26)
+    } else if response.hovered() && enabled {
+        Color32::from_rgba_unmultiplied(255, 255, 255, 13)
+    } else {
+        Color32::from_rgba_unmultiplied(255, 255, 255, 6)
+    };
+    p.rect_filled(rect, 8.0, if enabled { fill } else { Color32::from_white_alpha(4) });
+    p.rect_stroke(
+        rect,
+        8.0,
+        Stroke::new(
+            1.0f32,
+            if active {
+                alpha(MINT, 95)
+            } else {
+                Color32::from_white_alpha(24)
+            },
+        ),
+        StrokeKind::Inside,
+    );
+    let color = if !enabled {
+        MUTED2
+    } else if active {
+        MINT
+    } else {
+        INK
+    };
+    paint_editor_icon(p, rect.shrink(5.0), icon, color, active);
+    enabled && response.clicked()
+}
+
+fn paint_editor_icon(p: &egui::Painter, rect: Rect, icon: EditorIcon, color: Color32, active: bool) {
+    let c = rect.center();
+    let s = rect.width().min(rect.height()) * 0.44;
+    let stroke = Stroke::new(1.9f32, color);
+    match icon {
+        EditorIcon::Pan => {
+            p.line_segment([c - Vec2::new(s, 0.0), c + Vec2::new(s, 0.0)], stroke);
+            p.line_segment([c - Vec2::new(0.0, s), c + Vec2::new(0.0, s)], stroke);
+            for tip in [
+                c + Vec2::new(s, 0.0),
+                c - Vec2::new(s, 0.0),
+                c + Vec2::new(0.0, s),
+                c - Vec2::new(0.0, s),
+            ] {
+                let dir = (tip - c).normalized() * (s * 0.32);
+                let side = Vec2::new(-dir.y, dir.x) * 0.5;
+                p.line_segment([tip, tip - dir + side], stroke);
+                p.line_segment([tip, tip - dir - side], stroke);
+            }
+        }
+        EditorIcon::Note => {
+            p.line_segment(
+                [c + Vec2::new(s * 0.48, -s), c + Vec2::new(s * 0.48, s * 0.48)],
+                stroke,
+            );
+            p.rect_filled(
+                Rect::from_center_size(c + Vec2::new(0.0, s * 0.5), Vec2::new(s * 1.25, s * 0.62)),
+                s * 0.3,
+                color,
+            );
+        }
+        EditorIcon::Ribbon => {
+            p.rect_filled(
+                Rect::from_center_size(c + Vec2::new(-s * 0.56, 0.0), Vec2::new(s * 0.92, s * 0.46)),
+                s * 0.22,
+                color,
+            );
+            p.rect_filled(
+                Rect::from_center_size(c + Vec2::new(s * 0.56, 0.0), Vec2::new(s * 0.92, s * 0.46)),
+                s * 0.22,
+                color,
+            );
+            p.line_segment(
+                [c + Vec2::new(-s * 0.12, 0.0), c + Vec2::new(s * 0.12, 0.0)],
+                Stroke::new(1.5f32, color),
+            );
+        }
+        EditorIcon::Eraser => {
+            let points = vec![
+                Pos2::new(rect.left() + rect.width() * 0.12, rect.bottom() - rect.height() * 0.12),
+                Pos2::new(rect.left() + rect.width() * 0.56, rect.top() + rect.height() * 0.1),
+                Pos2::new(rect.right() - rect.width() * 0.06, rect.top() + rect.height() * 0.32),
+                Pos2::new(rect.right() - rect.width() * 0.42, rect.bottom() - rect.height() * 0.04),
+            ];
+            p.add(egui::Shape::convex_polygon(
+                points,
+                alpha(color, 80),
+                Stroke::new(1.4f32, color),
+            ));
+            p.line_segment(
+                [
+                    Pos2::new(rect.left() + rect.width() * 0.4, rect.bottom() - rect.height() * 0.1),
+                    Pos2::new(rect.right() - rect.width() * 0.22, rect.top() + rect.height() * 0.2),
+                ],
+                Stroke::new(1.0f32, color),
+            );
+        }
+        EditorIcon::Select => {
+            let points = vec![
+                c + Vec2::new(-s * 0.55, -s),
+                c + Vec2::new(-s * 0.55, s * 0.85),
+                c + Vec2::new(-s * 0.08, s * 0.4),
+                c + Vec2::new(s * 0.55, s * 0.28),
+            ];
+            p.add(egui::Shape::convex_polygon(points, color, Stroke::NONE));
+        }
+        EditorIcon::Snap => {
+            for row in -1..=1 {
+                for col in -1..=1 {
+                    let point = c + Vec2::new(col as f32 * s * 0.8, row as f32 * s * 0.8);
+                    let radius = if row == 0 && col == 0 { 2.2 } else { 1.3 };
+                    p.circle_filled(point, radius, if row == 0 && col == 0 { MINT } else { color });
+                }
+            }
+            p.line_segment(
+                [c - Vec2::new(s * 1.0, 0.0), c + Vec2::new(s * 1.0, 0.0)],
+                Stroke::new(0.8f32, alpha(color, 80)),
+            );
+        }
+        EditorIcon::Suggestions => {
+            p.rect_stroke(
+                Rect::from_center_size(c + Vec2::new(-s * 0.16, -s * 0.16), Vec2::new(s * 1.5, s * 1.1)),
+                3.0,
+                Stroke::new(1.2f32, alpha(color, 110)),
+                StrokeKind::Inside,
+            );
+            p.rect_stroke(
+                Rect::from_center_size(c + Vec2::new(s * 0.16, s * 0.16), Vec2::new(s * 1.5, s * 1.1)),
+                3.0,
+                Stroke::new(1.5f32, color),
+                StrokeKind::Inside,
+            );
+        }
+        EditorIcon::Follow => {
+            p.circle_stroke(c, s * 0.92, Stroke::new(1.5f32, color));
+            p.line_segment([c - Vec2::new(s * 1.15, 0.0), c - Vec2::new(s * 0.5, 0.0)], stroke);
+            p.line_segment([c + Vec2::new(s * 0.5, 0.0), c + Vec2::new(s * 1.15, 0.0)], stroke);
+            p.line_segment([c - Vec2::new(0.0, s * 1.15), c - Vec2::new(0.0, s * 0.5)], stroke);
+            p.line_segment([c + Vec2::new(0.0, s * 0.5), c + Vec2::new(0.0, s * 1.15)], stroke);
+            p.circle_filled(c, 1.8, if active { color } else { MINT });
+        }
+        EditorIcon::ZoomOut | EditorIcon::ZoomIn => {
+            let lens = c + Vec2::new(-s * 0.18, -s * 0.18);
+            p.circle_stroke(lens, s * 0.62, Stroke::new(1.6f32, color));
+            p.line_segment(
+                [lens + Vec2::new(s * 0.46, s * 0.46), c + Vec2::new(s * 1.1, s * 1.1)],
+                Stroke::new(1.8f32, color),
+            );
+            p.line_segment(
+                [lens - Vec2::new(s * 0.33, 0.0), lens + Vec2::new(s * 0.33, 0.0)],
+                Stroke::new(1.5f32, color),
+            );
+            if matches!(icon, EditorIcon::ZoomIn) {
+                p.line_segment(
+                    [lens - Vec2::new(0.0, s * 0.33), lens + Vec2::new(0.0, s * 0.33)],
+                    Stroke::new(1.5f32, color),
+                );
+            }
+        }
+        EditorIcon::Plus => {
+            p.line_segment([c - Vec2::new(s * 0.8, 0.0), c + Vec2::new(s * 0.8, 0.0)], stroke);
+            p.line_segment([c - Vec2::new(0.0, s * 0.8), c + Vec2::new(0.0, s * 0.8)], stroke);
+        }
+        EditorIcon::Back => {
+            p.line_segment([c + Vec2::new(s * 0.7, 0.0), c - Vec2::new(s * 0.7, 0.0)], stroke);
+            p.line_segment(
+                [c - Vec2::new(s * 0.7, 0.0), c - Vec2::new(s * 0.15, -s * 0.55)],
+                stroke,
+            );
+            p.line_segment(
+                [c - Vec2::new(s * 0.7, 0.0), c - Vec2::new(s * 0.15, s * 0.55)],
+                stroke,
+            );
+        }
+    }
 }
 
 fn paint_button(ui: &mut Ui, rect: Rect, text: &str, primary: bool, enabled: bool) -> bool {

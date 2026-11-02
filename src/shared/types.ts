@@ -17,6 +17,24 @@ export interface MelodyNote {
   vel?: number;
   /** cents offset from equal temperament, for synthesized charts */
   cents?: number;
+  /** manual ribbon group; notes with the same value are one visual ribbon */
+  ribbon?: number;
+}
+
+export interface PlacedWord {
+  text: string;
+  /** center time of the decorative label */
+  start: number;
+  /** 0.0 = top of the playfield, 1.0 = bottom */
+  y: number;
+  line?: number;
+  wordIndex?: number;
+  customId?: number;
+}
+
+export interface CustomWord {
+  id: number;
+  text: string;
 }
 
 export interface LyricWord {
@@ -70,6 +88,10 @@ export interface Song {
   releaseDate?: string;
   artistBio?: string;
   albumBio?: string;
+  /** decorative lyrics, positioned independently from notes */
+  placedWords?: PlacedWord[];
+  /** custom words added from the editor word bank */
+  customWords?: CustomWord[];
 }
 
 /** What the library screen needs. Audio files are resolved to media:// URLs. */

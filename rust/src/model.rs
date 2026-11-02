@@ -56,6 +56,62 @@ pub struct Note {
     pub line: Option<usize>,
     #[serde(default)]
     pub vel: Option<f32>,
+    /// Manual ribbon group. Notes with the same value are one visual ribbon.
+    #[serde(default)]
+    pub ribbon: Option<u32>,
+}
+
+impl Note {
+    /// Whether two notes should be joined by a ribbon neck.
+    ///
+    /// Legacy charts only have word fields to describe a ribbon, so they fall
+    /// back to word/line matching when no explicit ribbon group exists.
+    pub fn shares_ribbon(&self, other: &Note) -> bool {
+        match (self.ribbon, other.ribbon) {
+            (Some(left), Some(right)) => left == right,
+            (None, None) => {
+                if self.word.is_none()
+                    || other.word.is_none()
+                    || self.word != other.word
+                    || self.line != other.line
+                {
+                    return false;
+                }
+                match (self.word_index, other.word_index) {
+                    (Some(left), Some(right)) => left == right,
+                    _ => true,
+                }
+            }
+            _ => false,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct PlacedWord {
+    pub text: String,
+    /// Center time of the decorative word label.
+    pub start: f64,
+    /// 0.0 = top of the playfield, 1.0 = bottom. Decorative words are not
+    /// attached to a note, so they can float anywhere in the level.
+    #[serde(default = "default_word_y")]
+    pub y: f32,
+    #[serde(default)]
+    pub line: Option<usize>,
+    #[serde(rename = "wordIndex", default)]
+    pub word_index: Option<usize>,
+    #[serde(rename = "customId", default)]
+    pub custom_id: Option<u32>,
+}
+
+fn default_word_y() -> f32 {
+    0.5
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct CustomWord {
+    pub id: u32,
+    pub text: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -133,6 +189,12 @@ pub struct Song {
     /// Work in progress for an unmapped song.
     #[serde(rename = "draftNotes", default, skip_serializing_if = "Vec::is_empty")]
     pub draft_notes: Vec<Note>,
+    /// Decorative lyric labels, positioned independently of the notes.
+    #[serde(rename = "placedWords", default, skip_serializing_if = "Vec::is_empty")]
+    pub placed_words: Vec<PlacedWord>,
+    /// Words the mapper added with the word-bank + button.
+    #[serde(rename = "customWords", default, skip_serializing_if = "Vec::is_empty")]
+    pub custom_words: Vec<CustomWord>,
 }
 
 impl Song {

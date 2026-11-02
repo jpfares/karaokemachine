@@ -1477,9 +1477,14 @@ impl KaraokeMachineApp {
 
         // melody
         draw_melody(&painter, stage, &layout, active, chart_time, rect.width());
-        // words on notes
+        // Decorative lyrics. Older mapped charts only have words attached to
+        // notes, so fall back to the legacy renderer for those.
         if self.settings.show_lyrics {
-            draw_words(&painter, stage, &layout, chart_time, rect.width());
+            if stage.song.placed_words.is_empty() {
+                draw_words(&painter, stage, &layout, chart_time, rect.width());
+            } else {
+                draw_placed_words(&painter, stage, &layout, chart_time, rect.width());
+            }
         }
 
         // left rail labels
@@ -3013,15 +3018,13 @@ fn draw_melody(
         let group_prev = i > 0 && {
             let prev = &notes[i - 1];
             let gap = note.start - (prev.start + prev.dur);
-            gap <= 0.85
-                && (same_lyric_word(prev, note)
-                    || (prev.word.is_none() && note.word.is_none()))
+            let limit = if note.ribbon.is_some() { 3.0 } else { 0.85 };
+            gap <= limit && prev.shares_ribbon(note)
         };
         let group_next = notes.get(i + 1).map(|next| {
             let gap = next.start - (note.start + note.dur);
-            gap <= 0.85
-                && (same_lyric_word(note, next)
-                    || (next.word.is_none() && note.word.is_none()))
+            let limit = if note.ribbon.is_some() { 3.0 } else { 0.85 };
+            gap <= limit && note.shares_ribbon(next)
         }).unwrap_or(false);
         // Each note keeps its own rounded body. A thin neck connects it to the
         // next note of the same word/phrase, so the word remains one ribbon but
@@ -3144,6 +3147,67 @@ fn add_ribbon_mesh(
     add_cap(mesh, first);
     add_cap(mesh, last);
     let _ = (low, high);
+}
+
+fn draw_placed_words(p: &egui::Painter, stage: &Stage, layout: &Layout, time: f64, width: f32) {
+    for word in &stage.song.placed_words {
+        if word.start < time - 1.5 || word.start > time + 11.0 {
+            continue;
+        }
+        let x = layout.hit_x + (word.start - time) as f32 * layout.pps;
+        if x < layout.hit_x - 80.0 || x > width + 100.0 {
+            continue;
+        }
+        let y = (layout.lane_top
+            + word.y.clamp(0.02, 0.98) * (layout.lane_bottom - layout.lane_top))
+            .clamp(layout.lane_top + 12.0, layout.lane_bottom - 12.0);
+        let active = (time - word.start).abs() <= 0.45;
+        let font = FontId::proportional(if active { 15.0 } else { 13.0 });
+        let text_w = word.text.chars().count() as f32 * 7.4 + 14.0;
+        let pill_w = text_w.min(190.0);
+        let half = pill_w * 0.5 + 2.0;
+        let cx = x.max(layout.hit_x + half).min(width - half);
+        let pill = Rect::from_center_size(Pos2::new(cx, y), Vec2::new(pill_w, 24.0));
+        p.rect_filled(
+            pill,
+            5.0,
+            Color32::from_rgba_unmultiplied(5, 8, 15, if active { 205 } else { 120 }),
+        );
+        p.rect_stroke(
+            pill,
+            5.0,
+            Stroke::new(
+                1.0f32,
+                if active {
+                    alpha(GOLD, 110)
+                } else {
+                    Color32::from_white_alpha(22)
+                },
+            ),
+            StrokeKind::Inside,
+        );
+        if active {
+            p.line_segment(
+                [
+                    Pos2::new(pill.left() + 5.0, pill.bottom() + 2.0),
+                    Pos2::new(pill.right() - 5.0, pill.bottom() + 2.0),
+                ],
+                Stroke::new(2.0f32, GOLD),
+            );
+        }
+        let display = if word.text.chars().count() > 24 {
+            format!("{}…", word.text.chars().take(23).collect::<String>())
+        } else {
+            word.text.clone()
+        };
+        p.text(
+            pill.center(),
+            Align2::CENTER_CENTER,
+            display,
+            font,
+            if active { Color32::WHITE } else { alpha(INK, 175) },
+        );
+    }
 }
 
 fn draw_words(p: &egui::Painter, stage: &Stage, layout: &Layout, time: f64, width: f32) {

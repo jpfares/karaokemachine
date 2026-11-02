@@ -32,12 +32,16 @@ UPLOADING NEW SONGS
   Mapping the songs already in the "assets" folder does not need them.
 
 EDITOR QUICK REFERENCE
+  Top toolbar              Icon-only; hover an icon for its name.
   Pan tool                 Drag to pan. Middle-drag pans from any tool.
+  Right-click              Bring the now-playing line to that part of the level.
   Note tool                Click or drag on a lane. Pitch is fixed; drag sets length.
-  Ribbon tool              Drag across notes, then drop one word on the selection.
-  Eraser                   Click or sweep over notes to delete them.
-  Select tool              Click to select, drag the body to move, drag the ends to resize.
-  Word bank                Drag a word onto a note. Placed words leave the bank.
+  Ribbon tool              Drag across notes and release over the last note to connect them.
+  Eraser                   Click or sweep over notes or word decorations to delete them.
+  Select tool              Select notes or words. Drag note bodies to move, note ends to resize.
+  Word bank                Drag a word anywhere onto the level. Words are decorative and
+                           do not have to sit on a note, though they can be dropped on one.
+  + button                 Add a custom word to the front of the word bank.
   Space                    Play / pause
   Left / Right arrows      Seek 1 second (Shift: 5 seconds)
   Ctrl+Z                   Undo
