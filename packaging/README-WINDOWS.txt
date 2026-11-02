@@ -18,12 +18,14 @@ IMPORTANT: NO COMMERCIAL AUDIO IS BUNDLED
 - Use Library -> Maps to browse the public map list, then use Import Map File
   for a downloaded package. The app downloads the audio from the map's source
   link and applies the mapping locally.
-- Every included warm-up starts as UNMAPPED and cannot be played until mapped.
-- Click an UNMAPPED song in the library to open the manual level editor.
-  The old automatic chart is shown translucently as a guide only; it is not
-  playable until you draw the notes and place every lyric word yourself.
+- The six generated warm-ups ship pre-mapped and playable. They are listed in
+  Library -> Maps alongside community maps.
+- Every imported song starts as UNMAPPED. Click it in the library to open the
+  manual level editor. The old automatic chart is shown translucently as a
+  guide only; it is not playable until you draw the notes and place every
+  lyric word yourself.
 - Press SUBMIT MAPPING only when the editor says the mapping is complete.
-  After that the song becomes playable in the normal singing stage.
+  After that the imported song becomes playable in the normal singing stage.
 
 MAPS AND AUDIO
 - A map package contains notes, lyrics, cover art, and the original source
@@ -37,7 +39,7 @@ MAPS AND AUDIO
   fetch editable metadata and lyrics, download the audio, separate the
   backing and vocal stems, and open the editor automatically.
 - If the tools are missing, the upload and map-install flows explain what to
-  install. Mapping the bundled warm-ups does not need them.
+  install. The bundled warm-ups do not need them.
 
 EDITOR QUICK REFERENCE
   Top toolbar              Icon-only; hover an icon for its name.

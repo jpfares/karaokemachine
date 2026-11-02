@@ -39,7 +39,8 @@ To share a map, submit a mapping made in the editor. See
 - **Per-song vertical fit.** The pitch lane fits the melody, so high and low songs remain
   readable without scrolling vertically.
 - **Six warm-up tracks.** Major scale, pentatonic scales, blues, chromatic climb, and a
-  maj7 arpeggio, with synthesized backing and guide vocals.
+  maj7 arpeggio, with synthesized backing and guide vocals. They ship pre-mapped and
+  playable, and appear in **Library → Maps** alongside community maps.
 - **Native and offline.** Rust + `egui`/`eframe`, `cpal` audio, `symphonia` decoding. The
   singing app does not need a browser or Electron.
 
@@ -59,12 +60,13 @@ To share a map, submit a mapping made in the editor. See
 Settings also contains the input microphone, backing/vocal levels, count-in, sync trim,
 mic latency, octave shift, and the vocal-range test.
 
-## How a song becomes playable
+## How an imported song becomes playable
 
-Every song starts **UNMAPPED** and cannot be sung until a person maps it. The old
-automatic chart is only a translucent suggestion.
+Every imported song starts **UNMAPPED** and cannot be sung until a person maps it. The old
+automatic chart is only a translucent suggestion. The six generated warm-ups are the
+exception: they ship pre-mapped, playable, and listed in **Library → Maps**.
 
-1. Click an UNMAPPED song in the library.
+1. Click an UNMAPPED imported song in the library.
 2. Draw or correct the vocal notes over the suggestion.
 3. Connect notes into ribbons where a word or vocal run should glide.
 4. Drag lyric words anywhere onto the level as decorations.

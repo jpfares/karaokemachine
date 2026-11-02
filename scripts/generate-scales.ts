@@ -510,6 +510,7 @@ async function main() {
       title: spec.title,
       artist: 'KaraokeMachine warm-up',
       source: 'scale',
+      mapped: true,
       duration: Number(duration.toFixed(2)),
       bpm: spec.bpm,
       tags: spec.tags,

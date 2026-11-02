@@ -2097,6 +2097,65 @@ impl KaraokeMachineApp {
                 Stroke::new(0.6f32, Color32::from_white_alpha(14)),
             );
         }
+
+        let mut y = list_top + self.map_index.len() as f32 * 68.0;
+        for (song_index, song) in self
+            .songs
+            .iter()
+            .enumerate()
+            .filter(|(_, song)| song.source == "scale")
+        {
+            let row = Rect::from_min_size(
+                Pos2::new(body.left(), y),
+                Vec2::new(body.width(), 62.0),
+            );
+            y += 68.0;
+            if row.bottom() < body.top() || row.top() > body.bottom() {
+                continue;
+            }
+            let cover = Rect::from_min_size(row.left_top(), Vec2::new(54.0, 54.0));
+            p.rect_filled(cover, 8.0, Color32::from_rgb(18, 25, 42));
+            if let Some(texture) = self.covers.get(&song.id) {
+                p.image(
+                    texture.id(),
+                    cover,
+                    Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                    Color32::WHITE,
+                );
+            } else {
+                paint_cover_fallback(p, cover, &song.title);
+            }
+            p.text(
+                Pos2::new(row.left() + 66.0, row.top() + 9.0),
+                Align2::LEFT_TOP,
+                &song.title,
+                FontId::proportional(12.0),
+                INK,
+            );
+            p.text(
+                Pos2::new(row.left() + 66.0, row.top() + 27.0),
+                Align2::LEFT_TOP,
+                format!("Bundled warm-up · {}", format_time(song.duration())),
+                FontId::monospace(7.0),
+                MUTED,
+            );
+            let sing = Rect::from_min_size(
+                Pos2::new(row.right() - 82.0, row.top() + 17.0),
+                Vec2::new(76.0, 28.0),
+            );
+            paint_button(ui, sing, "SING", true);
+            if click(ui, sing, ("map_warmup_play", song_index)) {
+                actions.push(Action::PlaySong(song_index));
+            }
+            let main = Rect::from_min_max(row.min, Pos2::new(row.right() - 90.0, row.bottom()));
+            if click(ui, main, ("map_warmup_row", song_index)) {
+                actions.push(Action::PlaySong(song_index));
+            }
+            p.line_segment(
+                [row.left_bottom(), row.right_bottom()],
+                Stroke::new(0.6f32, Color32::from_white_alpha(14)),
+            );
+        }
     }
 
     fn draw_drawer_imports(&self, ui: &mut egui::Ui, p: &egui::Painter, body: Rect, actions: &mut Vec<Action>) {

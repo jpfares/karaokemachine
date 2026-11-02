@@ -73,6 +73,9 @@ cp "$PACKAGING_README" "$DIST_DIR/README-WINDOWS.txt"
 # Ship the app and the generated warm-ups only. Commercial audio and the local
 # library must never be included in a distributed package. Users obtain songs
 # through the map browser or the upload flow, with audio fetched from its source.
+# Clear the staged library first so no stale commercial media can survive from
+# an earlier build.
+rm -rf "$DIST_DIR/assets/songs"
 mkdir -p "$DIST_DIR/assets/songs"
 if [[ -f "$ROOT/assets/icon.png" ]]; then
   cp "$ROOT/assets/icon.png" "$DIST_DIR/assets/icon.png"
@@ -87,6 +90,19 @@ for warmup in "$ROOT"/assets/songs/scale-*; do
   cp -a "$warmup" "$DIST_DIR/assets/songs/"
 done
 shopt -u nullglob
+
+SOURCE_WARMUPS=$(find "$ROOT/assets/songs" -maxdepth 1 -type d -name 'scale-*' | wc -l | tr -d ' ')
+STAGED_WARMUPS=$(find "$DIST_DIR/assets/songs" -maxdepth 1 -type d -name 'scale-*' | wc -l | tr -d ' ')
+if [[ "$SOURCE_WARMUPS" -eq 0 || "$STAGED_WARMUPS" -ne "$SOURCE_WARMUPS" ]]; then
+  echo "error: staged warm-ups ($STAGED_WARMUPS) do not match the source library ($SOURCE_WARMUPS)." >&2
+  exit 1
+fi
+for warmup in "$DIST_DIR"/assets/songs/scale-*; do
+  if [[ ! -f "$warmup/song.json" ]]; then
+    echo "error: staged warm-up is missing song.json: $warmup" >&2
+    exit 1
+  fi
+done
 
 SONGS=$(find "$DIST_DIR/assets/songs" -name song.json | wc -l | tr -d ' ')
 if [[ "$SONGS" -eq 0 ]]; then
