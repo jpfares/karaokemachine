@@ -54,6 +54,7 @@ enum EditorIcon {
     ZoomIn,
     Plus,
     Back,
+    Submit,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -959,12 +960,22 @@ impl Editor {
             FontId::monospace(7.0),
             INK,
         );
-        let submit_rect = Rect::from_min_size(Pos2::new(rect.right() - 148.0, 12.0), Vec2::new(132.0, 36.0));
+        let submit_rect = Rect::from_min_size(Pos2::new(rect.right() - 54.0, 12.0), Vec2::new(38.0, 36.0));
         let ok = self.validate().is_ok();
-        if paint_button(ui, submit_rect, "SUBMIT MAPPING", ok, ok) {
+        if paint_icon_button(
+            ui,
+            submit_rect,
+            EditorIcon::Submit,
+            ok,
+            ok,
             if ok {
-                *event = EditorEvent::Submit;
-            }
+                "Submit mapping — this song becomes playable"
+            } else {
+                "Place all notes and word decorations before submitting"
+            },
+        ) && ok
+        {
+            *event = EditorEvent::Submit;
         }
         let _ = layout;
     }
@@ -2553,6 +2564,17 @@ fn paint_editor_icon(p: &egui::Painter, rect: Rect, icon: EditorIcon, color: Col
             p.line_segment(
                 [c - Vec2::new(s * 0.7, 0.0), c - Vec2::new(s * 0.15, s * 0.55)],
                 stroke,
+            );
+        }
+        EditorIcon::Submit => {
+            p.circle_stroke(c, s * 0.95, Stroke::new(1.5f32, color));
+            p.line_segment(
+                [c + Vec2::new(-s * 0.45, s * 0.02), c + Vec2::new(-s * 0.08, s * 0.4)],
+                Stroke::new(1.9f32, color),
+            );
+            p.line_segment(
+                [c + Vec2::new(-s * 0.08, s * 0.4), c + Vec2::new(s * 0.5, -s * 0.38)],
+                Stroke::new(1.9f32, color),
             );
         }
     }
