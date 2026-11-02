@@ -68,8 +68,10 @@ the song's `song.json`.
 The top toolbar is icon-only; hover an icon for its name.
 
 The analysis strip above the pitch lanes shows the isolated vocal waveform plus a raw,
-unsmoothed vocal pitch contour. Nothing is reduced to note groups for that display; the
-mapper decides how to simplify it. Hover it for a precise timestamp, raw pitch and cents,
+unsmoothed vocal pitch contour. The pitch contour is always auto-scaled between the lowest
+and highest pitch across the whole vocal track, so piano-rail octave scrolling never cuts
+it off. Nothing is reduced to note groups for that display; the mapper decides how to
+simplify it. Hover it for a precise timestamp, raw pitch and cents,
 and vocal level, so word onsets can be placed exactly. A translucent gray line follows the
 mouse across the working area at all times. Click any note to audition its pitch. With the
 Select tool, drag either note edge to stretch or contract it. Hold right-click and drag to

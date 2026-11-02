@@ -1558,7 +1558,30 @@ impl Editor {
                 if self.pitch_analyzing { GOLD } else { MUTED2 },
             );
         } else {
-            let span = (self.high - self.low + 1).max(1) as f32;
+            // The raw pitch overview is independent of the piano-rail scroll.
+            // Scale it to the full vocal track so the contour is always in frame.
+            let mut pitch_low = self
+                .raw_pitch
+                .iter()
+                .filter_map(|value| *value)
+                .fold(f32::INFINITY, f32::min);
+            let mut pitch_high = self
+                .raw_pitch
+                .iter()
+                .filter_map(|value| *value)
+                .fold(f32::NEG_INFINITY, f32::max);
+            if !pitch_low.is_finite() || !pitch_high.is_finite() {
+                pitch_low = 48.0;
+                pitch_high = 72.0;
+            }
+            pitch_low -= 0.75;
+            pitch_high += 0.75;
+            if pitch_high - pitch_low < 1.0 {
+                let center = (pitch_high + pitch_low) * 0.5;
+                pitch_low = center - 0.5;
+                pitch_high = center + 0.5;
+            }
+            let span = (pitch_high - pitch_low).max(1.0);
             let mut previous: Option<(usize, f32, f32)> = None;
             for (bin, value) in self.raw_pitch.iter().enumerate() {
                 let Some(midi) = *value else {
@@ -1573,12 +1596,8 @@ impl Editor {
                     previous = None;
                     continue;
                 }
-                if midi < self.low as f32 || midi > self.high as f32 {
-                    previous = None;
-                    continue;
-                }
                 let y = (pitch_area.top()
-                    + (self.high as f32 - midi) / span * pitch_area.height())
+                    + (pitch_high - midi) / span * pitch_area.height())
                     .clamp(pitch_area.top() + 2.0, pitch_area.bottom() - 2.0);
                 let t = ((y - pitch_area.top()) / pitch_area.height().max(1.0)).clamp(0.0, 1.0);
                 let color = pitch_color(t);

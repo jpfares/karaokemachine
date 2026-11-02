@@ -36,7 +36,8 @@ EDITOR QUICK REFERENCE
   Pan tool                 Drag to pan. Middle-drag pans from any tool.
   Right-click + drag       Scrub the yellow now-playing line continuously.
   Vocal analysis strip     Waveform of the isolated vocal plus the raw, unsmoothed pitch
-                           contour and a hover readout with exact time, raw pitch, and level.
+                           contour, auto-scaled across the full vocal track, and a hover
+                           readout with exact time, raw pitch, and level.
   Note tool                Click or drag on a lane. Pitch is fixed; drag sets length.
   Ribbon tool              Drag across notes and release over the last note to connect them.
   Eraser                   Click or sweep over notes or word decorations to delete them.
