@@ -34,11 +34,14 @@ UPLOADING NEW SONGS
 EDITOR QUICK REFERENCE
   Top toolbar              Icon-only; hover an icon for its name.
   Pan tool                 Drag to pan. Middle-drag pans from any tool.
-  Right-click              Bring the now-playing line to that part of the level.
+  Right-click + drag       Scrub the yellow now-playing line continuously.
+  Vocal analysis strip     Waveform of the isolated vocal, suggested pitch trace, and a
+                           hover readout with exact time, pitch, and level.
   Note tool                Click or drag on a lane. Pitch is fixed; drag sets length.
   Ribbon tool              Drag across notes and release over the last note to connect them.
   Eraser                   Click or sweep over notes or word decorations to delete them.
   Select tool              Select notes or words. Drag note bodies to move, note ends to resize.
+  Click a note             Audition that note's pitch (Note/Select/Ribbon/Pan tools).
   Word bank                Drag a word anywhere onto the level. Words are decorative and
                            do not have to sit on a note, though they can be dropped on one.
   + button                 Add a custom word to the front of the word bank.

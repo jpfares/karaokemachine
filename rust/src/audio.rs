@@ -23,6 +23,12 @@ struct Mixer {
     playing: bool,
     backing_vol: f32,
     vocals_vol: f32,
+    preview_phase: f32,
+    preview_step: f32,
+    preview_remaining: usize,
+    preview_total: usize,
+    preview_amp: f32,
+    preview_rate: f32,
 }
 
 impl Default for Mixer {
@@ -36,6 +42,12 @@ impl Default for Mixer {
             playing: false,
             backing_vol: 0.9,
             vocals_vol: 0.0,
+            preview_phase: 0.0,
+            preview_step: 0.0,
+            preview_remaining: 0,
+            preview_total: 0,
+            preview_amp: 0.0,
+            preview_rate: 48000.0,
         }
     }
 }
@@ -175,6 +187,47 @@ impl AudioEngine {
         mixer.rate = rate.clamp(0.25, 2.0);
     }
 
+    /// Audition a note in the editor without changing the transport position.
+    pub fn play_preview(&self, midi: i32, seconds: f32) {
+        let mut mixer = self.shared.mixer.lock().unwrap();
+        let frequency = 440.0 * 2.0f32.powf((midi as f32 - 69.0) / 12.0);
+        let duration = seconds.clamp(0.08, 3.0);
+        let rate = self.sample_rate.max(1) as f32;
+        mixer.preview_phase = 0.0;
+        mixer.preview_step = std::f32::consts::TAU * frequency / rate;
+        mixer.preview_total = (duration * rate) as usize;
+        mixer.preview_remaining = mixer.preview_total;
+        mixer.preview_amp = 0.24;
+        mixer.preview_rate = rate;
+    }
+
+    /// Peak amplitude of the isolated vocal stem, sampled into short bins.
+    /// This is used by the level editor to draw a precisely time-aligned vocal
+    /// waveform and to make lyric/word onsets visible.
+    pub fn vocal_peaks(&self, bins_per_second: f32) -> Vec<f32> {
+        let mixer = self.shared.mixer.lock().unwrap();
+        if mixer.frames == 0 || mixer.vocals.len() < mixer.frames.saturating_mul(2) {
+            return Vec::new();
+        }
+        let seconds = mixer.frames as f64 / self.sample_rate as f64;
+        let bins = (seconds * bins_per_second.max(1.0) as f64).ceil().max(1.0) as usize;
+        let frames_per_bin = (mixer.frames as f64 / bins as f64).max(1.0);
+        let mut peaks = vec![0.0f32; bins];
+        for (bin, peak) in peaks.iter_mut().enumerate() {
+            let start = (bin as f64 * frames_per_bin).floor() as usize;
+            let end = (((bin + 1) as f64 * frames_per_bin).ceil() as usize).min(mixer.frames);
+            let mut value = 0.0f32;
+            for frame in start..end {
+                let index = frame * 2;
+                let left = mixer.vocals.get(index).copied().unwrap_or(0.0).abs();
+                let right = mixer.vocals.get(index + 1).copied().unwrap_or(left).abs();
+                value = value.max(left.max(right));
+            }
+            *peak = value;
+        }
+        peaks
+    }
+
     pub fn set_volumes(&self, backing: f32, vocals: f32) {
         let mut mixer = self.shared.mixer.lock().unwrap();
         mixer.backing_vol = backing.clamp(0.0, 1.5);
@@ -194,16 +247,37 @@ fn sample_linear(data: &[f32], frame: usize, channel: usize, frames: usize, frac
 }
 
 fn next_frame(mixer: &mut Mixer) -> (f32, f32) {
-    if !mixer.playing || mixer.pos >= mixer.frames as f64 {
-        return (0.0, 0.0);
+    let mut l = 0.0f32;
+    let mut r = 0.0f32;
+    if mixer.playing && mixer.pos < mixer.frames as f64 {
+        let frame = mixer.pos.floor() as usize;
+        let frac = (mixer.pos - frame as f64) as f32;
+        l = sample_linear(&mixer.backing, frame, 0, mixer.frames, frac) * mixer.backing_vol
+            + sample_linear(&mixer.vocals, frame, 0, mixer.frames, frac) * mixer.vocals_vol;
+        r = sample_linear(&mixer.backing, frame, 1, mixer.frames, frac) * mixer.backing_vol
+            + sample_linear(&mixer.vocals, frame, 1, mixer.frames, frac) * mixer.vocals_vol;
+        mixer.pos += mixer.rate.max(0.05) as f64;
     }
-    let frame = mixer.pos.floor() as usize;
-    let frac = (mixer.pos - frame as f64) as f32;
-    let l = sample_linear(&mixer.backing, frame, 0, mixer.frames, frac) * mixer.backing_vol
-        + sample_linear(&mixer.vocals, frame, 0, mixer.frames, frac) * mixer.vocals_vol;
-    let r = sample_linear(&mixer.backing, frame, 1, mixer.frames, frac) * mixer.backing_vol
-        + sample_linear(&mixer.vocals, frame, 1, mixer.frames, frac) * mixer.vocals_vol;
-    mixer.pos += mixer.rate.max(0.05) as f64;
+
+    // Editor note audition is independent of the transport, so it still
+    // sounds while the backing is paused.
+    if mixer.preview_remaining > 0 {
+        let rate = mixer.preview_rate.max(1.0);
+        let elapsed = (mixer.preview_total.saturating_sub(mixer.preview_remaining)) as f32 / rate;
+        let remaining = mixer.preview_remaining as f32 / rate;
+        let attack = (elapsed / 0.006).min(1.0);
+        let release = (remaining / 0.035).min(1.0);
+        let envelope = attack.min(release);
+        let sample = (mixer.preview_phase.sin() * 0.75
+            + (mixer.preview_phase * 2.0).sin() * 0.18)
+            * mixer.preview_amp
+            * envelope;
+        l += sample;
+        r += sample;
+        mixer.preview_phase =
+            (mixer.preview_phase + mixer.preview_step) % std::f32::consts::TAU;
+        mixer.preview_remaining -= 1;
+    }
     (l, r)
 }
 

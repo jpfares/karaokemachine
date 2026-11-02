@@ -18,6 +18,7 @@ const PINK: Color32 = Color32::from_rgb(255, 93, 158);
 const GOLD: Color32 = Color32::from_rgb(255, 209, 102);
 const PANEL: Color32 = Color32::from_rgb(9, 13, 23);
 const PANEL2: Color32 = Color32::from_rgb(12, 17, 29);
+pub const VOCAL_BINS_PER_SECOND: f32 = 80.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EditorTool {
@@ -112,6 +113,7 @@ enum Drag {
 }
 
 struct Layout {
+    wave: Rect,
     note_area: Rect,
     rail: Rect,
     inspector: Rect,
@@ -124,6 +126,7 @@ pub struct Editor {
     pub song: Song,
     suggestions: Vec<Note>,
     notes: Vec<Note>,
+    vocal_peaks: Vec<f32>,
     words: Vec<PlacedWord>,
     custom_words: Vec<CustomWord>,
     word_bank: Vec<WordToken>,
@@ -150,6 +153,7 @@ pub struct Editor {
     follow: bool,
     snap: bool,
     duration: f64,
+    right_scrubbing: bool,
     next_ribbon_id: u32,
     next_custom_id: u32,
     custom_word_open: bool,
@@ -230,6 +234,7 @@ impl Editor {
             song,
             suggestions,
             notes: initial_notes,
+            vocal_peaks: Vec::new(),
             words,
             custom_words,
             word_bank,
@@ -256,6 +261,7 @@ impl Editor {
             follow: true,
             snap: true,
             duration,
+            right_scrubbing: false,
             next_ribbon_id,
             next_custom_id,
             custom_word_open: false,
@@ -268,6 +274,10 @@ impl Editor {
 
     pub fn set_audio_ready(&mut self, ready: bool) {
         self.audio_ready = ready;
+    }
+
+    pub fn set_vocal_peaks(&mut self, peaks: Vec<f32>) {
+        self.vocal_peaks = peaks;
     }
 
     pub fn pause_audio(&self, audio: &Option<AudioEngine>) {
@@ -375,6 +385,10 @@ impl Editor {
             }
         }
 
+        // Apply the scrub after the transport update so the yellow line always
+        // follows the cursor while the secondary button is held.
+        self.handle_right_scrub(ui, &layout, audio);
+
         // The note lane gets first crack at the pointer so the wheel can scroll
         // the timeline without fighting nested scroll areas.
         let canvas_response = ui.interact(
@@ -391,6 +405,7 @@ impl Editor {
         self.draw_header(ui, &p, &layout, &mut event);
         self.draw_toolbar(ui, &p, &layout);
         self.draw_lanes(ui, &p, &layout);
+        self.draw_wave(ui, &p, &layout);
         self.draw_ruler(ui, &p, &layout, &mut event, audio);
         self.draw_transport(ui, &p, &layout, audio);
         self.draw_word_bank(ui, &p, &layout, audio);
@@ -425,19 +440,26 @@ impl Editor {
             Pos2::new(rect.left() + rail_w, transport.top() - ruler_h),
             Pos2::new(rect.right() - inspector_w, transport.top()),
         );
+        let wave_h = 64.0;
+        let note_top = rect.top() + header_h + toolbar_h;
+        let wave = Rect::from_min_max(
+            Pos2::new(rect.left() + rail_w, note_top),
+            Pos2::new(rect.right() - inspector_w, note_top + wave_h),
+        );
         let note_area = Rect::from_min_max(
-            Pos2::new(rect.left() + rail_w, rect.top() + header_h + toolbar_h),
+            Pos2::new(rect.left() + rail_w, wave.bottom()),
             Pos2::new(rect.right() - inspector_w, transport.top() - ruler_h),
         );
         let rail = Rect::from_min_max(
-            Pos2::new(rect.left(), note_area.top()),
+            Pos2::new(rect.left(), wave.top()),
             Pos2::new(note_area.left(), note_area.bottom()),
         );
         let inspector = Rect::from_min_max(
-            Pos2::new(rect.right() - inspector_w + 8.0, note_area.top() + 6.0),
+            Pos2::new(rect.right() - inspector_w + 8.0, wave.top() + 6.0),
             Pos2::new(rect.right() - 8.0, transport.top() - 8.0),
         );
         Layout {
+            wave,
             note_area,
             rail,
             inspector,
@@ -571,6 +593,68 @@ impl Editor {
         }
     }
 
+    fn handle_right_scrub(
+        &mut self,
+        ui: &mut Ui,
+        layout: &Layout,
+        audio: &Option<AudioEngine>,
+    ) {
+        if self.custom_word_open {
+            self.right_scrubbing = false;
+            return;
+        }
+        let clicked = ui.input(|i| i.pointer.button_clicked(PointerButton::Secondary));
+        let down = ui.input(|i| i.pointer.button_down(PointerButton::Secondary));
+        if !(clicked || down) || self.drag.is_some() {
+            if self.right_scrubbing {
+                self.status = format!("Playhead at {}.", format_time_precise(self.playhead));
+            }
+            self.right_scrubbing = false;
+            return;
+        }
+        let Some(pos) = ui.input(|i| i.pointer.interact_pos()) else {
+            self.right_scrubbing = false;
+            return;
+        };
+        let area = layout
+            .wave
+            .union(layout.note_area)
+            .union(layout.ruler);
+        if !area.contains(pos) {
+            self.right_scrubbing = false;
+            return;
+        }
+        if !self.right_scrubbing {
+            self.right_scrubbing = true;
+            self.status = "Scrubbing the now-playing line. Release to leave it here.".into();
+        }
+        let time = self
+            .x_to_time(pos.x, layout)
+            .clamp(0.0, self.duration);
+        if (time - self.playhead).abs() > 0.0005 {
+            self.seek(time, audio);
+        }
+    }
+
+    fn preview_note(&mut self, index: usize, audio: &Option<AudioEngine>) {
+        let Some(note) = self.notes.get(index) else {
+            return;
+        };
+        let midi = note.midi;
+        let start = note.start;
+        let duration = note.dur.clamp(0.18, 2.0) as f32;
+        if let Some(audio) = audio {
+            audio.play_preview(midi, duration);
+            self.status = format!(
+                "Preview {} at {}. Click another note to hear it.",
+                note_name(midi),
+                format_time(start)
+            );
+        } else {
+            self.status = "No audio output is available for note preview.".into();
+        }
+    }
+
     fn handle_canvas(
         &mut self,
         ui: &mut Ui,
@@ -583,17 +667,6 @@ impl Editor {
         let Some(pos) = pointer else {
             return;
         };
-
-        // Right-click brings the now-playing line to the clicked part of the
-        // level without changing the current tool or selection.
-        if response.clicked_by(PointerButton::Secondary) && layout.note_area.contains(pos) {
-            let time = self
-                .x_to_time(pos.x, layout)
-                .clamp(0.0, self.duration);
-            self.seek(time, audio);
-            self.status = format!("Playhead moved to {}.", format_time(time));
-            return;
-        }
 
         // A word armed with a click in the bank drops at the next click,
         // anywhere in the note area.
@@ -609,7 +682,13 @@ impl Editor {
         }
 
         match self.tool {
-            EditorTool::Pan => {}
+            EditorTool::Pan => {
+                if response.clicked_by(PointerButton::Primary) {
+                    if let Some(index) = self.hit_note(pos, layout) {
+                        self.preview_note(index, audio);
+                    }
+                }
+            }
             EditorTool::Note => {
                 if response.drag_started_by(PointerButton::Primary) && layout.note_area.contains(pos) {
                     self.push_history();
@@ -632,24 +711,31 @@ impl Editor {
                     self.drag = Some(Drag::NewNote { index, start });
                     self.dirty = true;
                 } else if response.clicked_by(PointerButton::Primary) && layout.note_area.contains(pos) {
-                    self.push_history();
-                    let midi = self.midi_at_y(pos.y, layout);
-                    let start = self.snap_time(self.x_to_time(pos.x, layout));
-                    self.notes.push(Note {
-                        start,
-                        dur: 0.28,
-                        midi,
-                        word: None,
-                        word_index: None,
-                        line: None,
-                        vel: None,
-                        ribbon: None,
-                    });
-                    self.selected.clear();
-                    self.selected_word = None;
-                    self.selected.insert(self.notes.len() - 1);
-                    self.dirty = true;
-                    self.status = "Note placed. Use RIBBON to connect notes into one vocal run.".into();
+                    if let Some(index) = self.hit_note(pos, layout) {
+                        self.selected.clear();
+                        self.selected.insert(index);
+                        self.selected_word = None;
+                        self.preview_note(index, audio);
+                    } else {
+                        self.push_history();
+                        let midi = self.midi_at_y(pos.y, layout);
+                        let start = self.snap_time(self.x_to_time(pos.x, layout));
+                        self.notes.push(Note {
+                            start,
+                            dur: 0.28,
+                            midi,
+                            word: None,
+                            word_index: None,
+                            line: None,
+                            vel: None,
+                            ribbon: None,
+                        });
+                        self.selected.clear();
+                        self.selected_word = None;
+                        self.selected.insert(self.notes.len() - 1);
+                        self.dirty = true;
+                        self.status = "Note placed. Use RIBBON to connect notes into one vocal run.".into();
+                    }
                 }
             }
             EditorTool::Select => {
@@ -713,6 +799,7 @@ impl Editor {
                             self.selected.clear();
                             self.selected.insert(index);
                         }
+                        self.preview_note(index, audio);
                     } else {
                         self.selected.clear();
                         self.selected_word = None;
@@ -739,6 +826,7 @@ impl Editor {
                         if !self.selected.insert(index) {
                             self.selected.remove(&index);
                         }
+                        self.preview_note(index, audio);
                     } else {
                         self.selected.clear();
                         self.selected_word = None;
@@ -1257,11 +1345,235 @@ impl Editor {
             }
         }
         p.text(
-            Pos2::new(layout.rail.left() + 7.0, layout.rail.top() + 5.0),
+            Pos2::new(layout.rail.left() + 7.0, layout.wave.top() + 5.0),
             Align2::LEFT_TOP,
             "PITCH",
-            FontId::monospace(6.0),
+            FontId::monospace(5.5),
+            GOLD,
+        );
+        p.text(
+            Pos2::new(layout.rail.left() + 7.0, layout.wave.top() + 30.0),
+            Align2::LEFT_TOP,
+            "LEVEL",
+            FontId::monospace(5.5),
             MUTED2,
+        );
+    }
+
+    fn draw_wave(&self, ui: &mut Ui, _p: &egui::Painter, layout: &Layout) {
+        let area = layout.wave;
+        let painter = ui.painter().with_clip_rect(area);
+        painter.rect_filled(area, 0.0, Color32::from_rgb(7, 10, 18));
+        let interval = self.song.bpm.map(|bpm| 60.0 / bpm).unwrap_or(1.0);
+        let first = (self.scroll / interval).floor() as i64 - 1;
+        let last = ((self.scroll + (area.width() / self.zoom) as f64) / interval).ceil() as i64 + 1;
+        for tick in first..=last {
+            let x = self.time_to_x(tick as f64 * interval, layout);
+            if x < area.left() || x > area.right() {
+                continue;
+            }
+            let bar = self.song.bpm.map(|_| tick % 4 == 0).unwrap_or(false);
+            painter.line_segment(
+                [Pos2::new(x, area.top()), Pos2::new(x, area.bottom())],
+                Stroke::new(
+                    if bar { 1.0f32 } else { 0.55f32 },
+                    Color32::from_white_alpha(if bar { 18 } else { 7 }),
+                ),
+            );
+        }
+        let pitch_h = 20.0f32;
+        let pitch_area = Rect::from_min_max(
+            area.left_top(),
+            Pos2::new(area.right(), area.top() + pitch_h),
+        );
+        let level_area = Rect::from_min_max(
+            Pos2::new(area.left(), area.top() + pitch_h + 1.0),
+            area.right_bottom(),
+        );
+        painter.line_segment(
+            [
+                Pos2::new(area.left(), area.top() + pitch_h),
+                Pos2::new(area.right(), area.top() + pitch_h),
+            ],
+            Stroke::new(0.8f32, Color32::from_white_alpha(24)),
+        );
+        let center = level_area.center().y;
+        painter.line_segment(
+            [Pos2::new(area.left(), center), Pos2::new(area.right(), center)],
+            Stroke::new(0.7f32, Color32::from_white_alpha(20)),
+        );
+
+        let max_peak = self
+            .vocal_peaks
+            .iter()
+            .copied()
+            .fold(0.0f32, f32::max)
+            .max(1e-6);
+        if self.vocal_peaks.is_empty() {
+            painter.text(
+                Pos2::new(area.left() + 12.0, center),
+                Align2::LEFT_CENTER,
+                "No isolated vocal waveform loaded",
+                FontId::proportional(10.0),
+                MUTED2,
+            );
+        } else {
+            let half = level_area.height() * 0.45;
+            for x in (area.left().round() as i32)..(area.right().round() as i32) {
+                let time = self.x_to_time(x as f32, layout);
+                if time < 0.0 {
+                    continue;
+                }
+                let index = (time * VOCAL_BINS_PER_SECOND as f64).floor() as usize;
+                let Some(peak) = self.vocal_peaks.get(index) else {
+                    continue;
+                };
+                let amplitude = (peak / max_peak).sqrt().clamp(0.0, 1.0);
+                let h = (amplitude * half).max(0.6);
+                painter.line_segment(
+                    [Pos2::new(x as f32, center - h), Pos2::new(x as f32, center + h)],
+                    Stroke::new(1.0f32, Color32::from_rgba_unmultiplied(100, 200, 255, 120)),
+                );
+            }
+        }
+
+        // The suggested pitch trace gets its own thin lane above the waveform
+        // so pitch changes remain readable while the waveform shows onsets.
+        let mut pitch_low = self
+            .suggestions
+            .iter()
+            .map(|note| note.midi)
+            .min()
+            .unwrap_or(self.low) as f32
+            - 2.0;
+        let mut pitch_high = self
+            .suggestions
+            .iter()
+            .map(|note| note.midi)
+            .max()
+            .unwrap_or(self.high) as f32
+            + 2.0;
+        if pitch_high - pitch_low < 12.0 {
+            let center_pitch = (pitch_high + pitch_low) * 0.5;
+            pitch_low = center_pitch - 6.0;
+            pitch_high = center_pitch + 6.0;
+        }
+        let span = (pitch_high - pitch_low).max(1.0);
+        let mut previous: Option<(f64, f32, f32)> = None;
+        for note in &self.suggestions {
+            let x0 = self.time_to_x(note.start, layout);
+            let x1 = self.time_to_x(note.start + note.dur, layout);
+            if x1 < area.left() - 2.0 || x0 > area.right() + 2.0 {
+                previous = None;
+                continue;
+            }
+            let y = (pitch_area.top()
+                + (pitch_high - note.midi as f32) / span * pitch_area.height())
+                .clamp(pitch_area.top() + 2.0, pitch_area.bottom() - 2.0);
+            let t = ((y - pitch_area.top()) / pitch_area.height().max(1.0)).clamp(0.0, 1.0);
+            let color = pitch_color(t);
+            let color = Color32::from_rgba_unmultiplied(color[0], color[1], color[2], 235);
+            if let Some((previous_end, px, py)) = previous {
+                if note.start - previous_end <= 0.8 {
+                    painter.line_segment(
+                        [Pos2::new(px, py), Pos2::new(x0, y)],
+                        Stroke::new(3.2f32, Color32::from_rgba_unmultiplied(5, 8, 15, 190)),
+                    );
+                    painter.line_segment(
+                        [Pos2::new(px, py), Pos2::new(x0, y)],
+                        Stroke::new(1.2f32, color),
+                    );
+                }
+            }
+            painter.line_segment(
+                [
+                    Pos2::new(x0.max(area.left()), y),
+                    Pos2::new(x1.min(area.right()), y),
+                ],
+                Stroke::new(3.2f32, Color32::from_rgba_unmultiplied(5, 8, 15, 190)),
+            );
+            painter.line_segment(
+                [
+                    Pos2::new(x0.max(area.left()), y),
+                    Pos2::new(x1.min(area.right()), y),
+                ],
+                Stroke::new(1.8f32, color),
+            );
+            previous = Some((note.start + note.dur, x1, y));
+        }
+
+        // Hover readout: exact timestamp plus the suggested pitch and vocal
+        // level at the cursor. This is the precise onset-finding aid.
+        let hover = ui
+            .input(|i| i.pointer.hover_pos())
+            .filter(|pos| area.contains(*pos));
+        if let Some(pos) = hover {
+            let x = pos.x.clamp(area.left(), area.right());
+            painter.line_segment(
+                [Pos2::new(x, area.top()), Pos2::new(x, area.bottom())],
+                Stroke::new(1.0f32, Color32::from_white_alpha(75)),
+            );
+            let time = self.x_to_time(x, layout).clamp(0.0, self.duration);
+            let pitch = self
+                .suggestions
+                .iter()
+                .find(|note| time >= note.start && time <= note.start + note.dur)
+                .map(|note| note_name(note.midi))
+                .unwrap_or_else(|| "—".into());
+            let level = if self.vocal_peaks.is_empty() {
+                0.0
+            } else {
+                let index = (time * VOCAL_BINS_PER_SECOND as f64).floor() as usize;
+                self.vocal_peaks
+                    .get(index)
+                    .copied()
+                    .unwrap_or(0.0)
+                    / max_peak
+            };
+            let label = Rect::from_min_size(
+                Pos2::new(area.left() + 8.0, area.bottom() - 23.0),
+                Vec2::new(196.0, 18.0),
+            );
+            painter.rect_filled(label, 4.0, Color32::from_rgba_unmultiplied(5, 8, 15, 220));
+            painter.text(
+                label.left_center() + Vec2::new(6.0, 0.0),
+                Align2::LEFT_CENTER,
+                format!(
+                    "{}  ·  {}  ·  {:.0}%",
+                    format_time_precise(time),
+                    pitch,
+                    level * 100.0
+                ),
+                FontId::monospace(7.0),
+                INK,
+            );
+        }
+
+        let px = self.time_to_x(self.playhead, layout);
+        if px >= area.left() && px <= area.right() {
+            painter.line_segment(
+                [Pos2::new(px, area.top()), Pos2::new(px, area.bottom())],
+                Stroke::new(1.6f32, alpha(GOLD, 235)),
+            );
+            painter.add(egui::Shape::convex_polygon(
+                vec![
+                    Pos2::new(px - 5.0, area.top()),
+                    Pos2::new(px + 5.0, area.top()),
+                    Pos2::new(px, area.top() + 8.0),
+                ],
+                GOLD,
+                Stroke::NONE,
+            ));
+        }
+
+        // Borders make the analysis strip read as a separate timeline lane.
+        painter.line_segment(
+            [area.left_top(), area.right_top()],
+            Stroke::new(1.0f32, Color32::from_white_alpha(24)),
+        );
+        painter.line_segment(
+            [area.left_bottom(), area.right_bottom()],
+            Stroke::new(1.0f32, Color32::from_white_alpha(24)),
         );
     }
 
@@ -1308,15 +1620,6 @@ impl Editor {
             );
         }
         let response = ui.interact(ruler, Id::new("editor_ruler"), Sense::click_and_drag());
-        if response.clicked_by(PointerButton::Secondary) {
-            if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
-                let t = self
-                    .x_to_time(pos.x.clamp(ruler.left(), ruler.right()), layout)
-                    .clamp(0.0, self.duration);
-                self.seek(t, audio);
-                self.status = format!("Playhead moved to {}.", format_time(t));
-            }
-        }
         if (response.clicked() || response.dragged()) && ui.input(|i| i.pointer.primary_down()) {
             if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
                 let t = self.x_to_time(pos.x.clamp(ruler.left(), ruler.right()), layout).clamp(0.0, self.duration);
@@ -2270,6 +2573,13 @@ fn migrate_legacy_ribbons(notes: &mut [Note], next_ribbon_id: &mut u32) {
         note.word_index = None;
         note.line = None;
     }
+}
+
+fn format_time_precise(seconds: f64) -> String {
+    let seconds = seconds.max(0.0);
+    let minutes = (seconds / 60.0).floor() as i64;
+    let rest = seconds - minutes as f64 * 60.0;
+    format!("{minutes}:{rest:05.2}")
 }
 
 fn alpha(color: Color32, a: u8) -> Color32 {

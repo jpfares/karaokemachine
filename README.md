@@ -67,14 +67,20 @@ the song's `song.json`.
 
 The top toolbar is icon-only; hover an icon for its name.
 
+The analysis strip above the pitch lanes shows the isolated vocal waveform with a
+suggested pitch trace. Hover it for a precise timestamp, pitch label, and vocal level, so
+word onsets can be placed exactly. Click any note to audition its pitch. Hold right-click
+and drag to move the yellow now-playing line continuously.
+
 | Action | Control |
 | --- | --- |
 | Pan | Pan icon, or middle-drag from any tool |
-| Move the now-playing line | **Right-click** anywhere in the level or ruler |
+| Move the now-playing line | **Hold right-click and drag** in the lane, waveform, or ruler |
 | Draw a note | Note icon: click or drag on a pitch lane; drag sets length |
 | Make a ribbon | Ribbon icon: drag across notes, release over the last note |
 | Erase | Eraser icon: click or sweep over notes or words |
 | Select / move / resize | Select icon: drag a note body to move, drag either end to resize |
+| Audition a note | Click a note with the Note, Select, Ribbon, or Pan tool |
 | Move a lyric word | Select icon: drag the word anywhere in the level |
 | Place a lyric word | Drag it from the word bank, or click it and then click the level |
 | Add a custom word | **+** at the right of the word bank; it goes to the front of the bank |
