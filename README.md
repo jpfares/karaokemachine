@@ -100,7 +100,7 @@ with speed.
 ![Upload and metadata form](docs/upload.png)
 
 Open **Library → Imports → Upload Song**, paste one of these links, and press **Fetch
-Details**:
+Details** (or press `Enter` in the link field):
 
 - YouTube video
 - SoundCloud track

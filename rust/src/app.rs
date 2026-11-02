@@ -2615,6 +2615,15 @@ impl KaraokeMachineApp {
                                     false,
                                 );
                             }
+                            let can_fetch = !upload.fetching
+                                && !upload.importing
+                                && !upload.url.trim().is_empty();
+                            if can_fetch
+                                && (link.has_focus() || link.lost_focus())
+                                && ui.input(|i| i.key_pressed(egui::Key::Enter))
+                            {
+                                fetch_clicked = true;
+                            }
                             let fetch_label = if upload.fetching {
                                 "FETCHING…"
                             } else if upload.info_loaded {
