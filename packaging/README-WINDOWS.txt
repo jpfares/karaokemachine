@@ -54,7 +54,9 @@ EDITOR QUICK REFERENCE
   Delete                   Delete the selection
   1–5                      Select a tool
   Mouse wheel              Scroll the timeline
-  Ctrl + wheel             Zoom
+  Wheel over piano rail    Scroll the visible pitch range (Shift = one octave)
+  Ctrl + wheel             Zoom the timeline from anywhere over the working area
+  Piano rail click         Audition that pitch
 
 PLAYING
   Space       Play / pause

@@ -436,7 +436,7 @@ impl Editor {
             Id::new("editor_note_canvas"),
             Sense::click_and_drag(),
         );
-        self.handle_navigation(ui, &layout, &canvas_response);
+        self.handle_navigation(ui, &layout, &canvas_response, audio);
         self.handle_canvas(ui, &layout, &canvas_response, audio, &mut event);
 
         // ---- paint -----------------------------------------------------
@@ -596,24 +596,62 @@ impl Editor {
         ui: &mut Ui,
         layout: &Layout,
         response: &egui::Response,
+        audio: &Option<AudioEngine>,
     ) {
-        if response.hovered() {
-            let (scroll, modifiers) = ui.input(|i| (i.raw_scroll_delta, i.modifiers));
-            if modifiers.command || modifiers.ctrl {
-                if scroll.y.abs() > 0.0 {
-                    let anchor = ui
-                        .input(|i| i.pointer.hover_pos())
-                        .unwrap_or_else(|| layout.note_area.center());
-                    let anchor_time = self.x_to_time(anchor.x, layout);
-                    self.zoom = (self.zoom * (1.0 + scroll.y * 0.0015)).clamp(24.0, 420.0);
-                    self.scroll = (anchor_time - (anchor.x - layout.note_area.left()) as f64 / self.zoom as f64)
-                        .max(0.0);
+        let pointer = ui.input(|i| i.pointer.hover_pos());
+        let (scroll, modifiers) = ui.input(|i| (i.raw_scroll_delta, i.modifiers));
+        let ctrl = modifiers.command || modifiers.ctrl;
+        let zoom_area = layout
+            .rail
+            .union(layout.wave)
+            .union(layout.note_area)
+            .union(layout.ruler);
+
+        // Ctrl+wheel behaves like the zoom in/out buttons anywhere over the
+        // working area, including the piano rail and the analysis strip.
+        let mut zoom_handled = false;
+        if ctrl && scroll.y.abs() > 0.0 {
+            if let Some(pos) = pointer.filter(|pos| zoom_area.contains(*pos)) {
+                let anchor_x = pos
+                    .x
+                    .clamp(layout.note_area.left(), layout.note_area.right());
+                let anchor_time = self.x_to_time(anchor_x, layout);
+                self.zoom = (self.zoom * (1.0 + scroll.y * 0.0015)).clamp(24.0, 420.0);
+                self.scroll = (anchor_time
+                    - (anchor_x - layout.note_area.left()) as f64 / self.zoom as f64)
+                    .max(0.0);
+                zoom_handled = true;
+            }
+        }
+
+        // The leftmost piano rail is a pitch scrollbar and an audition keyboard.
+        if let Some(pos) = pointer {
+            if layout.rail.contains(pos) {
+                if !zoom_handled && scroll.y.abs() > 0.0 {
+                    let step = if modifiers.shift { 12 } else { 1 };
+                    self.scroll_pitches(if scroll.y > 0.0 { step } else { -step });
                 }
-            } else {
-                let dx = scroll.x + scroll.y;
-                if dx.abs() > 0.0 {
-                    self.scroll = (self.scroll - dx as f64 / self.zoom as f64).max(0.0);
+                if layout.note_area.contains(pos)
+                    && ui.input(|i| i.pointer.button_clicked(PointerButton::Primary))
+                {
+                    let midi = self.midi_at_y(pos.y, layout);
+                    if let Some(audio) = audio {
+                        audio.play_preview(midi, 0.55);
+                        self.status = format!(
+                            "Preview {} from the piano rail.",
+                            note_name(midi)
+                        );
+                    } else {
+                        self.status = "No audio output is available for note preview.".into();
+                    }
                 }
+            }
+        }
+
+        if response.hovered() && !zoom_handled && !ctrl {
+            let dx = scroll.x + scroll.y;
+            if dx.abs() > 0.0 {
+                self.scroll = (self.scroll - dx as f64 / self.zoom as f64).max(0.0);
             }
         }
 
@@ -1418,6 +1456,13 @@ impl Editor {
             FontId::monospace(5.5),
             MUTED2,
         );
+        p.text(
+            Pos2::new(layout.rail.left() + 7.0, layout.rail.bottom() - 8.0),
+            Align2::LEFT_BOTTOM,
+            "SCROLL",
+            FontId::monospace(5.0),
+            MUTED2,
+        );
     }
 
     fn draw_wave(&self, ui: &mut Ui, _p: &egui::Painter, layout: &Layout) {
@@ -1499,8 +1544,8 @@ impl Editor {
 
         // Raw pitch, frame by frame. No note grouping or smoothing is applied
         // here: simplifying the contour is the mapper's decision.
-        let mut pitch_values: Vec<f32> = self.raw_pitch.iter().filter_map(|value| *value).collect();
-        if pitch_values.is_empty() {
+        let has_pitch = self.raw_pitch.iter().any(|value| value.is_some());
+        if !has_pitch {
             painter.text(
                 Pos2::new(pitch_area.left() + 8.0, pitch_area.center().y),
                 Align2::LEFT_CENTER,
@@ -1513,18 +1558,7 @@ impl Editor {
                 if self.pitch_analyzing { GOLD } else { MUTED2 },
             );
         } else {
-            pitch_values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-            let pick = |q: f32| {
-                pitch_values[((pitch_values.len().saturating_sub(1)) as f32 * q) as usize]
-            };
-            let mut pitch_low = pick(0.02) - 1.0;
-            let mut pitch_high = pick(0.98) + 1.0;
-            if pitch_high - pitch_low < 12.0 {
-                let center_pitch = (pitch_high + pitch_low) * 0.5;
-                pitch_low = center_pitch - 6.0;
-                pitch_high = center_pitch + 6.0;
-            }
-            let span = (pitch_high - pitch_low).max(1.0);
+            let span = (self.high - self.low + 1).max(1) as f32;
             let mut previous: Option<(usize, f32, f32)> = None;
             for (bin, value) in self.raw_pitch.iter().enumerate() {
                 let Some(midi) = *value else {
@@ -1539,8 +1573,12 @@ impl Editor {
                     previous = None;
                     continue;
                 }
+                if midi < self.low as f32 || midi > self.high as f32 {
+                    previous = None;
+                    continue;
+                }
                 let y = (pitch_area.top()
-                    + (pitch_high - midi) / span * pitch_area.height())
+                    + (self.high as f32 - midi) / span * pitch_area.height())
                     .clamp(pitch_area.top() + 2.0, pitch_area.bottom() - 2.0);
                 let t = ((y - pitch_area.top()) / pitch_area.height().max(1.0)).clamp(0.0, 1.0);
                 let color = pitch_color(t);
@@ -2304,6 +2342,20 @@ impl Editor {
             .rev()
             .find(|(_, word)| self.word_rect(word, layout).contains(pos))
             .map(|(index, _)| index)
+    }
+
+    fn scroll_pitches(&mut self, semitones: i32) {
+        let span = (self.high - self.low).clamp(12, 127);
+        let low = (self.low + semitones).clamp(0, 127 - span);
+        if low != self.low {
+            self.low = low;
+            self.high = low + span;
+            self.status = format!(
+                "Pitch view: {} – {}. Scroll the piano rail to move it.",
+                note_name(self.low),
+                note_name(self.high)
+            );
+        }
     }
 
     fn snap_time(&self, time: f64) -> f64 {

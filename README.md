@@ -83,12 +83,13 @@ move the yellow now-playing line continuously.
 | Make a ribbon | Ribbon icon: drag across notes, release over the last note |
 | Erase | Eraser icon: click or sweep over notes or words |
 | Select / move / resize | Select icon: drag a note body to move, drag either end to resize |
-| Audition a note | Click a note with the Note, Select, Ribbon, or Pan tool |
+| Audition a note | Click a mapped note with the Note, Select, Ribbon, or Pan tool, or click a pitch on the piano rail |
 | Move a lyric word | Select icon: drag the word anywhere in the level |
 | Place a lyric word | Drag it from the word bank, or click it and then click the level |
 | Add a custom word | **+** at the right of the word bank; it goes to the front of the bank |
 | Scroll timeline | Mouse wheel |
-| Zoom | Ctrl + wheel, or the − / + magnifier icons |
+| Scroll pitch view | Mouse wheel over the piano rail (Shift = octave) |
+| Zoom timeline | Ctrl + wheel anywhere over the working area, or the − / + magnifier icons |
 | Play / pause | `Space` |
 | Seek | Arrow keys, or click/drag the time ruler |
 | Save draft | **SAVE AS DRAFT** in the inspector, or `Ctrl+S` |
