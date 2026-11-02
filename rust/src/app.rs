@@ -3315,6 +3315,23 @@ impl eframe::App for KaraokeMachineApp {
                 self.drawer_open = true;
                 self.toast("Draft saved. The song remains UNMAPPED.", now);
             }
+            EditorEvent::SaveDraft => {
+                let result = if let Some(editor) = &mut self.editor {
+                    if editor.song.mapped {
+                        Err("This song is already mapped. Use Submit Mapping to save edits.".into())
+                    } else {
+                        editor
+                            .save_draft(&self.root)
+                            .map(|()| editor.mark_draft_saved())
+                    }
+                } else {
+                    Ok(())
+                };
+                match result {
+                    Ok(()) => self.toast("Draft saved. The song remains UNMAPPED.", now),
+                    Err(error) => self.toast(error, now),
+                }
+            }
             EditorEvent::Submit => {
                 if let Some(mut editor) = self.editor.take() {
                     editor.pause_audio(&self.audio);

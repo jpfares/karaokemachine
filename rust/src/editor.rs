@@ -64,6 +64,7 @@ enum EditorIcon {
 pub enum EditorEvent {
     None,
     Back,
+    SaveDraft,
     Submit,
 }
 
@@ -320,6 +321,10 @@ impl Editor {
         }
     }
 
+    pub fn mark_draft_saved(&mut self) {
+        self.status = "Draft saved. The song remains UNMAPPED.".into();
+    }
+
     pub fn save_draft(&mut self, root: &Path) -> Result<(), String> {
         if self.song.mapped {
             return Ok(());
@@ -535,6 +540,9 @@ impl Editor {
         }
         if ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Y)) {
             self.redo();
+        }
+        if ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::S)) {
+            *event = EditorEvent::SaveDraft;
         }
         if ui.input(|i| i.key_pressed(egui::Key::Space)) {
             self.toggle_play(audio);
@@ -2201,12 +2209,17 @@ impl Editor {
             "← →  seek 1s (Shift 5s)",
             "Right-click  move now line",
             "Ctrl+Z / ⇧Z  undo",
+            "Ctrl+S  save draft",
             "Delete  remove selection",
             "Middle-drag  pan",
         ] {
             p.text(Pos2::new(x, y), Align2::LEFT_TOP, line, FontId::monospace(7.5), MUTED2);
             y += 15.0;
         }
+        let save = Rect::from_min_size(
+            Pos2::new(x, r.bottom() - 96.0),
+            Vec2::new(r.width() - 28.0, 32.0),
+        );
         let submit = Rect::from_min_size(
             Pos2::new(x, r.bottom() - 52.0),
             Vec2::new(r.width() - 28.0, 38.0),
@@ -2220,15 +2233,18 @@ impl Editor {
                 r.width() - 28.0,
             );
             let h = galley.size().y;
-            p.galley(Pos2::new(x, submit.top() - h - 4.0), galley, PINK);
+            p.galley(Pos2::new(x, save.top() - h - 4.0), galley, PINK);
         } else {
             p.text(
-                Pos2::new(x, submit.top() - 16.0),
+                Pos2::new(x, save.top() - 16.0),
                 Align2::LEFT_BOTTOM,
                 "Ready to submit.",
                 FontId::proportional(9.0),
                 MINT,
             );
+        }
+        if paint_button(ui, save, "SAVE AS DRAFT", false, true) {
+            *event = EditorEvent::SaveDraft;
         }
         if paint_button(ui, submit, "SUBMIT MAPPING", ok, ok) && ok {
             *event = EditorEvent::Submit;

@@ -91,6 +91,7 @@ move the yellow now-playing line continuously.
 | Zoom | Ctrl + wheel, or the − / + magnifier icons |
 | Play / pause | `Space` |
 | Seek | Arrow keys, or click/drag the time ruler |
+| Save draft | **SAVE AS DRAFT** in the inspector, or `Ctrl+S` |
 | Undo / redo | `Ctrl+Z` / `Ctrl+Shift+Z` or `Ctrl+Y` |
 | Select tool | Keys `1`–`5` |
 | Delete selection | `Delete` / `Backspace` |

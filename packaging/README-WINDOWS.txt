@@ -47,6 +47,8 @@ EDITOR QUICK REFERENCE
   + button                 Add a custom word to the front of the word bank.
   Space                    Play / pause
   Left / Right arrows      Seek 1 second (Shift: 5 seconds)
+  SAVE AS DRAFT            Saves the current mapping without leaving the editor.
+  Ctrl+S                   Save as draft.
   Ctrl+Z                   Undo
   Ctrl+Shift+Z / Ctrl+Y    Redo
   Delete                   Delete the selection
