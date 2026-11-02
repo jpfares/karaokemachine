@@ -239,3 +239,68 @@ fn read_cover_data_uri(root: &Path, song: &Song) -> Option<String> {
         STANDARD.encode(bytes)
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn song() -> Song {
+        serde_json::from_value(json!({
+            "id": "test-map",
+            "title": "Test Song",
+            "artist": "Test Artist",
+            "album": "Test Album",
+            "source": "import",
+            "duration": 10.0,
+            "mapped": true,
+            "notes": [
+                {"start": 1.0, "dur": 0.5, "midi": 60, "ribbon": 1}
+            ],
+            "lines": [{
+                "start": 1.0, "end": 2.0, "text": "hello",
+                "words": [{"text": "hello", "start": 1.0, "end": 2.0}]
+            }],
+            "placedWords": [{
+                "text": "hello", "start": 1.5, "y": 0.5, "line": 0, "wordIndex": 0
+            }],
+            "customWords": [{"id": 1, "text": "whoa"}],
+            "low": 48,
+            "high": 72,
+            "audio": {"backing": "backing.mp3", "guide": "guide.mp3"},
+            "youtubeUrl": "https://example.com/audio.mp3"
+        }))
+        .expect("test song")
+    }
+
+    #[test]
+    fn map_package_round_trips_without_audio() {
+        let song = song();
+        let package = MapPackage::from_song(Path::new("."), &song, Some("tester".into()))
+            .expect("export map");
+        assert_eq!(package.source_url, "https://example.com/audio.mp3");
+        assert_eq!(package.notes.len(), 1);
+        assert_eq!(package.placed_words.len(), 1);
+        let value = serde_json::to_value(&package).expect("serialize map");
+        assert!(value.get("audio").is_none());
+        assert!(value.get("audioFiles").is_none());
+
+        let detached: MapPackage =
+            serde_json::from_value(value).expect("deserialize map package");
+        let mut target = song;
+        target.mapped = false;
+        target.notes.clear();
+        detached.apply_to_song(&mut target).expect("apply map");
+        assert!(target.mapped);
+        assert_eq!(target.notes.len(), 1);
+        assert_eq!(target.placed_words.len(), 1);
+        assert_eq!(target.tags.iter().filter(|tag| *tag == "Community map").count(), 1);
+    }
+
+    #[test]
+    fn unmapped_song_cannot_be_exported() {
+        let mut song = song();
+        song.mapped = false;
+        assert!(MapPackage::from_song(Path::new("."), &song, None).is_err());
+    }
+}

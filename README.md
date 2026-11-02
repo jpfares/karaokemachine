@@ -203,7 +203,7 @@ The Windows build is made only when you run the script. The package contains the
 the generated warm-ups only; it never bundles the local commercial library.
 
 ```bash
-# prerequisites: rustup target add x86_64-pc-windows-gnu, mingw-w64, zip, rsync
+# prerequisites: rustup target add x86_64-pc-windows-gnu, mingw-w64, zip
 ./scripts/build-windows.sh
 ```
 
