@@ -1,0 +1,2141 @@
+{
+  "id": "scale-chromatic",
+  "title": "Chromatic Climb",
+  "artist": "Keyline warm-up",
+  "source": "scale",
+  "duration": 79.32,
+  "bpm": 78,
+  "tags": [
+    "Warm-up",
+    "Chromatic",
+    "Agility"
+  ],
+  "notes": [
+    {
+      "start": 3.0769,
+      "dur": 0.3723,
+      "midi": 60,
+      "word": "Do",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 3.5,
+      "dur": 0.3723,
+      "midi": 61,
+      "word": "Di",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 3.9231,
+      "dur": 0.3723,
+      "midi": 62,
+      "word": "Re",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 4.3462,
+      "dur": 0.3723,
+      "midi": 63,
+      "word": "Ri",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 4.7692,
+      "dur": 0.3723,
+      "midi": 64,
+      "word": "Mi",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 5.1923,
+      "dur": 0.3723,
+      "midi": 65,
+      "word": "Fa",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 5.6154,
+      "dur": 0.3723,
+      "midi": 66,
+      "word": "Fi",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 6.0385,
+      "dur": 0.3723,
+      "midi": 67,
+      "word": "Sol",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 6.4615,
+      "dur": 0.3723,
+      "midi": 68,
+      "word": "Si",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 6.8846,
+      "dur": 0.3723,
+      "midi": 69,
+      "word": "La",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 7.3077,
+      "dur": 0.3723,
+      "midi": 70,
+      "word": "Li",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 7.7308,
+      "dur": 0.3723,
+      "midi": 71,
+      "word": "Ti",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 8.1538,
+      "dur": 0.3723,
+      "midi": 72,
+      "word": "Do",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 8.8077,
+      "dur": 0.3723,
+      "midi": 72,
+      "word": "Do",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 9.2308,
+      "dur": 0.3723,
+      "midi": 71,
+      "word": "Ti",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 9.6538,
+      "dur": 0.3723,
+      "midi": 70,
+      "word": "Te",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 10.0769,
+      "dur": 0.3723,
+      "midi": 69,
+      "word": "La",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 10.5,
+      "dur": 0.3723,
+      "midi": 68,
+      "word": "Le",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 10.9231,
+      "dur": 0.3723,
+      "midi": 67,
+      "word": "Sol",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 11.3462,
+      "dur": 0.3723,
+      "midi": 66,
+      "word": "Se",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 11.7692,
+      "dur": 0.3723,
+      "midi": 65,
+      "word": "Fa",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 12.1923,
+      "dur": 0.3723,
+      "midi": 64,
+      "word": "Mi",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 12.6154,
+      "dur": 0.3723,
+      "midi": 63,
+      "word": "Me",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 13.0385,
+      "dur": 0.3723,
+      "midi": 62,
+      "word": "Re",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 13.4615,
+      "dur": 0.3723,
+      "midi": 61,
+      "word": "Ra",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 13.8846,
+      "dur": 0.3723,
+      "midi": 60,
+      "word": "Do",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 14.5385,
+      "dur": 0.3723,
+      "midi": 60,
+      "word": "Do",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 14.9615,
+      "dur": 0.3723,
+      "midi": 61,
+      "word": "Di",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 15.3846,
+      "dur": 0.3723,
+      "midi": 62,
+      "word": "Re",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 15.8077,
+      "dur": 0.3723,
+      "midi": 63,
+      "word": "Ri",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 16.2308,
+      "dur": 0.3723,
+      "midi": 64,
+      "word": "Mi",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 16.6538,
+      "dur": 0.3723,
+      "midi": 65,
+      "word": "Fa",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 17.0769,
+      "dur": 0.3723,
+      "midi": 66,
+      "word": "Fi",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 17.5,
+      "dur": 0.3723,
+      "midi": 67,
+      "word": "Sol",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 17.9231,
+      "dur": 0.3723,
+      "midi": 68,
+      "word": "Si",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 18.3462,
+      "dur": 0.3723,
+      "midi": 69,
+      "word": "La",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 18.7692,
+      "dur": 0.3723,
+      "midi": 70,
+      "word": "Li",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 19.1923,
+      "dur": 0.3723,
+      "midi": 71,
+      "word": "Ti",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 19.6154,
+      "dur": 0.3723,
+      "midi": 72,
+      "word": "Do",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 20.2692,
+      "dur": 0.3723,
+      "midi": 72,
+      "word": "Do",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 20.6923,
+      "dur": 0.3723,
+      "midi": 71,
+      "word": "Ti",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 21.1154,
+      "dur": 0.3723,
+      "midi": 70,
+      "word": "Te",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 21.5385,
+      "dur": 0.3723,
+      "midi": 69,
+      "word": "La",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 21.9615,
+      "dur": 0.3723,
+      "midi": 68,
+      "word": "Le",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 22.3846,
+      "dur": 0.3723,
+      "midi": 67,
+      "word": "Sol",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 22.8077,
+      "dur": 0.3723,
+      "midi": 66,
+      "word": "Se",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 23.2308,
+      "dur": 0.3723,
+      "midi": 65,
+      "word": "Fa",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 23.6538,
+      "dur": 0.3723,
+      "midi": 64,
+      "word": "Mi",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 24.0769,
+      "dur": 0.3723,
+      "midi": 63,
+      "word": "Me",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 24.5,
+      "dur": 0.3723,
+      "midi": 62,
+      "word": "Re",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 24.9231,
+      "dur": 0.3723,
+      "midi": 61,
+      "word": "Ra",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 25.3462,
+      "dur": 0.3723,
+      "midi": 60,
+      "word": "Do",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 26,
+      "dur": 0.3723,
+      "midi": 60,
+      "word": "Do",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 26.4231,
+      "dur": 0.3723,
+      "midi": 61,
+      "word": "Di",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 26.8462,
+      "dur": 0.3723,
+      "midi": 62,
+      "word": "Re",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 27.2692,
+      "dur": 0.3723,
+      "midi": 63,
+      "word": "Ri",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 27.6923,
+      "dur": 0.3723,
+      "midi": 64,
+      "word": "Mi",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 28.1154,
+      "dur": 0.3723,
+      "midi": 65,
+      "word": "Fa",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 28.5385,
+      "dur": 0.3723,
+      "midi": 66,
+      "word": "Fi",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 28.9615,
+      "dur": 0.3723,
+      "midi": 67,
+      "word": "Sol",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 29.3846,
+      "dur": 0.3723,
+      "midi": 68,
+      "word": "Si",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 29.8077,
+      "dur": 0.3723,
+      "midi": 69,
+      "word": "La",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 30.2308,
+      "dur": 0.3723,
+      "midi": 70,
+      "word": "Li",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 30.6538,
+      "dur": 0.3723,
+      "midi": 71,
+      "word": "Ti",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 31.0769,
+      "dur": 0.3723,
+      "midi": 72,
+      "word": "Do",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 31.7308,
+      "dur": 0.3723,
+      "midi": 72,
+      "word": "Do",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 32.1538,
+      "dur": 0.3723,
+      "midi": 71,
+      "word": "Ti",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 32.5769,
+      "dur": 0.3723,
+      "midi": 70,
+      "word": "Te",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 33,
+      "dur": 0.3723,
+      "midi": 69,
+      "word": "La",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 33.4231,
+      "dur": 0.3723,
+      "midi": 68,
+      "word": "Le",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 33.8462,
+      "dur": 0.3723,
+      "midi": 67,
+      "word": "Sol",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 34.2692,
+      "dur": 0.3723,
+      "midi": 66,
+      "word": "Se",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 34.6923,
+      "dur": 0.3723,
+      "midi": 65,
+      "word": "Fa",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 35.1154,
+      "dur": 0.3723,
+      "midi": 64,
+      "word": "Mi",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 35.5385,
+      "dur": 0.3723,
+      "midi": 63,
+      "word": "Me",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 35.9615,
+      "dur": 0.3723,
+      "midi": 62,
+      "word": "Re",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 36.3846,
+      "dur": 0.3723,
+      "midi": 61,
+      "word": "Ra",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 36.8077,
+      "dur": 0.3723,
+      "midi": 60,
+      "word": "Do",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 37.4615,
+      "dur": 0.3723,
+      "midi": 60,
+      "word": "Do",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 37.8846,
+      "dur": 0.3723,
+      "midi": 61,
+      "word": "Di",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 38.3077,
+      "dur": 0.3723,
+      "midi": 62,
+      "word": "Re",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 38.7308,
+      "dur": 0.3723,
+      "midi": 63,
+      "word": "Ri",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 39.1538,
+      "dur": 0.3723,
+      "midi": 64,
+      "word": "Mi",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 39.5769,
+      "dur": 0.3723,
+      "midi": 65,
+      "word": "Fa",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 40,
+      "dur": 0.3723,
+      "midi": 66,
+      "word": "Fi",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 40.4231,
+      "dur": 0.3723,
+      "midi": 67,
+      "word": "Sol",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 40.8462,
+      "dur": 0.3723,
+      "midi": 68,
+      "word": "Si",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 41.2692,
+      "dur": 0.3723,
+      "midi": 69,
+      "word": "La",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 41.6923,
+      "dur": 0.3723,
+      "midi": 70,
+      "word": "Li",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 42.1154,
+      "dur": 0.3723,
+      "midi": 71,
+      "word": "Ti",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 42.5385,
+      "dur": 0.3723,
+      "midi": 72,
+      "word": "Do",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 43.1923,
+      "dur": 0.3723,
+      "midi": 72,
+      "word": "Do",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 43.6154,
+      "dur": 0.3723,
+      "midi": 71,
+      "word": "Ti",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 44.0385,
+      "dur": 0.3723,
+      "midi": 70,
+      "word": "Te",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 44.4615,
+      "dur": 0.3723,
+      "midi": 69,
+      "word": "La",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 44.8846,
+      "dur": 0.3723,
+      "midi": 68,
+      "word": "Le",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 45.3077,
+      "dur": 0.3723,
+      "midi": 67,
+      "word": "Sol",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 45.7308,
+      "dur": 0.3723,
+      "midi": 66,
+      "word": "Se",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 46.1538,
+      "dur": 0.3723,
+      "midi": 65,
+      "word": "Fa",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 46.5769,
+      "dur": 0.3723,
+      "midi": 64,
+      "word": "Mi",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 47,
+      "dur": 0.3723,
+      "midi": 63,
+      "word": "Me",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 47.4231,
+      "dur": 0.3723,
+      "midi": 62,
+      "word": "Re",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 47.8462,
+      "dur": 0.3723,
+      "midi": 61,
+      "word": "Ra",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 48.2692,
+      "dur": 0.3723,
+      "midi": 60,
+      "word": "Do",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 48.9231,
+      "dur": 0.3723,
+      "midi": 60,
+      "word": "Do",
+      "line": 8,
+      "vel": 0.8
+    },
+    {
+      "start": 49.3462,
+      "dur": 0.3723,
+      "midi": 61,
+      "word": "Di",
+      "line": 8,
+      "vel": 0.8
+    },
+    {
+      "start": 49.7692,
+      "dur": 0.3723,
+      "midi": 62,
+      "word": "Re",
+      "line": 8,
+      "vel": 0.8
+    },
+    {
+      "start": 50.1923,
+      "dur": 0.3723,
+      "midi": 63,
+      "word": "Ri",
+      "line": 8,
+      "vel": 0.8
+    },
+    {
+      "start": 50.6154,
+      "dur": 0.3723,
+      "midi": 64,
+      "word": "Mi",
+      "line": 8,
+      "vel": 0.8
+    },
+    {
+      "start": 51.0385,
+      "dur": 0.3723,
+      "midi": 65,
+      "word": "Fa",
+      "line": 8,
+      "vel": 0.8
+    },
+    {
+      "start": 51.4615,
+      "dur": 0.3723,
+      "midi": 66,
+      "word": "Fi",
+      "line": 8,
+      "vel": 0.8
+    },
+    {
+      "start": 51.8846,
+      "dur": 0.3723,
+      "midi": 67,
+      "word": "Sol",
+      "line": 8,
+      "vel": 0.8
+    },
+    {
+      "start": 52.3077,
+      "dur": 0.3723,
+      "midi": 68,
+      "word": "Si",
+      "line": 8,
+      "vel": 0.8
+    },
+    {
+      "start": 52.7308,
+      "dur": 0.3723,
+      "midi": 69,
+      "word": "La",
+      "line": 8,
+      "vel": 0.8
+    },
+    {
+      "start": 53.1538,
+      "dur": 0.3723,
+      "midi": 70,
+      "word": "Li",
+      "line": 8,
+      "vel": 0.8
+    },
+    {
+      "start": 53.5769,
+      "dur": 0.3723,
+      "midi": 71,
+      "word": "Ti",
+      "line": 8,
+      "vel": 0.8
+    },
+    {
+      "start": 54,
+      "dur": 0.3723,
+      "midi": 72,
+      "word": "Do",
+      "line": 8,
+      "vel": 0.8
+    },
+    {
+      "start": 54.6538,
+      "dur": 0.3723,
+      "midi": 72,
+      "word": "Do",
+      "line": 9,
+      "vel": 0.8
+    },
+    {
+      "start": 55.0769,
+      "dur": 0.3723,
+      "midi": 71,
+      "word": "Ti",
+      "line": 9,
+      "vel": 0.8
+    },
+    {
+      "start": 55.5,
+      "dur": 0.3723,
+      "midi": 70,
+      "word": "Te",
+      "line": 9,
+      "vel": 0.8
+    },
+    {
+      "start": 55.9231,
+      "dur": 0.3723,
+      "midi": 69,
+      "word": "La",
+      "line": 9,
+      "vel": 0.8
+    },
+    {
+      "start": 56.3462,
+      "dur": 0.3723,
+      "midi": 68,
+      "word": "Le",
+      "line": 9,
+      "vel": 0.8
+    },
+    {
+      "start": 56.7692,
+      "dur": 0.3723,
+      "midi": 67,
+      "word": "Sol",
+      "line": 9,
+      "vel": 0.8
+    },
+    {
+      "start": 57.1923,
+      "dur": 0.3723,
+      "midi": 66,
+      "word": "Se",
+      "line": 9,
+      "vel": 0.8
+    },
+    {
+      "start": 57.6154,
+      "dur": 0.3723,
+      "midi": 65,
+      "word": "Fa",
+      "line": 9,
+      "vel": 0.8
+    },
+    {
+      "start": 58.0385,
+      "dur": 0.3723,
+      "midi": 64,
+      "word": "Mi",
+      "line": 9,
+      "vel": 0.8
+    },
+    {
+      "start": 58.4615,
+      "dur": 0.3723,
+      "midi": 63,
+      "word": "Me",
+      "line": 9,
+      "vel": 0.8
+    },
+    {
+      "start": 58.8846,
+      "dur": 0.3723,
+      "midi": 62,
+      "word": "Re",
+      "line": 9,
+      "vel": 0.8
+    },
+    {
+      "start": 59.3077,
+      "dur": 0.3723,
+      "midi": 61,
+      "word": "Ra",
+      "line": 9,
+      "vel": 0.8
+    },
+    {
+      "start": 59.7308,
+      "dur": 0.3723,
+      "midi": 60,
+      "word": "Do",
+      "line": 9,
+      "vel": 0.8
+    },
+    {
+      "start": 60.3846,
+      "dur": 0.3723,
+      "midi": 60,
+      "word": "Do",
+      "line": 10,
+      "vel": 0.8
+    },
+    {
+      "start": 60.8077,
+      "dur": 0.3723,
+      "midi": 61,
+      "word": "Di",
+      "line": 10,
+      "vel": 0.8
+    },
+    {
+      "start": 61.2308,
+      "dur": 0.3723,
+      "midi": 62,
+      "word": "Re",
+      "line": 10,
+      "vel": 0.8
+    },
+    {
+      "start": 61.6538,
+      "dur": 0.3723,
+      "midi": 63,
+      "word": "Ri",
+      "line": 10,
+      "vel": 0.8
+    },
+    {
+      "start": 62.0769,
+      "dur": 0.3723,
+      "midi": 64,
+      "word": "Mi",
+      "line": 10,
+      "vel": 0.8
+    },
+    {
+      "start": 62.5,
+      "dur": 0.3723,
+      "midi": 65,
+      "word": "Fa",
+      "line": 10,
+      "vel": 0.8
+    },
+    {
+      "start": 62.9231,
+      "dur": 0.3723,
+      "midi": 66,
+      "word": "Fi",
+      "line": 10,
+      "vel": 0.8
+    },
+    {
+      "start": 63.3462,
+      "dur": 0.3723,
+      "midi": 67,
+      "word": "Sol",
+      "line": 10,
+      "vel": 0.8
+    },
+    {
+      "start": 63.7692,
+      "dur": 0.3723,
+      "midi": 68,
+      "word": "Si",
+      "line": 10,
+      "vel": 0.8
+    },
+    {
+      "start": 64.1923,
+      "dur": 0.3723,
+      "midi": 69,
+      "word": "La",
+      "line": 10,
+      "vel": 0.8
+    },
+    {
+      "start": 64.6154,
+      "dur": 0.3723,
+      "midi": 70,
+      "word": "Li",
+      "line": 10,
+      "vel": 0.8
+    },
+    {
+      "start": 65.0385,
+      "dur": 0.3723,
+      "midi": 71,
+      "word": "Ti",
+      "line": 10,
+      "vel": 0.8
+    },
+    {
+      "start": 65.4615,
+      "dur": 0.3723,
+      "midi": 72,
+      "word": "Do",
+      "line": 10,
+      "vel": 0.8
+    },
+    {
+      "start": 66.1154,
+      "dur": 0.3723,
+      "midi": 72,
+      "word": "Do",
+      "line": 11,
+      "vel": 0.8
+    },
+    {
+      "start": 66.5385,
+      "dur": 0.3723,
+      "midi": 71,
+      "word": "Ti",
+      "line": 11,
+      "vel": 0.8
+    },
+    {
+      "start": 66.9615,
+      "dur": 0.3723,
+      "midi": 70,
+      "word": "Te",
+      "line": 11,
+      "vel": 0.8
+    },
+    {
+      "start": 67.3846,
+      "dur": 0.3723,
+      "midi": 69,
+      "word": "La",
+      "line": 11,
+      "vel": 0.8
+    },
+    {
+      "start": 67.8077,
+      "dur": 0.3723,
+      "midi": 68,
+      "word": "Le",
+      "line": 11,
+      "vel": 0.8
+    },
+    {
+      "start": 68.2308,
+      "dur": 0.3723,
+      "midi": 67,
+      "word": "Sol",
+      "line": 11,
+      "vel": 0.8
+    },
+    {
+      "start": 68.6538,
+      "dur": 0.3723,
+      "midi": 66,
+      "word": "Se",
+      "line": 11,
+      "vel": 0.8
+    },
+    {
+      "start": 69.0769,
+      "dur": 0.3723,
+      "midi": 65,
+      "word": "Fa",
+      "line": 11,
+      "vel": 0.8
+    },
+    {
+      "start": 69.5,
+      "dur": 0.3723,
+      "midi": 64,
+      "word": "Mi",
+      "line": 11,
+      "vel": 0.8
+    },
+    {
+      "start": 69.9231,
+      "dur": 0.3723,
+      "midi": 63,
+      "word": "Me",
+      "line": 11,
+      "vel": 0.8
+    },
+    {
+      "start": 70.3462,
+      "dur": 0.3723,
+      "midi": 62,
+      "word": "Re",
+      "line": 11,
+      "vel": 0.8
+    },
+    {
+      "start": 70.7692,
+      "dur": 0.3723,
+      "midi": 61,
+      "word": "Ra",
+      "line": 11,
+      "vel": 0.8
+    },
+    {
+      "start": 71.1923,
+      "dur": 0.3723,
+      "midi": 60,
+      "word": "Do",
+      "line": 11,
+      "vel": 0.8
+    }
+  ],
+  "lines": [
+    {
+      "start": 3.0769,
+      "end": 8.6923,
+      "text": "Do Di Re Ri Mi Fa Fi Sol Si La Li Ti Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 3.0769,
+          "end": 3.4492
+        },
+        {
+          "text": "Di",
+          "start": 3.5,
+          "end": 3.8723
+        },
+        {
+          "text": "Re",
+          "start": 3.9231,
+          "end": 4.2954
+        },
+        {
+          "text": "Ri",
+          "start": 4.3462,
+          "end": 4.7185
+        },
+        {
+          "text": "Mi",
+          "start": 4.7692,
+          "end": 5.1415
+        },
+        {
+          "text": "Fa",
+          "start": 5.1923,
+          "end": 5.5646
+        },
+        {
+          "text": "Fi",
+          "start": 5.6154,
+          "end": 5.9877
+        },
+        {
+          "text": "Sol",
+          "start": 6.0385,
+          "end": 6.4108
+        },
+        {
+          "text": "Si",
+          "start": 6.4615,
+          "end": 6.8338
+        },
+        {
+          "text": "La",
+          "start": 6.8846,
+          "end": 7.2569
+        },
+        {
+          "text": "Li",
+          "start": 7.3077,
+          "end": 7.68
+        },
+        {
+          "text": "Ti",
+          "start": 7.7308,
+          "end": 8.1031
+        },
+        {
+          "text": "Do",
+          "start": 8.1538,
+          "end": 8.5262
+        }
+      ]
+    },
+    {
+      "start": 8.8077,
+      "end": 14.4231,
+      "text": "Do Ti Te La Le Sol Se Fa Mi Me Re Ra Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 8.8077,
+          "end": 9.18
+        },
+        {
+          "text": "Ti",
+          "start": 9.2308,
+          "end": 9.6031
+        },
+        {
+          "text": "Te",
+          "start": 9.6538,
+          "end": 10.0262
+        },
+        {
+          "text": "La",
+          "start": 10.0769,
+          "end": 10.4492
+        },
+        {
+          "text": "Le",
+          "start": 10.5,
+          "end": 10.8723
+        },
+        {
+          "text": "Sol",
+          "start": 10.9231,
+          "end": 11.2954
+        },
+        {
+          "text": "Se",
+          "start": 11.3462,
+          "end": 11.7185
+        },
+        {
+          "text": "Fa",
+          "start": 11.7692,
+          "end": 12.1415
+        },
+        {
+          "text": "Mi",
+          "start": 12.1923,
+          "end": 12.5646
+        },
+        {
+          "text": "Me",
+          "start": 12.6154,
+          "end": 12.9877
+        },
+        {
+          "text": "Re",
+          "start": 13.0385,
+          "end": 13.4108
+        },
+        {
+          "text": "Ra",
+          "start": 13.4615,
+          "end": 13.8338
+        },
+        {
+          "text": "Do",
+          "start": 13.8846,
+          "end": 14.2569
+        }
+      ]
+    },
+    {
+      "start": 14.5385,
+      "end": 20.1538,
+      "text": "Do Di Re Ri Mi Fa Fi Sol Si La Li Ti Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 14.5385,
+          "end": 14.9108
+        },
+        {
+          "text": "Di",
+          "start": 14.9615,
+          "end": 15.3338
+        },
+        {
+          "text": "Re",
+          "start": 15.3846,
+          "end": 15.7569
+        },
+        {
+          "text": "Ri",
+          "start": 15.8077,
+          "end": 16.18
+        },
+        {
+          "text": "Mi",
+          "start": 16.2308,
+          "end": 16.6031
+        },
+        {
+          "text": "Fa",
+          "start": 16.6538,
+          "end": 17.0262
+        },
+        {
+          "text": "Fi",
+          "start": 17.0769,
+          "end": 17.4492
+        },
+        {
+          "text": "Sol",
+          "start": 17.5,
+          "end": 17.8723
+        },
+        {
+          "text": "Si",
+          "start": 17.9231,
+          "end": 18.2954
+        },
+        {
+          "text": "La",
+          "start": 18.3462,
+          "end": 18.7185
+        },
+        {
+          "text": "Li",
+          "start": 18.7692,
+          "end": 19.1415
+        },
+        {
+          "text": "Ti",
+          "start": 19.1923,
+          "end": 19.5646
+        },
+        {
+          "text": "Do",
+          "start": 19.6154,
+          "end": 19.9877
+        }
+      ]
+    },
+    {
+      "start": 20.2692,
+      "end": 25.8846,
+      "text": "Do Ti Te La Le Sol Se Fa Mi Me Re Ra Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 20.2692,
+          "end": 20.6415
+        },
+        {
+          "text": "Ti",
+          "start": 20.6923,
+          "end": 21.0646
+        },
+        {
+          "text": "Te",
+          "start": 21.1154,
+          "end": 21.4877
+        },
+        {
+          "text": "La",
+          "start": 21.5385,
+          "end": 21.9108
+        },
+        {
+          "text": "Le",
+          "start": 21.9615,
+          "end": 22.3338
+        },
+        {
+          "text": "Sol",
+          "start": 22.3846,
+          "end": 22.7569
+        },
+        {
+          "text": "Se",
+          "start": 22.8077,
+          "end": 23.18
+        },
+        {
+          "text": "Fa",
+          "start": 23.2308,
+          "end": 23.6031
+        },
+        {
+          "text": "Mi",
+          "start": 23.6538,
+          "end": 24.0262
+        },
+        {
+          "text": "Me",
+          "start": 24.0769,
+          "end": 24.4492
+        },
+        {
+          "text": "Re",
+          "start": 24.5,
+          "end": 24.8723
+        },
+        {
+          "text": "Ra",
+          "start": 24.9231,
+          "end": 25.2954
+        },
+        {
+          "text": "Do",
+          "start": 25.3462,
+          "end": 25.7185
+        }
+      ]
+    },
+    {
+      "start": 26,
+      "end": 31.6154,
+      "text": "Do Di Re Ri Mi Fa Fi Sol Si La Li Ti Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 26,
+          "end": 26.3723
+        },
+        {
+          "text": "Di",
+          "start": 26.4231,
+          "end": 26.7954
+        },
+        {
+          "text": "Re",
+          "start": 26.8462,
+          "end": 27.2185
+        },
+        {
+          "text": "Ri",
+          "start": 27.2692,
+          "end": 27.6415
+        },
+        {
+          "text": "Mi",
+          "start": 27.6923,
+          "end": 28.0646
+        },
+        {
+          "text": "Fa",
+          "start": 28.1154,
+          "end": 28.4877
+        },
+        {
+          "text": "Fi",
+          "start": 28.5385,
+          "end": 28.9108
+        },
+        {
+          "text": "Sol",
+          "start": 28.9615,
+          "end": 29.3338
+        },
+        {
+          "text": "Si",
+          "start": 29.3846,
+          "end": 29.7569
+        },
+        {
+          "text": "La",
+          "start": 29.8077,
+          "end": 30.18
+        },
+        {
+          "text": "Li",
+          "start": 30.2308,
+          "end": 30.6031
+        },
+        {
+          "text": "Ti",
+          "start": 30.6538,
+          "end": 31.0262
+        },
+        {
+          "text": "Do",
+          "start": 31.0769,
+          "end": 31.4492
+        }
+      ]
+    },
+    {
+      "start": 31.7308,
+      "end": 37.3462,
+      "text": "Do Ti Te La Le Sol Se Fa Mi Me Re Ra Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 31.7308,
+          "end": 32.1031
+        },
+        {
+          "text": "Ti",
+          "start": 32.1538,
+          "end": 32.5262
+        },
+        {
+          "text": "Te",
+          "start": 32.5769,
+          "end": 32.9492
+        },
+        {
+          "text": "La",
+          "start": 33,
+          "end": 33.3723
+        },
+        {
+          "text": "Le",
+          "start": 33.4231,
+          "end": 33.7954
+        },
+        {
+          "text": "Sol",
+          "start": 33.8462,
+          "end": 34.2185
+        },
+        {
+          "text": "Se",
+          "start": 34.2692,
+          "end": 34.6415
+        },
+        {
+          "text": "Fa",
+          "start": 34.6923,
+          "end": 35.0646
+        },
+        {
+          "text": "Mi",
+          "start": 35.1154,
+          "end": 35.4877
+        },
+        {
+          "text": "Me",
+          "start": 35.5385,
+          "end": 35.9108
+        },
+        {
+          "text": "Re",
+          "start": 35.9615,
+          "end": 36.3338
+        },
+        {
+          "text": "Ra",
+          "start": 36.3846,
+          "end": 36.7569
+        },
+        {
+          "text": "Do",
+          "start": 36.8077,
+          "end": 37.18
+        }
+      ]
+    },
+    {
+      "start": 37.4615,
+      "end": 43.0769,
+      "text": "Do Di Re Ri Mi Fa Fi Sol Si La Li Ti Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 37.4615,
+          "end": 37.8338
+        },
+        {
+          "text": "Di",
+          "start": 37.8846,
+          "end": 38.2569
+        },
+        {
+          "text": "Re",
+          "start": 38.3077,
+          "end": 38.68
+        },
+        {
+          "text": "Ri",
+          "start": 38.7308,
+          "end": 39.1031
+        },
+        {
+          "text": "Mi",
+          "start": 39.1538,
+          "end": 39.5262
+        },
+        {
+          "text": "Fa",
+          "start": 39.5769,
+          "end": 39.9492
+        },
+        {
+          "text": "Fi",
+          "start": 40,
+          "end": 40.3723
+        },
+        {
+          "text": "Sol",
+          "start": 40.4231,
+          "end": 40.7954
+        },
+        {
+          "text": "Si",
+          "start": 40.8462,
+          "end": 41.2185
+        },
+        {
+          "text": "La",
+          "start": 41.2692,
+          "end": 41.6415
+        },
+        {
+          "text": "Li",
+          "start": 41.6923,
+          "end": 42.0646
+        },
+        {
+          "text": "Ti",
+          "start": 42.1154,
+          "end": 42.4877
+        },
+        {
+          "text": "Do",
+          "start": 42.5385,
+          "end": 42.9108
+        }
+      ]
+    },
+    {
+      "start": 43.1923,
+      "end": 48.8077,
+      "text": "Do Ti Te La Le Sol Se Fa Mi Me Re Ra Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 43.1923,
+          "end": 43.5646
+        },
+        {
+          "text": "Ti",
+          "start": 43.6154,
+          "end": 43.9877
+        },
+        {
+          "text": "Te",
+          "start": 44.0385,
+          "end": 44.4108
+        },
+        {
+          "text": "La",
+          "start": 44.4615,
+          "end": 44.8338
+        },
+        {
+          "text": "Le",
+          "start": 44.8846,
+          "end": 45.2569
+        },
+        {
+          "text": "Sol",
+          "start": 45.3077,
+          "end": 45.68
+        },
+        {
+          "text": "Se",
+          "start": 45.7308,
+          "end": 46.1031
+        },
+        {
+          "text": "Fa",
+          "start": 46.1538,
+          "end": 46.5262
+        },
+        {
+          "text": "Mi",
+          "start": 46.5769,
+          "end": 46.9492
+        },
+        {
+          "text": "Me",
+          "start": 47,
+          "end": 47.3723
+        },
+        {
+          "text": "Re",
+          "start": 47.4231,
+          "end": 47.7954
+        },
+        {
+          "text": "Ra",
+          "start": 47.8462,
+          "end": 48.2185
+        },
+        {
+          "text": "Do",
+          "start": 48.2692,
+          "end": 48.6415
+        }
+      ]
+    },
+    {
+      "start": 48.9231,
+      "end": 54.5385,
+      "text": "Do Di Re Ri Mi Fa Fi Sol Si La Li Ti Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 48.9231,
+          "end": 49.2954
+        },
+        {
+          "text": "Di",
+          "start": 49.3462,
+          "end": 49.7185
+        },
+        {
+          "text": "Re",
+          "start": 49.7692,
+          "end": 50.1415
+        },
+        {
+          "text": "Ri",
+          "start": 50.1923,
+          "end": 50.5646
+        },
+        {
+          "text": "Mi",
+          "start": 50.6154,
+          "end": 50.9877
+        },
+        {
+          "text": "Fa",
+          "start": 51.0385,
+          "end": 51.4108
+        },
+        {
+          "text": "Fi",
+          "start": 51.4615,
+          "end": 51.8338
+        },
+        {
+          "text": "Sol",
+          "start": 51.8846,
+          "end": 52.2569
+        },
+        {
+          "text": "Si",
+          "start": 52.3077,
+          "end": 52.68
+        },
+        {
+          "text": "La",
+          "start": 52.7308,
+          "end": 53.1031
+        },
+        {
+          "text": "Li",
+          "start": 53.1538,
+          "end": 53.5262
+        },
+        {
+          "text": "Ti",
+          "start": 53.5769,
+          "end": 53.9492
+        },
+        {
+          "text": "Do",
+          "start": 54,
+          "end": 54.3723
+        }
+      ]
+    },
+    {
+      "start": 54.6538,
+      "end": 60.2692,
+      "text": "Do Ti Te La Le Sol Se Fa Mi Me Re Ra Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 54.6538,
+          "end": 55.0262
+        },
+        {
+          "text": "Ti",
+          "start": 55.0769,
+          "end": 55.4492
+        },
+        {
+          "text": "Te",
+          "start": 55.5,
+          "end": 55.8723
+        },
+        {
+          "text": "La",
+          "start": 55.9231,
+          "end": 56.2954
+        },
+        {
+          "text": "Le",
+          "start": 56.3462,
+          "end": 56.7185
+        },
+        {
+          "text": "Sol",
+          "start": 56.7692,
+          "end": 57.1415
+        },
+        {
+          "text": "Se",
+          "start": 57.1923,
+          "end": 57.5646
+        },
+        {
+          "text": "Fa",
+          "start": 57.6154,
+          "end": 57.9877
+        },
+        {
+          "text": "Mi",
+          "start": 58.0385,
+          "end": 58.4108
+        },
+        {
+          "text": "Me",
+          "start": 58.4615,
+          "end": 58.8338
+        },
+        {
+          "text": "Re",
+          "start": 58.8846,
+          "end": 59.2569
+        },
+        {
+          "text": "Ra",
+          "start": 59.3077,
+          "end": 59.68
+        },
+        {
+          "text": "Do",
+          "start": 59.7308,
+          "end": 60.1031
+        }
+      ]
+    },
+    {
+      "start": 60.3846,
+      "end": 66,
+      "text": "Do Di Re Ri Mi Fa Fi Sol Si La Li Ti Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 60.3846,
+          "end": 60.7569
+        },
+        {
+          "text": "Di",
+          "start": 60.8077,
+          "end": 61.18
+        },
+        {
+          "text": "Re",
+          "start": 61.2308,
+          "end": 61.6031
+        },
+        {
+          "text": "Ri",
+          "start": 61.6538,
+          "end": 62.0262
+        },
+        {
+          "text": "Mi",
+          "start": 62.0769,
+          "end": 62.4492
+        },
+        {
+          "text": "Fa",
+          "start": 62.5,
+          "end": 62.8723
+        },
+        {
+          "text": "Fi",
+          "start": 62.9231,
+          "end": 63.2954
+        },
+        {
+          "text": "Sol",
+          "start": 63.3462,
+          "end": 63.7185
+        },
+        {
+          "text": "Si",
+          "start": 63.7692,
+          "end": 64.1415
+        },
+        {
+          "text": "La",
+          "start": 64.1923,
+          "end": 64.5646
+        },
+        {
+          "text": "Li",
+          "start": 64.6154,
+          "end": 64.9877
+        },
+        {
+          "text": "Ti",
+          "start": 65.0385,
+          "end": 65.4108
+        },
+        {
+          "text": "Do",
+          "start": 65.4615,
+          "end": 65.8338
+        }
+      ]
+    },
+    {
+      "start": 66.1154,
+      "end": 71.7308,
+      "text": "Do Ti Te La Le Sol Se Fa Mi Me Re Ra Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 66.1154,
+          "end": 66.4877
+        },
+        {
+          "text": "Ti",
+          "start": 66.5385,
+          "end": 66.9108
+        },
+        {
+          "text": "Te",
+          "start": 66.9615,
+          "end": 67.3338
+        },
+        {
+          "text": "La",
+          "start": 67.3846,
+          "end": 67.7569
+        },
+        {
+          "text": "Le",
+          "start": 67.8077,
+          "end": 68.18
+        },
+        {
+          "text": "Sol",
+          "start": 68.2308,
+          "end": 68.6031
+        },
+        {
+          "text": "Se",
+          "start": 68.6538,
+          "end": 69.0262
+        },
+        {
+          "text": "Fa",
+          "start": 69.0769,
+          "end": 69.4492
+        },
+        {
+          "text": "Mi",
+          "start": 69.5,
+          "end": 69.8723
+        },
+        {
+          "text": "Me",
+          "start": 69.9231,
+          "end": 70.2954
+        },
+        {
+          "text": "Re",
+          "start": 70.3462,
+          "end": 70.7185
+        },
+        {
+          "text": "Ra",
+          "start": 70.7692,
+          "end": 71.1415
+        },
+        {
+          "text": "Do",
+          "start": 71.1923,
+          "end": 71.5646
+        }
+      ]
+    }
+  ],
+  "low": 58,
+  "high": 74,
+  "order": 5,
+  "audio": {
+    "backing": "backing.mp3",
+    "guide": "guide.mp3"
+  },
+  "lyricsProvider": "Solf\u00e8ge (built-in)",
+  "lyricsSynced": true,
+  "createdAt": "2026-10-29T03:37:58.505Z",
+  "album": "Warm-ups",
+  "cover": "cover.png"
+}

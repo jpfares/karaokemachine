@@ -1,0 +1,709 @@
+{
+  "id": "scale-pentatonic-major",
+  "title": "Major Pentatonic",
+  "artist": "Keyline warm-up",
+  "source": "scale",
+  "duration": 36,
+  "bpm": 100,
+  "tags": [
+    "Scale",
+    "C major",
+    "Five notes"
+  ],
+  "notes": [
+    {
+      "start": 2.4,
+      "dur": 0.4752,
+      "midi": 60,
+      "word": "Do",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 2.94,
+      "dur": 0.4752,
+      "midi": 62,
+      "word": "Re",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 3.48,
+      "dur": 0.4752,
+      "midi": 64,
+      "word": "Mi",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 4.02,
+      "dur": 0.4752,
+      "midi": 67,
+      "word": "Sol",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 4.56,
+      "dur": 0.4752,
+      "midi": 69,
+      "word": "La",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 5.1,
+      "dur": 0.4752,
+      "midi": 72,
+      "word": "Do",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 5.82,
+      "dur": 0.4752,
+      "midi": 72,
+      "word": "Do",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 6.36,
+      "dur": 0.4752,
+      "midi": 69,
+      "word": "La",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 6.9,
+      "dur": 0.4752,
+      "midi": 67,
+      "word": "Sol",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 7.44,
+      "dur": 0.4752,
+      "midi": 64,
+      "word": "Mi",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 7.98,
+      "dur": 0.4752,
+      "midi": 62,
+      "word": "Re",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 8.52,
+      "dur": 0.4752,
+      "midi": 60,
+      "word": "Do",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 9.24,
+      "dur": 0.4752,
+      "midi": 60,
+      "word": "Do",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 9.78,
+      "dur": 0.4752,
+      "midi": 62,
+      "word": "Re",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 10.32,
+      "dur": 0.4752,
+      "midi": 64,
+      "word": "Mi",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 10.86,
+      "dur": 0.4752,
+      "midi": 67,
+      "word": "Sol",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 11.4,
+      "dur": 0.4752,
+      "midi": 69,
+      "word": "La",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 11.94,
+      "dur": 0.4752,
+      "midi": 72,
+      "word": "Do",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 12.66,
+      "dur": 0.4752,
+      "midi": 72,
+      "word": "Do",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 13.2,
+      "dur": 0.4752,
+      "midi": 69,
+      "word": "La",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 13.74,
+      "dur": 0.4752,
+      "midi": 67,
+      "word": "Sol",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 14.28,
+      "dur": 0.4752,
+      "midi": 64,
+      "word": "Mi",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 14.82,
+      "dur": 0.4752,
+      "midi": 62,
+      "word": "Re",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 15.36,
+      "dur": 0.4752,
+      "midi": 60,
+      "word": "Do",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 16.08,
+      "dur": 0.4752,
+      "midi": 60,
+      "word": "Do",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 16.62,
+      "dur": 0.4752,
+      "midi": 62,
+      "word": "Re",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 17.16,
+      "dur": 0.4752,
+      "midi": 64,
+      "word": "Mi",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 17.7,
+      "dur": 0.4752,
+      "midi": 67,
+      "word": "Sol",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 18.24,
+      "dur": 0.4752,
+      "midi": 69,
+      "word": "La",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 18.78,
+      "dur": 0.4752,
+      "midi": 72,
+      "word": "Do",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 19.5,
+      "dur": 0.4752,
+      "midi": 72,
+      "word": "Do",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 20.04,
+      "dur": 0.4752,
+      "midi": 69,
+      "word": "La",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 20.58,
+      "dur": 0.4752,
+      "midi": 67,
+      "word": "Sol",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 21.12,
+      "dur": 0.4752,
+      "midi": 64,
+      "word": "Mi",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 21.66,
+      "dur": 0.4752,
+      "midi": 62,
+      "word": "Re",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 22.2,
+      "dur": 0.4752,
+      "midi": 60,
+      "word": "Do",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 22.92,
+      "dur": 0.4752,
+      "midi": 60,
+      "word": "Do",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 23.46,
+      "dur": 0.4752,
+      "midi": 62,
+      "word": "Re",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 24,
+      "dur": 0.4752,
+      "midi": 64,
+      "word": "Mi",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 24.54,
+      "dur": 0.4752,
+      "midi": 67,
+      "word": "Sol",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 25.08,
+      "dur": 0.4752,
+      "midi": 69,
+      "word": "La",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 25.62,
+      "dur": 0.4752,
+      "midi": 72,
+      "word": "Do",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 26.34,
+      "dur": 0.4752,
+      "midi": 72,
+      "word": "Do",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 26.88,
+      "dur": 0.4752,
+      "midi": 69,
+      "word": "La",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 27.42,
+      "dur": 0.4752,
+      "midi": 67,
+      "word": "Sol",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 27.96,
+      "dur": 0.4752,
+      "midi": 64,
+      "word": "Mi",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 28.5,
+      "dur": 0.4752,
+      "midi": 62,
+      "word": "Re",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 29.04,
+      "dur": 0.4752,
+      "midi": 60,
+      "word": "Do",
+      "line": 7,
+      "vel": 0.8
+    }
+  ],
+  "lines": [
+    {
+      "start": 2.4,
+      "end": 5.73,
+      "text": "Do Re Mi Sol La Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 2.4,
+          "end": 2.8752
+        },
+        {
+          "text": "Re",
+          "start": 2.94,
+          "end": 3.4152
+        },
+        {
+          "text": "Mi",
+          "start": 3.48,
+          "end": 3.9552
+        },
+        {
+          "text": "Sol",
+          "start": 4.02,
+          "end": 4.4952
+        },
+        {
+          "text": "La",
+          "start": 4.56,
+          "end": 5.0352
+        },
+        {
+          "text": "Do",
+          "start": 5.1,
+          "end": 5.5752
+        }
+      ]
+    },
+    {
+      "start": 5.82,
+      "end": 9.15,
+      "text": "Do La Sol Mi Re Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 5.82,
+          "end": 6.2952
+        },
+        {
+          "text": "La",
+          "start": 6.36,
+          "end": 6.8352
+        },
+        {
+          "text": "Sol",
+          "start": 6.9,
+          "end": 7.3752
+        },
+        {
+          "text": "Mi",
+          "start": 7.44,
+          "end": 7.9152
+        },
+        {
+          "text": "Re",
+          "start": 7.98,
+          "end": 8.4552
+        },
+        {
+          "text": "Do",
+          "start": 8.52,
+          "end": 8.9952
+        }
+      ]
+    },
+    {
+      "start": 9.24,
+      "end": 12.57,
+      "text": "Do Re Mi Sol La Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 9.24,
+          "end": 9.7152
+        },
+        {
+          "text": "Re",
+          "start": 9.78,
+          "end": 10.2552
+        },
+        {
+          "text": "Mi",
+          "start": 10.32,
+          "end": 10.7952
+        },
+        {
+          "text": "Sol",
+          "start": 10.86,
+          "end": 11.3352
+        },
+        {
+          "text": "La",
+          "start": 11.4,
+          "end": 11.8752
+        },
+        {
+          "text": "Do",
+          "start": 11.94,
+          "end": 12.4152
+        }
+      ]
+    },
+    {
+      "start": 12.66,
+      "end": 15.99,
+      "text": "Do La Sol Mi Re Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 12.66,
+          "end": 13.1352
+        },
+        {
+          "text": "La",
+          "start": 13.2,
+          "end": 13.6752
+        },
+        {
+          "text": "Sol",
+          "start": 13.74,
+          "end": 14.2152
+        },
+        {
+          "text": "Mi",
+          "start": 14.28,
+          "end": 14.7552
+        },
+        {
+          "text": "Re",
+          "start": 14.82,
+          "end": 15.2952
+        },
+        {
+          "text": "Do",
+          "start": 15.36,
+          "end": 15.8352
+        }
+      ]
+    },
+    {
+      "start": 16.08,
+      "end": 19.41,
+      "text": "Do Re Mi Sol La Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 16.08,
+          "end": 16.5552
+        },
+        {
+          "text": "Re",
+          "start": 16.62,
+          "end": 17.0952
+        },
+        {
+          "text": "Mi",
+          "start": 17.16,
+          "end": 17.6352
+        },
+        {
+          "text": "Sol",
+          "start": 17.7,
+          "end": 18.1752
+        },
+        {
+          "text": "La",
+          "start": 18.24,
+          "end": 18.7152
+        },
+        {
+          "text": "Do",
+          "start": 18.78,
+          "end": 19.2552
+        }
+      ]
+    },
+    {
+      "start": 19.5,
+      "end": 22.83,
+      "text": "Do La Sol Mi Re Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 19.5,
+          "end": 19.9752
+        },
+        {
+          "text": "La",
+          "start": 20.04,
+          "end": 20.5152
+        },
+        {
+          "text": "Sol",
+          "start": 20.58,
+          "end": 21.0552
+        },
+        {
+          "text": "Mi",
+          "start": 21.12,
+          "end": 21.5952
+        },
+        {
+          "text": "Re",
+          "start": 21.66,
+          "end": 22.1352
+        },
+        {
+          "text": "Do",
+          "start": 22.2,
+          "end": 22.6752
+        }
+      ]
+    },
+    {
+      "start": 22.92,
+      "end": 26.25,
+      "text": "Do Re Mi Sol La Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 22.92,
+          "end": 23.3952
+        },
+        {
+          "text": "Re",
+          "start": 23.46,
+          "end": 23.9352
+        },
+        {
+          "text": "Mi",
+          "start": 24,
+          "end": 24.4752
+        },
+        {
+          "text": "Sol",
+          "start": 24.54,
+          "end": 25.0152
+        },
+        {
+          "text": "La",
+          "start": 25.08,
+          "end": 25.5552
+        },
+        {
+          "text": "Do",
+          "start": 25.62,
+          "end": 26.0952
+        }
+      ]
+    },
+    {
+      "start": 26.34,
+      "end": 29.67,
+      "text": "Do La Sol Mi Re Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 26.34,
+          "end": 26.8152
+        },
+        {
+          "text": "La",
+          "start": 26.88,
+          "end": 27.3552
+        },
+        {
+          "text": "Sol",
+          "start": 27.42,
+          "end": 27.8952
+        },
+        {
+          "text": "Mi",
+          "start": 27.96,
+          "end": 28.4352
+        },
+        {
+          "text": "Re",
+          "start": 28.5,
+          "end": 28.9752
+        },
+        {
+          "text": "Do",
+          "start": 29.04,
+          "end": 29.5152
+        }
+      ]
+    }
+  ],
+  "low": 58,
+  "high": 74,
+  "order": 2,
+  "audio": {
+    "backing": "backing.mp3",
+    "guide": "guide.mp3"
+  },
+  "lyricsProvider": "Solf\u00e8ge (built-in)",
+  "lyricsSynced": true,
+  "createdAt": "2026-10-29T03:37:58.505Z",
+  "album": "Warm-ups",
+  "cover": "cover.png"
+}

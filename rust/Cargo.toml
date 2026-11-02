@@ -1,0 +1,21 @@
+[package]
+name = "karaokemachine"
+version = "2.0.0"
+edition = "2021"
+description = "KaraokeMachine — native manual karaoke level editor and singing coach"
+license = "MIT"
+
+[dependencies]
+eframe = { version = "0.31.1", features = ["default_fonts", "glow", "wayland", "x11"] }
+egui = "0.31.1"
+cpal = "0.15.3"
+symphonia = { version = "0.5.4", features = ["mp3", "wav", "flac", "ogg", "vorbis"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+anyhow = "1"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1

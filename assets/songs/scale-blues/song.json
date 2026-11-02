@@ -1,0 +1,813 @@
+{
+  "id": "scale-blues",
+  "title": "Blues Scale",
+  "artist": "Keyline warm-up",
+  "source": "scale",
+  "duration": 46.04,
+  "bpm": 88,
+  "tags": [
+    "Scale",
+    "C blues",
+    "Blue notes"
+  ],
+  "notes": [
+    {
+      "start": 2.7273,
+      "dur": 0.54,
+      "midi": 60,
+      "word": "Do",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 3.3409,
+      "dur": 0.54,
+      "midi": 63,
+      "word": "Me",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 3.9545,
+      "dur": 0.54,
+      "midi": 65,
+      "word": "Fa",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 4.5682,
+      "dur": 0.54,
+      "midi": 66,
+      "word": "Se",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 5.1818,
+      "dur": 0.54,
+      "midi": 67,
+      "word": "Sol",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 5.7955,
+      "dur": 0.54,
+      "midi": 70,
+      "word": "Te",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 6.4091,
+      "dur": 0.54,
+      "midi": 72,
+      "word": "Do",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 7.2273,
+      "dur": 0.54,
+      "midi": 72,
+      "word": "Do",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 7.8409,
+      "dur": 0.54,
+      "midi": 70,
+      "word": "Te",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 8.4545,
+      "dur": 0.54,
+      "midi": 67,
+      "word": "Sol",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 9.0682,
+      "dur": 0.54,
+      "midi": 66,
+      "word": "Se",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 9.6818,
+      "dur": 0.54,
+      "midi": 65,
+      "word": "Fa",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 10.2955,
+      "dur": 0.54,
+      "midi": 63,
+      "word": "Me",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 10.9091,
+      "dur": 0.54,
+      "midi": 60,
+      "word": "Do",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 11.7273,
+      "dur": 0.54,
+      "midi": 60,
+      "word": "Do",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 12.3409,
+      "dur": 0.54,
+      "midi": 63,
+      "word": "Me",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 12.9545,
+      "dur": 0.54,
+      "midi": 65,
+      "word": "Fa",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 13.5682,
+      "dur": 0.54,
+      "midi": 66,
+      "word": "Se",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 14.1818,
+      "dur": 0.54,
+      "midi": 67,
+      "word": "Sol",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 14.7955,
+      "dur": 0.54,
+      "midi": 70,
+      "word": "Te",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 15.4091,
+      "dur": 0.54,
+      "midi": 72,
+      "word": "Do",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 16.2273,
+      "dur": 0.54,
+      "midi": 72,
+      "word": "Do",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 16.8409,
+      "dur": 0.54,
+      "midi": 70,
+      "word": "Te",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 17.4545,
+      "dur": 0.54,
+      "midi": 67,
+      "word": "Sol",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 18.0682,
+      "dur": 0.54,
+      "midi": 66,
+      "word": "Se",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 18.6818,
+      "dur": 0.54,
+      "midi": 65,
+      "word": "Fa",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 19.2955,
+      "dur": 0.54,
+      "midi": 63,
+      "word": "Me",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 19.9091,
+      "dur": 0.54,
+      "midi": 60,
+      "word": "Do",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 20.7273,
+      "dur": 0.54,
+      "midi": 60,
+      "word": "Do",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 21.3409,
+      "dur": 0.54,
+      "midi": 63,
+      "word": "Me",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 21.9545,
+      "dur": 0.54,
+      "midi": 65,
+      "word": "Fa",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 22.5682,
+      "dur": 0.54,
+      "midi": 66,
+      "word": "Se",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 23.1818,
+      "dur": 0.54,
+      "midi": 67,
+      "word": "Sol",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 23.7955,
+      "dur": 0.54,
+      "midi": 70,
+      "word": "Te",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 24.4091,
+      "dur": 0.54,
+      "midi": 72,
+      "word": "Do",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 25.2273,
+      "dur": 0.54,
+      "midi": 72,
+      "word": "Do",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 25.8409,
+      "dur": 0.54,
+      "midi": 70,
+      "word": "Te",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 26.4545,
+      "dur": 0.54,
+      "midi": 67,
+      "word": "Sol",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 27.0682,
+      "dur": 0.54,
+      "midi": 66,
+      "word": "Se",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 27.6818,
+      "dur": 0.54,
+      "midi": 65,
+      "word": "Fa",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 28.2955,
+      "dur": 0.54,
+      "midi": 63,
+      "word": "Me",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 28.9091,
+      "dur": 0.54,
+      "midi": 60,
+      "word": "Do",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 29.7273,
+      "dur": 0.54,
+      "midi": 60,
+      "word": "Do",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 30.3409,
+      "dur": 0.54,
+      "midi": 63,
+      "word": "Me",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 30.9545,
+      "dur": 0.54,
+      "midi": 65,
+      "word": "Fa",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 31.5682,
+      "dur": 0.54,
+      "midi": 66,
+      "word": "Se",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 32.1818,
+      "dur": 0.54,
+      "midi": 67,
+      "word": "Sol",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 32.7955,
+      "dur": 0.54,
+      "midi": 70,
+      "word": "Te",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 33.4091,
+      "dur": 0.54,
+      "midi": 72,
+      "word": "Do",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 34.2273,
+      "dur": 0.54,
+      "midi": 72,
+      "word": "Do",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 34.8409,
+      "dur": 0.54,
+      "midi": 70,
+      "word": "Te",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 35.4545,
+      "dur": 0.54,
+      "midi": 67,
+      "word": "Sol",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 36.0682,
+      "dur": 0.54,
+      "midi": 66,
+      "word": "Se",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 36.6818,
+      "dur": 0.54,
+      "midi": 65,
+      "word": "Fa",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 37.2955,
+      "dur": 0.54,
+      "midi": 63,
+      "word": "Me",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 37.9091,
+      "dur": 0.54,
+      "midi": 60,
+      "word": "Do",
+      "line": 7,
+      "vel": 0.8
+    }
+  ],
+  "lines": [
+    {
+      "start": 2.7273,
+      "end": 7.125,
+      "text": "Do Me Fa Se Sol Te Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 2.7273,
+          "end": 3.2673
+        },
+        {
+          "text": "Me",
+          "start": 3.3409,
+          "end": 3.8809
+        },
+        {
+          "text": "Fa",
+          "start": 3.9545,
+          "end": 4.4945
+        },
+        {
+          "text": "Se",
+          "start": 4.5682,
+          "end": 5.1082
+        },
+        {
+          "text": "Sol",
+          "start": 5.1818,
+          "end": 5.7218
+        },
+        {
+          "text": "Te",
+          "start": 5.7955,
+          "end": 6.3355
+        },
+        {
+          "text": "Do",
+          "start": 6.4091,
+          "end": 6.9491
+        }
+      ]
+    },
+    {
+      "start": 7.2273,
+      "end": 11.625,
+      "text": "Do Te Sol Se Fa Me Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 7.2273,
+          "end": 7.7673
+        },
+        {
+          "text": "Te",
+          "start": 7.8409,
+          "end": 8.3809
+        },
+        {
+          "text": "Sol",
+          "start": 8.4545,
+          "end": 8.9945
+        },
+        {
+          "text": "Se",
+          "start": 9.0682,
+          "end": 9.6082
+        },
+        {
+          "text": "Fa",
+          "start": 9.6818,
+          "end": 10.2218
+        },
+        {
+          "text": "Me",
+          "start": 10.2955,
+          "end": 10.8355
+        },
+        {
+          "text": "Do",
+          "start": 10.9091,
+          "end": 11.4491
+        }
+      ]
+    },
+    {
+      "start": 11.7273,
+      "end": 16.125,
+      "text": "Do Me Fa Se Sol Te Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 11.7273,
+          "end": 12.2673
+        },
+        {
+          "text": "Me",
+          "start": 12.3409,
+          "end": 12.8809
+        },
+        {
+          "text": "Fa",
+          "start": 12.9545,
+          "end": 13.4945
+        },
+        {
+          "text": "Se",
+          "start": 13.5682,
+          "end": 14.1082
+        },
+        {
+          "text": "Sol",
+          "start": 14.1818,
+          "end": 14.7218
+        },
+        {
+          "text": "Te",
+          "start": 14.7955,
+          "end": 15.3355
+        },
+        {
+          "text": "Do",
+          "start": 15.4091,
+          "end": 15.9491
+        }
+      ]
+    },
+    {
+      "start": 16.2273,
+      "end": 20.625,
+      "text": "Do Te Sol Se Fa Me Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 16.2273,
+          "end": 16.7673
+        },
+        {
+          "text": "Te",
+          "start": 16.8409,
+          "end": 17.3809
+        },
+        {
+          "text": "Sol",
+          "start": 17.4545,
+          "end": 17.9945
+        },
+        {
+          "text": "Se",
+          "start": 18.0682,
+          "end": 18.6082
+        },
+        {
+          "text": "Fa",
+          "start": 18.6818,
+          "end": 19.2218
+        },
+        {
+          "text": "Me",
+          "start": 19.2955,
+          "end": 19.8355
+        },
+        {
+          "text": "Do",
+          "start": 19.9091,
+          "end": 20.4491
+        }
+      ]
+    },
+    {
+      "start": 20.7273,
+      "end": 25.125,
+      "text": "Do Me Fa Se Sol Te Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 20.7273,
+          "end": 21.2673
+        },
+        {
+          "text": "Me",
+          "start": 21.3409,
+          "end": 21.8809
+        },
+        {
+          "text": "Fa",
+          "start": 21.9545,
+          "end": 22.4945
+        },
+        {
+          "text": "Se",
+          "start": 22.5682,
+          "end": 23.1082
+        },
+        {
+          "text": "Sol",
+          "start": 23.1818,
+          "end": 23.7218
+        },
+        {
+          "text": "Te",
+          "start": 23.7955,
+          "end": 24.3355
+        },
+        {
+          "text": "Do",
+          "start": 24.4091,
+          "end": 24.9491
+        }
+      ]
+    },
+    {
+      "start": 25.2273,
+      "end": 29.625,
+      "text": "Do Te Sol Se Fa Me Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 25.2273,
+          "end": 25.7673
+        },
+        {
+          "text": "Te",
+          "start": 25.8409,
+          "end": 26.3809
+        },
+        {
+          "text": "Sol",
+          "start": 26.4545,
+          "end": 26.9945
+        },
+        {
+          "text": "Se",
+          "start": 27.0682,
+          "end": 27.6082
+        },
+        {
+          "text": "Fa",
+          "start": 27.6818,
+          "end": 28.2218
+        },
+        {
+          "text": "Me",
+          "start": 28.2955,
+          "end": 28.8355
+        },
+        {
+          "text": "Do",
+          "start": 28.9091,
+          "end": 29.4491
+        }
+      ]
+    },
+    {
+      "start": 29.7273,
+      "end": 34.125,
+      "text": "Do Me Fa Se Sol Te Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 29.7273,
+          "end": 30.2673
+        },
+        {
+          "text": "Me",
+          "start": 30.3409,
+          "end": 30.8809
+        },
+        {
+          "text": "Fa",
+          "start": 30.9545,
+          "end": 31.4945
+        },
+        {
+          "text": "Se",
+          "start": 31.5682,
+          "end": 32.1082
+        },
+        {
+          "text": "Sol",
+          "start": 32.1818,
+          "end": 32.7218
+        },
+        {
+          "text": "Te",
+          "start": 32.7955,
+          "end": 33.3355
+        },
+        {
+          "text": "Do",
+          "start": 33.4091,
+          "end": 33.9491
+        }
+      ]
+    },
+    {
+      "start": 34.2273,
+      "end": 38.625,
+      "text": "Do Te Sol Se Fa Me Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 34.2273,
+          "end": 34.7673
+        },
+        {
+          "text": "Te",
+          "start": 34.8409,
+          "end": 35.3809
+        },
+        {
+          "text": "Sol",
+          "start": 35.4545,
+          "end": 35.9945
+        },
+        {
+          "text": "Se",
+          "start": 36.0682,
+          "end": 36.6082
+        },
+        {
+          "text": "Fa",
+          "start": 36.6818,
+          "end": 37.2218
+        },
+        {
+          "text": "Me",
+          "start": 37.2955,
+          "end": 37.8355
+        },
+        {
+          "text": "Do",
+          "start": 37.9091,
+          "end": 38.4491
+        }
+      ]
+    }
+  ],
+  "low": 58,
+  "high": 74,
+  "order": 4,
+  "audio": {
+    "backing": "backing.mp3",
+    "guide": "guide.mp3"
+  },
+  "lyricsProvider": "Solf\u00e8ge (built-in)",
+  "lyricsSynced": true,
+  "createdAt": "2026-10-29T03:37:58.505Z",
+  "album": "Warm-ups",
+  "cover": "cover.png"
+}

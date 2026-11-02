@@ -1,0 +1,917 @@
+{
+  "id": "scale-arpeggio",
+  "title": "Maj7 Arpeggio",
+  "artist": "Keyline warm-up",
+  "source": "scale",
+  "duration": 44.14,
+  "bpm": 92,
+  "tags": [
+    "Leaps",
+    "C major 7",
+    "Intervals"
+  ],
+  "notes": [
+    {
+      "start": 2.6087,
+      "dur": 0.4591,
+      "midi": 60,
+      "word": "Do",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 3.1304,
+      "dur": 0.4591,
+      "midi": 64,
+      "word": "Mi",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 3.6522,
+      "dur": 0.4591,
+      "midi": 67,
+      "word": "Sol",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 4.1739,
+      "dur": 0.4591,
+      "midi": 71,
+      "word": "Ti",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 4.6957,
+      "dur": 0.4591,
+      "midi": 72,
+      "word": "Do",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 5.2174,
+      "dur": 0.4591,
+      "midi": 71,
+      "word": "Ti",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 5.7391,
+      "dur": 0.4591,
+      "midi": 67,
+      "word": "Sol",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 6.2609,
+      "dur": 0.4591,
+      "midi": 64,
+      "word": "Mi",
+      "line": 0,
+      "vel": 0.8
+    },
+    {
+      "start": 6.9783,
+      "dur": 0.4591,
+      "midi": 60,
+      "word": "Do",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 7.5,
+      "dur": 0.4591,
+      "midi": 67,
+      "word": "Sol",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 8.0217,
+      "dur": 0.4591,
+      "midi": 64,
+      "word": "Mi",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 8.5435,
+      "dur": 0.4591,
+      "midi": 71,
+      "word": "Ti",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 9.0652,
+      "dur": 0.4591,
+      "midi": 72,
+      "word": "Do",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 9.587,
+      "dur": 0.4591,
+      "midi": 67,
+      "word": "Sol",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 10.1087,
+      "dur": 0.4591,
+      "midi": 64,
+      "word": "Mi",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 10.6304,
+      "dur": 0.4591,
+      "midi": 60,
+      "word": "Do",
+      "line": 1,
+      "vel": 0.8
+    },
+    {
+      "start": 11.3478,
+      "dur": 0.4591,
+      "midi": 60,
+      "word": "Do",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 11.8696,
+      "dur": 0.4591,
+      "midi": 64,
+      "word": "Mi",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 12.3913,
+      "dur": 0.4591,
+      "midi": 67,
+      "word": "Sol",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 12.913,
+      "dur": 0.4591,
+      "midi": 71,
+      "word": "Ti",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 13.4348,
+      "dur": 0.4591,
+      "midi": 72,
+      "word": "Do",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 13.9565,
+      "dur": 0.4591,
+      "midi": 71,
+      "word": "Ti",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 14.4783,
+      "dur": 0.4591,
+      "midi": 67,
+      "word": "Sol",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 15,
+      "dur": 0.4591,
+      "midi": 64,
+      "word": "Mi",
+      "line": 2,
+      "vel": 0.8
+    },
+    {
+      "start": 15.7174,
+      "dur": 0.4591,
+      "midi": 60,
+      "word": "Do",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 16.2391,
+      "dur": 0.4591,
+      "midi": 67,
+      "word": "Sol",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 16.7609,
+      "dur": 0.4591,
+      "midi": 64,
+      "word": "Mi",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 17.2826,
+      "dur": 0.4591,
+      "midi": 71,
+      "word": "Ti",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 17.8043,
+      "dur": 0.4591,
+      "midi": 72,
+      "word": "Do",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 18.3261,
+      "dur": 0.4591,
+      "midi": 67,
+      "word": "Sol",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 18.8478,
+      "dur": 0.4591,
+      "midi": 64,
+      "word": "Mi",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 19.3696,
+      "dur": 0.4591,
+      "midi": 60,
+      "word": "Do",
+      "line": 3,
+      "vel": 0.8
+    },
+    {
+      "start": 20.087,
+      "dur": 0.4591,
+      "midi": 60,
+      "word": "Do",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 20.6087,
+      "dur": 0.4591,
+      "midi": 64,
+      "word": "Mi",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 21.1304,
+      "dur": 0.4591,
+      "midi": 67,
+      "word": "Sol",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 21.6522,
+      "dur": 0.4591,
+      "midi": 71,
+      "word": "Ti",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 22.1739,
+      "dur": 0.4591,
+      "midi": 72,
+      "word": "Do",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 22.6957,
+      "dur": 0.4591,
+      "midi": 71,
+      "word": "Ti",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 23.2174,
+      "dur": 0.4591,
+      "midi": 67,
+      "word": "Sol",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 23.7391,
+      "dur": 0.4591,
+      "midi": 64,
+      "word": "Mi",
+      "line": 4,
+      "vel": 0.8
+    },
+    {
+      "start": 24.4565,
+      "dur": 0.4591,
+      "midi": 60,
+      "word": "Do",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 24.9783,
+      "dur": 0.4591,
+      "midi": 67,
+      "word": "Sol",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 25.5,
+      "dur": 0.4591,
+      "midi": 64,
+      "word": "Mi",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 26.0217,
+      "dur": 0.4591,
+      "midi": 71,
+      "word": "Ti",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 26.5435,
+      "dur": 0.4591,
+      "midi": 72,
+      "word": "Do",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 27.0652,
+      "dur": 0.4591,
+      "midi": 67,
+      "word": "Sol",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 27.587,
+      "dur": 0.4591,
+      "midi": 64,
+      "word": "Mi",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 28.1087,
+      "dur": 0.4591,
+      "midi": 60,
+      "word": "Do",
+      "line": 5,
+      "vel": 0.8
+    },
+    {
+      "start": 28.8261,
+      "dur": 0.4591,
+      "midi": 60,
+      "word": "Do",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 29.3478,
+      "dur": 0.4591,
+      "midi": 64,
+      "word": "Mi",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 29.8696,
+      "dur": 0.4591,
+      "midi": 67,
+      "word": "Sol",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 30.3913,
+      "dur": 0.4591,
+      "midi": 71,
+      "word": "Ti",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 30.913,
+      "dur": 0.4591,
+      "midi": 72,
+      "word": "Do",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 31.4348,
+      "dur": 0.4591,
+      "midi": 71,
+      "word": "Ti",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 31.9565,
+      "dur": 0.4591,
+      "midi": 67,
+      "word": "Sol",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 32.4783,
+      "dur": 0.4591,
+      "midi": 64,
+      "word": "Mi",
+      "line": 6,
+      "vel": 0.8
+    },
+    {
+      "start": 33.1957,
+      "dur": 0.4591,
+      "midi": 60,
+      "word": "Do",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 33.7174,
+      "dur": 0.4591,
+      "midi": 67,
+      "word": "Sol",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 34.2391,
+      "dur": 0.4591,
+      "midi": 64,
+      "word": "Mi",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 34.7609,
+      "dur": 0.4591,
+      "midi": 71,
+      "word": "Ti",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 35.2826,
+      "dur": 0.4591,
+      "midi": 72,
+      "word": "Do",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 35.8043,
+      "dur": 0.4591,
+      "midi": 67,
+      "word": "Sol",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 36.3261,
+      "dur": 0.4591,
+      "midi": 64,
+      "word": "Mi",
+      "line": 7,
+      "vel": 0.8
+    },
+    {
+      "start": 36.8478,
+      "dur": 0.4591,
+      "midi": 60,
+      "word": "Do",
+      "line": 7,
+      "vel": 0.8
+    }
+  ],
+  "lines": [
+    {
+      "start": 2.6087,
+      "end": 6.8804,
+      "text": "Do Mi Sol Ti Do Ti Sol Mi",
+      "words": [
+        {
+          "text": "Do",
+          "start": 2.6087,
+          "end": 3.0678
+        },
+        {
+          "text": "Mi",
+          "start": 3.1304,
+          "end": 3.5896
+        },
+        {
+          "text": "Sol",
+          "start": 3.6522,
+          "end": 4.1113
+        },
+        {
+          "text": "Ti",
+          "start": 4.1739,
+          "end": 4.633
+        },
+        {
+          "text": "Do",
+          "start": 4.6957,
+          "end": 5.1548
+        },
+        {
+          "text": "Ti",
+          "start": 5.2174,
+          "end": 5.6765
+        },
+        {
+          "text": "Sol",
+          "start": 5.7391,
+          "end": 6.1983
+        },
+        {
+          "text": "Mi",
+          "start": 6.2609,
+          "end": 6.72
+        }
+      ]
+    },
+    {
+      "start": 6.9783,
+      "end": 11.25,
+      "text": "Do Sol Mi Ti Do Sol Mi Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 6.9783,
+          "end": 7.4374
+        },
+        {
+          "text": "Sol",
+          "start": 7.5,
+          "end": 7.9591
+        },
+        {
+          "text": "Mi",
+          "start": 8.0217,
+          "end": 8.4809
+        },
+        {
+          "text": "Ti",
+          "start": 8.5435,
+          "end": 9.0026
+        },
+        {
+          "text": "Do",
+          "start": 9.0652,
+          "end": 9.5243
+        },
+        {
+          "text": "Sol",
+          "start": 9.587,
+          "end": 10.0461
+        },
+        {
+          "text": "Mi",
+          "start": 10.1087,
+          "end": 10.5678
+        },
+        {
+          "text": "Do",
+          "start": 10.6304,
+          "end": 11.0896
+        }
+      ]
+    },
+    {
+      "start": 11.3478,
+      "end": 15.6196,
+      "text": "Do Mi Sol Ti Do Ti Sol Mi",
+      "words": [
+        {
+          "text": "Do",
+          "start": 11.3478,
+          "end": 11.807
+        },
+        {
+          "text": "Mi",
+          "start": 11.8696,
+          "end": 12.3287
+        },
+        {
+          "text": "Sol",
+          "start": 12.3913,
+          "end": 12.8504
+        },
+        {
+          "text": "Ti",
+          "start": 12.913,
+          "end": 13.3722
+        },
+        {
+          "text": "Do",
+          "start": 13.4348,
+          "end": 13.8939
+        },
+        {
+          "text": "Ti",
+          "start": 13.9565,
+          "end": 14.4157
+        },
+        {
+          "text": "Sol",
+          "start": 14.4783,
+          "end": 14.9374
+        },
+        {
+          "text": "Mi",
+          "start": 15,
+          "end": 15.4591
+        }
+      ]
+    },
+    {
+      "start": 15.7174,
+      "end": 19.9891,
+      "text": "Do Sol Mi Ti Do Sol Mi Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 15.7174,
+          "end": 16.1765
+        },
+        {
+          "text": "Sol",
+          "start": 16.2391,
+          "end": 16.6983
+        },
+        {
+          "text": "Mi",
+          "start": 16.7609,
+          "end": 17.22
+        },
+        {
+          "text": "Ti",
+          "start": 17.2826,
+          "end": 17.7417
+        },
+        {
+          "text": "Do",
+          "start": 17.8043,
+          "end": 18.2635
+        },
+        {
+          "text": "Sol",
+          "start": 18.3261,
+          "end": 18.7852
+        },
+        {
+          "text": "Mi",
+          "start": 18.8478,
+          "end": 19.307
+        },
+        {
+          "text": "Do",
+          "start": 19.3696,
+          "end": 19.8287
+        }
+      ]
+    },
+    {
+      "start": 20.087,
+      "end": 24.3587,
+      "text": "Do Mi Sol Ti Do Ti Sol Mi",
+      "words": [
+        {
+          "text": "Do",
+          "start": 20.087,
+          "end": 20.5461
+        },
+        {
+          "text": "Mi",
+          "start": 20.6087,
+          "end": 21.0678
+        },
+        {
+          "text": "Sol",
+          "start": 21.1304,
+          "end": 21.5896
+        },
+        {
+          "text": "Ti",
+          "start": 21.6522,
+          "end": 22.1113
+        },
+        {
+          "text": "Do",
+          "start": 22.1739,
+          "end": 22.633
+        },
+        {
+          "text": "Ti",
+          "start": 22.6957,
+          "end": 23.1548
+        },
+        {
+          "text": "Sol",
+          "start": 23.2174,
+          "end": 23.6765
+        },
+        {
+          "text": "Mi",
+          "start": 23.7391,
+          "end": 24.1983
+        }
+      ]
+    },
+    {
+      "start": 24.4565,
+      "end": 28.7283,
+      "text": "Do Sol Mi Ti Do Sol Mi Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 24.4565,
+          "end": 24.9157
+        },
+        {
+          "text": "Sol",
+          "start": 24.9783,
+          "end": 25.4374
+        },
+        {
+          "text": "Mi",
+          "start": 25.5,
+          "end": 25.9591
+        },
+        {
+          "text": "Ti",
+          "start": 26.0217,
+          "end": 26.4809
+        },
+        {
+          "text": "Do",
+          "start": 26.5435,
+          "end": 27.0026
+        },
+        {
+          "text": "Sol",
+          "start": 27.0652,
+          "end": 27.5243
+        },
+        {
+          "text": "Mi",
+          "start": 27.587,
+          "end": 28.0461
+        },
+        {
+          "text": "Do",
+          "start": 28.1087,
+          "end": 28.5678
+        }
+      ]
+    },
+    {
+      "start": 28.8261,
+      "end": 33.0978,
+      "text": "Do Mi Sol Ti Do Ti Sol Mi",
+      "words": [
+        {
+          "text": "Do",
+          "start": 28.8261,
+          "end": 29.2852
+        },
+        {
+          "text": "Mi",
+          "start": 29.3478,
+          "end": 29.807
+        },
+        {
+          "text": "Sol",
+          "start": 29.8696,
+          "end": 30.3287
+        },
+        {
+          "text": "Ti",
+          "start": 30.3913,
+          "end": 30.8504
+        },
+        {
+          "text": "Do",
+          "start": 30.913,
+          "end": 31.3722
+        },
+        {
+          "text": "Ti",
+          "start": 31.4348,
+          "end": 31.8939
+        },
+        {
+          "text": "Sol",
+          "start": 31.9565,
+          "end": 32.4157
+        },
+        {
+          "text": "Mi",
+          "start": 32.4783,
+          "end": 32.9374
+        }
+      ]
+    },
+    {
+      "start": 33.1957,
+      "end": 37.4674,
+      "text": "Do Sol Mi Ti Do Sol Mi Do",
+      "words": [
+        {
+          "text": "Do",
+          "start": 33.1957,
+          "end": 33.6548
+        },
+        {
+          "text": "Sol",
+          "start": 33.7174,
+          "end": 34.1765
+        },
+        {
+          "text": "Mi",
+          "start": 34.2391,
+          "end": 34.6983
+        },
+        {
+          "text": "Ti",
+          "start": 34.7609,
+          "end": 35.22
+        },
+        {
+          "text": "Do",
+          "start": 35.2826,
+          "end": 35.7417
+        },
+        {
+          "text": "Sol",
+          "start": 35.8043,
+          "end": 36.2635
+        },
+        {
+          "text": "Mi",
+          "start": 36.3261,
+          "end": 36.7852
+        },
+        {
+          "text": "Do",
+          "start": 36.8478,
+          "end": 37.307
+        }
+      ]
+    }
+  ],
+  "low": 58,
+  "high": 74,
+  "order": 6,
+  "audio": {
+    "backing": "backing.mp3",
+    "guide": "guide.mp3"
+  },
+  "lyricsProvider": "Solf\u00e8ge (built-in)",
+  "lyricsSynced": true,
+  "createdAt": "2026-10-29T03:37:58.505Z",
+  "album": "Warm-ups",
+  "cover": "cover.png"
+}

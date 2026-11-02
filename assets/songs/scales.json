@@ -1,0 +1,68 @@
+[
+  {
+    "id": "scale-major",
+    "title": "Major Scale",
+    "tags": [
+      "Warm-up",
+      "C major",
+      "Do–Re–Mi"
+    ],
+    "order": 1,
+    "bpm": 96
+  },
+  {
+    "id": "scale-pentatonic-major",
+    "title": "Major Pentatonic",
+    "tags": [
+      "Scale",
+      "C major",
+      "Five notes"
+    ],
+    "order": 2,
+    "bpm": 100
+  },
+  {
+    "id": "scale-pentatonic-minor",
+    "title": "Minor Pentatonic",
+    "tags": [
+      "Scale",
+      "A minor",
+      "Bluesy"
+    ],
+    "order": 3,
+    "bpm": 100
+  },
+  {
+    "id": "scale-blues",
+    "title": "Blues Scale",
+    "tags": [
+      "Scale",
+      "C blues",
+      "Blue notes"
+    ],
+    "order": 4,
+    "bpm": 88
+  },
+  {
+    "id": "scale-chromatic",
+    "title": "Chromatic Climb",
+    "tags": [
+      "Warm-up",
+      "Chromatic",
+      "Agility"
+    ],
+    "order": 5,
+    "bpm": 78
+  },
+  {
+    "id": "scale-arpeggio",
+    "title": "Maj7 Arpeggio",
+    "tags": [
+      "Leaps",
+      "C major 7",
+      "Intervals"
+    ],
+    "order": 6,
+    "bpm": 92
+  }
+]

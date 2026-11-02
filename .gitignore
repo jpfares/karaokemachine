@@ -1,0 +1,16 @@
+node_modules/
+dist/
+dist-tools/
+rust/target/
+.runtime/
+.work/
+.venv/
+*.log
+instructions.txt
+dist-windows/
+
+# The public repository does not ship commercial recordings. The six
+# generated warm-ups are kept so a fresh clone still has a playable demo set.
+assets/songs/*
+!assets/songs/scales.json
+!assets/songs/scale-*/

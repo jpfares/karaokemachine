@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=KaraokeMachine
+GenericName=Karaoke Level Editor and Singing Coach
+Comment=Manually map karaoke levels, then sing them with live pitch scoring.
+Exec=/home/deanp/Projects/karaokemachine/launch.sh
+Icon=/home/deanp/Projects/karaokemachine/assets/icon.png
+Terminal=false
+Categories=AudioVideo;Player;
+Keywords=karaoke;singing;pitch;music;editor;
+StartupNotify=true
+StartupWMClass=karaokemachine

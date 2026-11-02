@@ -1,0 +1,24 @@
+{
+  "name": "karaokemachine",
+  "version": "2.0.0",
+  "description": "KaraokeMachine — a native Rust karaoke level editor and singing coach.",
+  "author": "Dean",
+  "license": "MIT",
+  "scripts": {
+    "build": "cargo build --release --manifest-path rust/Cargo.toml",
+    "start": "npm run build && ./launch.sh",
+    "dev": "cargo run --manifest-path rust/Cargo.toml",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run assets && node dist-tools/test-pitch.js",
+    "assets": "node scripts/build-tools.mjs",
+    "scales": "npm run assets && node dist-tools/generate-scales.js",
+    "prepare-songs": "npm run assets && node dist-tools/prepare-songs.js",
+    "song-info": "npm run assets && node dist-tools/song-info.js",
+    "import-song": "npm run assets && node dist-tools/import-song.js"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  }
+}
