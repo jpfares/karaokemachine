@@ -67,10 +67,13 @@ the song's `song.json`.
 
 The top toolbar is icon-only; hover an icon for its name.
 
-The analysis strip above the pitch lanes shows the isolated vocal waveform with a
-suggested pitch trace. Hover it for a precise timestamp, pitch label, and vocal level, so
-word onsets can be placed exactly. Click any note to audition its pitch. Hold right-click
-and drag to move the yellow now-playing line continuously.
+The analysis strip above the pitch lanes shows the isolated vocal waveform plus a raw,
+unsmoothed vocal pitch contour. Nothing is reduced to note groups for that display; the
+mapper decides how to simplify it. Hover it for a precise timestamp, raw pitch and cents,
+and vocal level, so word onsets can be placed exactly. A translucent gray line follows the
+mouse across the working area at all times. Click any note to audition its pitch. With the
+Select tool, drag either note edge to stretch or contract it. Hold right-click and drag to
+move the yellow now-playing line continuously.
 
 | Action | Control |
 | --- | --- |

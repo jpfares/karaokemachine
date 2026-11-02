@@ -1,5 +1,5 @@
 use crate::audio::{input_device_names, AudioEngine, Microphone};
-use crate::editor::{Editor, EditorEvent, VOCAL_BINS_PER_SECOND};
+use crate::editor::{spawn_raw_pitch_track, Editor, EditorEvent, VOCAL_BINS_PER_SECOND, RAW_PITCH_SAMPLE_RATE};
 use crate::library::*;
 use crate::model::*;
 use crate::pitch::{detect_pitch, PitchReading, PitchTracker};
@@ -947,6 +947,13 @@ impl KaraokeMachineApp {
                 Ok(duration) => {
                     editor.set_audio_ready(duration > 0.0);
                     editor.set_vocal_peaks(audio.vocal_peaks(VOCAL_BINS_PER_SECOND));
+                    let mono = audio.vocal_mono(RAW_PITCH_SAMPLE_RATE);
+                    if !mono.is_empty() {
+                        editor.set_pitch_track_rx(spawn_raw_pitch_track(
+                            mono,
+                            VOCAL_BINS_PER_SECOND,
+                        ));
+                    }
                 }
                 Err(error) => {
                     self.toast(format!("Audio preview unavailable: {error}"), now);

@@ -1,10 +1,11 @@
 use crate::audio::AudioEngine;
 use crate::model::{format_time, note_name, pitch_color, CustomWord, LyricLine, Note, PlacedWord, Song};
 use eframe::egui::{
-    self, Align2, Color32, FontId, Id, LayerId, Order, PointerButton, Pos2, Rect, RichText, Sense,
+    self, Align2, Color32, CursorIcon, FontId, Id, LayerId, Order, PointerButton, Pos2, Rect, RichText, Sense,
     Stroke, StrokeKind, Ui, Vec2,
 };
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::mpsc::{self, Receiver};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -19,6 +20,7 @@ const GOLD: Color32 = Color32::from_rgb(255, 209, 102);
 const PANEL: Color32 = Color32::from_rgb(9, 13, 23);
 const PANEL2: Color32 = Color32::from_rgb(12, 17, 29);
 pub const VOCAL_BINS_PER_SECOND: f32 = 80.0;
+pub const RAW_PITCH_SAMPLE_RATE: f32 = 8000.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EditorTool {
@@ -127,6 +129,9 @@ pub struct Editor {
     suggestions: Vec<Note>,
     notes: Vec<Note>,
     vocal_peaks: Vec<f32>,
+    raw_pitch: Vec<Option<f32>>,
+    pitch_rx: Option<Receiver<Vec<Option<f32>>>>,
+    pitch_analyzing: bool,
     words: Vec<PlacedWord>,
     custom_words: Vec<CustomWord>,
     word_bank: Vec<WordToken>,
@@ -235,6 +240,9 @@ impl Editor {
             suggestions,
             notes: initial_notes,
             vocal_peaks: Vec::new(),
+            raw_pitch: Vec::new(),
+            pitch_rx: None,
+            pitch_analyzing: false,
             words,
             custom_words,
             word_bank,
@@ -278,6 +286,32 @@ impl Editor {
 
     pub fn set_vocal_peaks(&mut self, peaks: Vec<f32>) {
         self.vocal_peaks = peaks;
+    }
+
+    pub fn set_pitch_track_rx(&mut self, rx: Receiver<Vec<Option<f32>>>) {
+        self.pitch_rx = Some(rx);
+        self.pitch_analyzing = true;
+    }
+
+    fn poll_pitch_track(&mut self) {
+        let mut received = None;
+        let mut disconnected = false;
+        if let Some(rx) = &self.pitch_rx {
+            match rx.try_recv() {
+                Ok(track) => received = Some(track),
+                Err(mpsc::TryRecvError::Empty) => {}
+                Err(mpsc::TryRecvError::Disconnected) => disconnected = true,
+            }
+        }
+        if disconnected {
+            self.pitch_rx = None;
+            self.pitch_analyzing = false;
+        }
+        if let Some(track) = received {
+            self.pitch_rx = None;
+            self.pitch_analyzing = false;
+            self.raw_pitch = track;
+        }
     }
 
     pub fn pause_audio(&self, audio: &Option<AudioEngine>) {
@@ -354,6 +388,7 @@ impl Editor {
         let layout = self.layout(rect);
         let mut event = EditorEvent::None;
         let ctx = ui.ctx().clone();
+        self.poll_pitch_track();
 
         self.handle_keys(ui, audio, &layout, &mut event);
 
@@ -406,6 +441,7 @@ impl Editor {
         self.draw_toolbar(ui, &p, &layout);
         self.draw_lanes(ui, &p, &layout);
         self.draw_wave(ui, &p, &layout);
+        self.draw_hover_cursor(ui, &layout);
         self.draw_ruler(ui, &p, &layout, &mut event, audio);
         self.draw_transport(ui, &p, &layout, audio);
         self.draw_word_bank(ui, &p, &layout, audio);
@@ -667,6 +703,9 @@ impl Editor {
         let Some(pos) = pointer else {
             return;
         };
+        if self.tool == EditorTool::Select && self.note_edge_at(pos, layout).is_some() {
+            ui.ctx().set_cursor_icon(CursorIcon::ResizeHorizontal);
+        }
 
         // A word armed with a click in the bank drops at the next click,
         // anywhere in the note area.
@@ -753,34 +792,40 @@ impl Editor {
                             grab_time,
                             grab_y,
                         });
+                    } else if let Some((index, left_edge)) = self.note_edge_at(pos, layout) {
+                        self.selected.clear();
+                        self.selected.insert(index);
+                        self.selected_word = None;
+                        let (note_start, note_dur) = {
+                            let note = &self.notes[index];
+                            (note.start, note.dur)
+                        };
+                        self.push_history();
+                        self.drag = Some(if left_edge {
+                            Drag::ResizeLeft {
+                                index,
+                                end: note_start + note_dur,
+                            }
+                        } else {
+                            Drag::ResizeRight {
+                                index,
+                                start: note_start,
+                            }
+                        });
                     } else if let Some(index) = self.hit_note(pos, layout) {
                         self.selected.clear();
                         self.selected.insert(index);
                         self.selected_word = None;
-                        let (note_start, note_dur, note_midi) = {
+                        let (note_start, note_midi) = {
                             let note = &self.notes[index];
-                            (note.start, note.dur, note.midi)
+                            (note.start, note.midi)
                         };
-                        let x0 = self.time_to_x(note_start, layout);
-                        let x1 = self.time_to_x(note_start + note_dur, layout);
                         self.push_history();
-                        self.drag = if (pos.x - x0).abs() <= 8.0 {
-                            Some(Drag::ResizeLeft {
-                                index,
-                                end: note_start + note_dur,
-                            })
-                        } else if (pos.x - x1).abs() <= 8.0 {
-                            Some(Drag::ResizeRight {
-                                index,
-                                start: note_start,
-                            })
-                        } else {
-                            Some(Drag::Move {
-                                index,
-                                grab: self.x_to_time(pos.x, layout) - note_start,
-                                midi_offset: self.midi_at_y(pos.y, layout) - note_midi,
-                            })
-                        };
+                        self.drag = Some(Drag::Move {
+                            index,
+                            grab: self.x_to_time(pos.x, layout) - note_start,
+                            midi_offset: self.midi_at_y(pos.y, layout) - note_midi,
+                        });
                     } else {
                         self.selected.clear();
                         self.selected_word = None;
@@ -1345,14 +1390,21 @@ impl Editor {
             }
         }
         p.text(
-            Pos2::new(layout.rail.left() + 7.0, layout.wave.top() + 5.0),
+            Pos2::new(layout.rail.left() + 7.0, layout.wave.top() + 4.0),
+            Align2::LEFT_TOP,
+            "RAW",
+            FontId::monospace(5.5),
+            GOLD,
+        );
+        p.text(
+            Pos2::new(layout.rail.left() + 7.0, layout.wave.top() + 16.0),
             Align2::LEFT_TOP,
             "PITCH",
             FontId::monospace(5.5),
             GOLD,
         );
         p.text(
-            Pos2::new(layout.rail.left() + 7.0, layout.wave.top() + 30.0),
+            Pos2::new(layout.rail.left() + 7.0, layout.wave.top() + 33.0),
             Align2::LEFT_TOP,
             "LEVEL",
             FontId::monospace(5.5),
@@ -1437,89 +1489,96 @@ impl Editor {
             }
         }
 
-        // The suggested pitch trace gets its own thin lane above the waveform
-        // so pitch changes remain readable while the waveform shows onsets.
-        let mut pitch_low = self
-            .suggestions
-            .iter()
-            .map(|note| note.midi)
-            .min()
-            .unwrap_or(self.low) as f32
-            - 2.0;
-        let mut pitch_high = self
-            .suggestions
-            .iter()
-            .map(|note| note.midi)
-            .max()
-            .unwrap_or(self.high) as f32
-            + 2.0;
-        if pitch_high - pitch_low < 12.0 {
-            let center_pitch = (pitch_high + pitch_low) * 0.5;
-            pitch_low = center_pitch - 6.0;
-            pitch_high = center_pitch + 6.0;
-        }
-        let span = (pitch_high - pitch_low).max(1.0);
-        let mut previous: Option<(f64, f32, f32)> = None;
-        for note in &self.suggestions {
-            let x0 = self.time_to_x(note.start, layout);
-            let x1 = self.time_to_x(note.start + note.dur, layout);
-            if x1 < area.left() - 2.0 || x0 > area.right() + 2.0 {
-                previous = None;
-                continue;
+        // Raw pitch, frame by frame. No note grouping or smoothing is applied
+        // here: simplifying the contour is the mapper's decision.
+        let mut pitch_values: Vec<f32> = self.raw_pitch.iter().filter_map(|value| *value).collect();
+        if pitch_values.is_empty() {
+            painter.text(
+                Pos2::new(pitch_area.left() + 8.0, pitch_area.center().y),
+                Align2::LEFT_CENTER,
+                if self.pitch_analyzing {
+                    "Analyzing raw vocal pitch…"
+                } else {
+                    "Raw pitch unavailable"
+                },
+                FontId::proportional(9.0),
+                if self.pitch_analyzing { GOLD } else { MUTED2 },
+            );
+        } else {
+            pitch_values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            let pick = |q: f32| {
+                pitch_values[((pitch_values.len().saturating_sub(1)) as f32 * q) as usize]
+            };
+            let mut pitch_low = pick(0.02) - 1.0;
+            let mut pitch_high = pick(0.98) + 1.0;
+            if pitch_high - pitch_low < 12.0 {
+                let center_pitch = (pitch_high + pitch_low) * 0.5;
+                pitch_low = center_pitch - 6.0;
+                pitch_high = center_pitch + 6.0;
             }
-            let y = (pitch_area.top()
-                + (pitch_high - note.midi as f32) / span * pitch_area.height())
-                .clamp(pitch_area.top() + 2.0, pitch_area.bottom() - 2.0);
-            let t = ((y - pitch_area.top()) / pitch_area.height().max(1.0)).clamp(0.0, 1.0);
-            let color = pitch_color(t);
-            let color = Color32::from_rgba_unmultiplied(color[0], color[1], color[2], 235);
-            if let Some((previous_end, px, py)) = previous {
-                if note.start - previous_end <= 0.8 {
-                    painter.line_segment(
-                        [Pos2::new(px, py), Pos2::new(x0, y)],
-                        Stroke::new(3.2f32, Color32::from_rgba_unmultiplied(5, 8, 15, 190)),
-                    );
-                    painter.line_segment(
-                        [Pos2::new(px, py), Pos2::new(x0, y)],
-                        Stroke::new(1.2f32, color),
-                    );
+            let span = (pitch_high - pitch_low).max(1.0);
+            let mut previous: Option<(usize, f32, f32)> = None;
+            for (bin, value) in self.raw_pitch.iter().enumerate() {
+                let Some(midi) = *value else {
+                    previous = None;
+                    continue;
+                };
+                let x = self.time_to_x(
+                    bin as f64 / VOCAL_BINS_PER_SECOND as f64,
+                    layout,
+                );
+                if x < area.left() - 4.0 || x > area.right() + 4.0 {
+                    previous = None;
+                    continue;
                 }
+                let y = (pitch_area.top()
+                    + (pitch_high - midi) / span * pitch_area.height())
+                    .clamp(pitch_area.top() + 2.0, pitch_area.bottom() - 2.0);
+                let t = ((y - pitch_area.top()) / pitch_area.height().max(1.0)).clamp(0.0, 1.0);
+                let color = pitch_color(t);
+                let color = Color32::from_rgba_unmultiplied(color[0], color[1], color[2], 235);
+                if let Some((previous_bin, px, py)) = previous {
+                    if bin.saturating_sub(previous_bin) <= 2 {
+                        painter.line_segment(
+                            [Pos2::new(px, py), Pos2::new(x, y)],
+                            Stroke::new(3.0f32, Color32::from_rgba_unmultiplied(5, 8, 15, 180)),
+                        );
+                        painter.line_segment(
+                            [Pos2::new(px, py), Pos2::new(x, y)],
+                            Stroke::new(1.2f32, color),
+                        );
+                    }
+                }
+                painter.circle_filled(Pos2::new(x, y), 1.15, color);
+                previous = Some((bin, x, y));
             }
-            painter.line_segment(
-                [
-                    Pos2::new(x0.max(area.left()), y),
-                    Pos2::new(x1.min(area.right()), y),
-                ],
-                Stroke::new(3.2f32, Color32::from_rgba_unmultiplied(5, 8, 15, 190)),
-            );
-            painter.line_segment(
-                [
-                    Pos2::new(x0.max(area.left()), y),
-                    Pos2::new(x1.min(area.right()), y),
-                ],
-                Stroke::new(1.8f32, color),
-            );
-            previous = Some((note.start + note.dur, x1, y));
         }
 
-        // Hover readout: exact timestamp plus the suggested pitch and vocal
-        // level at the cursor. This is the precise onset-finding aid.
+        // Hover readout: exact timestamp plus raw pitch and vocal level at the
+        // cursor. The vertical gray cursor is drawn globally below.
         let hover = ui
             .input(|i| i.pointer.hover_pos())
             .filter(|pos| area.contains(*pos));
         if let Some(pos) = hover {
             let x = pos.x.clamp(area.left(), area.right());
-            painter.line_segment(
-                [Pos2::new(x, area.top()), Pos2::new(x, area.bottom())],
-                Stroke::new(1.0f32, Color32::from_white_alpha(75)),
-            );
             let time = self.x_to_time(x, layout).clamp(0.0, self.duration);
+            let pitch_bin = (time * VOCAL_BINS_PER_SECOND as f64).floor() as usize;
             let pitch = self
-                .suggestions
-                .iter()
-                .find(|note| time >= note.start && time <= note.start + note.dur)
-                .map(|note| note_name(note.midi))
-                .unwrap_or_else(|| "—".into());
+                .raw_pitch
+                .get(pitch_bin)
+                .and_then(|value| *value)
+                .map(|midi| {
+                    let rounded = midi.round();
+                    let cents = ((midi - rounded) * 100.0).round();
+                    format!("{} {:+.0}¢", note_name(rounded as i32), cents)
+                })
+                .unwrap_or_else(|| {
+                    if self.pitch_analyzing {
+                        "analyzing…".into()
+                    } else {
+                        "—".into()
+                    }
+                });
             let level = if self.vocal_peaks.is_empty() {
                 0.0
             } else {
@@ -1574,6 +1633,33 @@ impl Editor {
         painter.line_segment(
             [area.left_bottom(), area.right_bottom()],
             Stroke::new(1.0f32, Color32::from_white_alpha(24)),
+        );
+    }
+
+    fn draw_hover_cursor(&self, ui: &Ui, layout: &Layout) {
+        if self.custom_word_open {
+            return;
+        }
+        let Some(pos) = ui.input(|i| i.pointer.hover_pos()) else {
+            return;
+        };
+        let area = layout
+            .wave
+            .union(layout.note_area)
+            .union(layout.ruler);
+        if !area.contains(pos) {
+            return;
+        }
+        let x = pos.x.clamp(layout.note_area.left(), layout.note_area.right());
+        ui.painter().line_segment(
+            [
+                Pos2::new(x, layout.wave.top()),
+                Pos2::new(x, layout.note_area.bottom()),
+            ],
+            Stroke::new(
+                1.0f32,
+                Color32::from_rgba_unmultiplied(185, 190, 202, 72),
+            ),
         );
     }
 
@@ -2217,6 +2303,41 @@ impl Editor {
         ((time.max(0.0) / step).round() * step).max(0.0)
     }
 
+    fn note_edge_at(&self, pos: Pos2, layout: &Layout) -> Option<(usize, bool)> {
+        if !layout.note_area.contains(pos) {
+            return None;
+        }
+        let lane_h = layout.note_area.height() / (self.high - self.low + 1) as f32;
+        let h = (lane_h * 0.62).clamp(6.0, 22.0);
+        let mut best: Option<(f32, usize, bool)> = None;
+        for (index, note) in self.notes.iter().enumerate().rev() {
+            let y = self.midi_to_y(note.midi, layout);
+            if (pos.y - y).abs() > h / 2.0 + 6.0 {
+                continue;
+            }
+            let x0 = self.time_to_x(note.start, layout);
+            let x1 = self.time_to_x(note.start + note.dur, layout);
+            let width = (x1 - x0).max(1.0);
+            let tolerance = 12.0f32.min(width * 0.4).max(4.0);
+            let left = (pos.x - x0).abs();
+            let right = (pos.x - x1).abs();
+            let (distance, is_left) = if left <= right {
+                (left, true)
+            } else {
+                (right, false)
+            };
+            if distance <= tolerance {
+                if best
+                    .map(|(best_distance, _, _)| distance < best_distance)
+                    .unwrap_or(true)
+                {
+                    best = Some((distance, index, is_left));
+                }
+            }
+        }
+        best.map(|(_, index, left)| (index, left))
+    }
+
     fn hit_note(&self, pos: Pos2, layout: &Layout) -> Option<usize> {
         if !layout.note_area.contains(pos) {
             return None;
@@ -2573,6 +2694,47 @@ fn migrate_legacy_ribbons(notes: &mut [Note], next_ribbon_id: &mut u32) {
         note.word_index = None;
         note.line = None;
     }
+}
+
+/// Analyze raw vocal pitch in a worker thread. The result is deliberately not
+/// smoothed or reduced to note groups: the mapper decides how to simplify it.
+pub fn spawn_raw_pitch_track(
+    mono: Vec<f32>,
+    bins_per_second: f32,
+) -> Receiver<Vec<Option<f32>>> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(analyze_raw_pitch(&mono, bins_per_second));
+    });
+    rx
+}
+
+fn analyze_raw_pitch(mono: &[f32], bins_per_second: f32) -> Vec<Option<f32>> {
+    const WINDOW: usize = 512;
+    if mono.len() < WINDOW {
+        return Vec::new();
+    }
+    let bins = (mono.len() as f32 / RAW_PITCH_SAMPLE_RATE * bins_per_second.max(1.0))
+        .ceil() as usize;
+    let mut track = vec![None; bins];
+    for (bin, slot) in track.iter_mut().enumerate() {
+        let center_seconds = bin as f32 / bins_per_second.max(1.0);
+        let start = ((center_seconds * RAW_PITCH_SAMPLE_RATE - WINDOW as f32 * 0.5)
+            .max(0.0)) as usize;
+        if start + WINDOW > mono.len() {
+            break;
+        }
+        let Some(reading) = crate::pitch::detect_pitch(
+            &mono[start..start + WINDOW],
+            RAW_PITCH_SAMPLE_RATE,
+        ) else {
+            continue;
+        };
+        if reading.clarity >= 0.18 && reading.rms >= 0.0015 {
+            *slot = Some(reading.midi);
+        }
+    }
+    track
 }
 
 fn format_time_precise(seconds: f64) -> String {

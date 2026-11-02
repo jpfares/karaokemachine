@@ -228,6 +228,32 @@ impl AudioEngine {
         peaks
     }
 
+    /// Decimated mono copy of the isolated vocal stem for offline analysis.
+    pub fn vocal_mono(&self, sample_rate: f32) -> Vec<f32> {
+        let mixer = self.shared.mixer.lock().unwrap();
+        if mixer.frames == 0 || mixer.vocals.len() < mixer.frames.saturating_mul(2) {
+            return Vec::new();
+        }
+        let target_rate = sample_rate.max(1000.0) as f64;
+        let source_rate = self.sample_rate.max(1) as f64;
+        let out_frames = (mixer.frames as f64 * target_rate / source_rate).ceil() as usize;
+        let mut out = Vec::with_capacity(out_frames);
+        for index in 0..out_frames {
+            let source = index as f64 * source_rate / target_rate;
+            let first = (source.floor() as usize).min(mixer.frames.saturating_sub(1));
+            let second = (first + 1).min(mixer.frames.saturating_sub(1));
+            let frac = (source - first as f64) as f32;
+            let left0 = mixer.vocals.get(first * 2).copied().unwrap_or(0.0);
+            let left1 = mixer.vocals.get(second * 2).copied().unwrap_or(left0);
+            let right0 = mixer.vocals.get(first * 2 + 1).copied().unwrap_or(left0);
+            let right1 = mixer.vocals.get(second * 2 + 1).copied().unwrap_or(left1);
+            let left = left0 + (left1 - left0) * frac;
+            let right = right0 + (right1 - right0) * frac;
+            out.push((left + right) * 0.5);
+        }
+        out
+    }
+
     pub fn set_volumes(&self, backing: f32, vocals: f32) {
         let mut mixer = self.shared.mixer.lock().unwrap();
         mixer.backing_vol = backing.clamp(0.0, 1.5);
