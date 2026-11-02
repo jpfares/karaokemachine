@@ -2150,6 +2150,8 @@ impl KaraokeMachineApp {
             .find(|song| {
                 song.id == map.id
                     || song.youtube_url.as_deref() == Some(map.source_url.as_str())
+                    || (song.title.eq_ignore_ascii_case(&map.title)
+                        && song.artist.as_deref() == map.artist.as_deref())
             })
             .cloned()
         {
