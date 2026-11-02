@@ -8,6 +8,41 @@ use std::path::{Path, PathBuf};
 pub const MAP_FORMAT: &str = "karaokemachine-map";
 pub const MAP_VERSION: u32 = 1;
 
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct MapIndex {
+    #[serde(default)]
+    pub maps: Vec<MapIndexEntry>,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct MapIndexEntry {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub artist: String,
+    #[serde(default)]
+    pub album: String,
+    #[serde(rename = "releaseDate", default)]
+    pub release_date: String,
+    #[serde(default)]
+    pub duration: f64,
+    #[serde(rename = "sourceUrl", default)]
+    pub source_url: String,
+    #[serde(default)]
+    pub file: String,
+    #[serde(default)]
+    pub cover: String,
+    #[serde(default)]
+    pub notes: usize,
+    #[serde(default)]
+    pub lyrics: usize,
+    #[serde(default)]
+    pub contributor: String,
+}
+
 /// A shareable karaoke mapping. This deliberately contains no audio files:
 /// the source URL is the only audio reference.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -184,11 +219,9 @@ impl MapPackage {
         fs::write(path, raw).map_err(|error| format!("Could not write {}: {error}", path.display()))
     }
 
-    pub fn load(path: &Path) -> Result<Self, String> {
-        let raw = fs::read_to_string(path)
-            .map_err(|error| format!("Could not read {}: {error}", path.display()))?;
-        let map: Self = serde_json::from_str(&raw)
-            .map_err(|error| format!("Could not parse {}: {error}", path.display()))?;
+    pub fn from_json(raw: &str) -> Result<Self, String> {
+        let map: Self = serde_json::from_str(raw)
+            .map_err(|error| format!("Could not parse map package: {error}"))?;
         if map.format != MAP_FORMAT {
             return Err("That file is not a KaraokeMachine map package.".into());
         }
@@ -196,6 +229,12 @@ impl MapPackage {
             return Err("That map package has no notes.".into());
         }
         Ok(map)
+    }
+
+    pub fn load(path: &Path) -> Result<Self, String> {
+        let raw = fs::read_to_string(path)
+            .map_err(|error| format!("Could not read {}: {error}", path.display()))?;
+        Self::from_json(&raw)
     }
 
     pub fn file_name(&self) -> String {

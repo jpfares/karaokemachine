@@ -15,9 +15,9 @@ IMPORTANT: NO COMMERCIAL AUDIO IS BUNDLED
 - Keep the "assets" folder next to karaokemachine.exe.
 - This portable build ships only the app and the generated warm-up tracks.
   It does not contain commercial recordings.
-- Use Library -> Maps -> Open Map Browser to find community mappings, then
-  install the downloaded map file. The app downloads the audio from the map's
-  source link and applies the mapping locally.
+- Use Library -> Maps to browse the public map list, then use Import Map File
+  for a downloaded package. The app downloads the audio from the map's source
+  link and applies the mapping locally.
 - Every included warm-up starts as UNMAPPED and cannot be played until mapped.
 - Click an UNMAPPED song in the library to open the manual level editor.
   The old automatic chart is shown translucently as a guide only; it is not
@@ -28,7 +28,7 @@ IMPORTANT: NO COMMERCIAL AUDIO IS BUNDLED
 MAPS AND AUDIO
 - A map package contains notes, lyrics, cover art, and the original source
   link. It never contains audio.
-- Library -> Maps -> Install Map File applies a downloaded JSON map. If the
+- Library -> Maps -> Import Map File applies a downloaded JSON map. If the
   audio is not local, the app fetches it from the source link and separates it.
 - Uploading a brand new song also needs Node.js 22+, ffmpeg, yt-dlp and Demucs.
   They are not bundled with this portable build.

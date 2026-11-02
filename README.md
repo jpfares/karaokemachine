@@ -14,9 +14,10 @@ sing. The level editor exists for one reason: to turn a song into a playable kar
 **https://rgbeans.github.io/karaokemachine/**
 
 The public map browser shares mappings only: notes, ribbons, lyrics, cover art, and the
-original source link. It hosts **no audio**. Install a downloaded map through
-**Library → Maps → Install Map File**; if the audio is not already local, KaraokeMachine
-fetches it from the map's source link and applies the mapping.
+original source link. It hosts **no audio**. The app's **Library → Maps** tab loads the
+public map list automatically. Use **Import Map File** for a downloaded package; if the
+audio is not already local, KaraokeMachine fetches it from the map's source link and
+applies the mapping.
 
 To share a map, submit a mapping made in the editor. See
 [CONTRIBUTING.md](CONTRIBUTING.md). Exported map packages contain no audio files.

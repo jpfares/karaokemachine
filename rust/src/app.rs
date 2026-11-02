@@ -1,7 +1,8 @@
 use crate::audio::{input_device_names, AudioEngine, Microphone};
 use crate::editor::{spawn_raw_pitch_track, Editor, EditorEvent, VOCAL_BINS_PER_SECOND, RAW_PITCH_SAMPLE_RATE};
 use crate::library::*;
-use crate::map_package::MapPackage;
+use crate::map_package::{MapIndex, MapIndexEntry, MapPackage};
+use base64::Engine;
 use crate::model::*;
 use crate::pitch::{detect_pitch, PitchReading, PitchTracker};
 use eframe::egui::{
@@ -18,7 +19,7 @@ use std::time::Duration;
 
 const DESIGN_WIDTH: f32 = 1600.0;
 const DESIGN_HEIGHT: f32 = 980.0;
-const MAP_BROWSER_URL: &str = "https://rgbeans.github.io/karaokemachine/";
+const MAPS_BASE_URL: &str = "https://rgbeans.github.io/karaokemachine/maps/";
 
 const BG: Color32 = Color32::from_rgb(5, 7, 14);
 const INK: Color32 = Color32::from_rgb(244, 247, 251);
@@ -92,7 +93,7 @@ enum Action {
     OpenUpload,
     ShowMaps,
     InstallMap,
-    OpenMapBrowser,
+    InstallRemoteMap(usize),
     EditSong(usize),
 }
 
@@ -620,6 +621,13 @@ pub struct KaraokeMachineApp {
     range_last_note: Option<i32>,
     range_note_frames: u32,
     upload: UploadState,
+    map_index: Vec<MapIndexEntry>,
+    map_index_rx: Option<Receiver<Result<MapIndex, String>>>,
+    map_index_loading: bool,
+    map_index_loaded: bool,
+    map_covers: HashMap<String, TextureHandle>,
+    map_download_rx: Option<Receiver<Result<MapPackage, String>>>,
+    map_downloading: Option<String>,
     stage: Option<Stage>,
     editor: Option<Editor>,
     songlist: Vec<String>,
@@ -710,6 +718,13 @@ impl KaraokeMachineApp {
             range_last_note: None,
             range_note_frames: 0,
             upload: UploadState::default(),
+            map_index: Vec::new(),
+            map_index_rx: None,
+            map_index_loading: false,
+            map_index_loaded: false,
+            map_covers: HashMap::new(),
+            map_download_rx: None,
+            map_downloading: None,
             stage: None,
             editor: None,
             songlist,
@@ -757,6 +772,7 @@ impl KaraokeMachineApp {
             Some("maps") => {
                 app.drawer_view = DrawerViewRust::Maps;
                 app.drawer_open = true;
+                app.start_map_index_fetch();
             }
             Some("album") => {
                 if let Ok(index) = setting_env("ALBUM").unwrap_or_default().parse::<usize>() {
@@ -1188,11 +1204,14 @@ impl KaraokeMachineApp {
                 self.drawer_view = DrawerViewRust::Maps;
                 self.selected_album = None;
                 self.drawer_scroll = 0.0;
+                if !self.map_index_loading {
+                    self.start_map_index_fetch();
+                }
             }
             Action::InstallMap => self.install_map_file(now, ctx),
-            Action::OpenMapBrowser => {
-                if let Err(error) = open_external(MAP_BROWSER_URL) {
-                    self.toast(format!("Could not open the map browser: {error}"), now);
+            Action::InstallRemoteMap(index) => {
+                if let Some(entry) = self.map_index.get(index).cloned() {
+                    self.start_remote_map_install(entry);
                 }
             }
             Action::EditSong(index) => {
@@ -1804,7 +1823,7 @@ impl KaraokeMachineApp {
         let drawer_title = if self.drawer_view == DrawerViewRust::Imports {
             "Imports"
         } else if self.drawer_view == DrawerViewRust::Maps {
-            "Map browser"
+            "Map Browser"
         } else if self.selected_album.is_some() {
             "Album"
         } else {
@@ -2021,53 +2040,63 @@ impl KaraokeMachineApp {
     }
 
     fn draw_drawer_maps(&self, ui: &mut egui::Ui, p: &egui::Painter, body: Rect, actions: &mut Vec<Action>) {
-        p.text(body.left_top(), Align2::LEFT_TOP, "COMMUNITY MAPPINGS", FontId::monospace(8.0), MUTED2);
-        p.text(body.left_top() + Vec2::new(0.0, 18.0), Align2::LEFT_TOP, "Maps, not media.", FontId::proportional(26.0), INK);
-        let intro = p.layout(
-            "A map package contains notes, lyrics, cover art, and the original source link. No audio is hosted or downloaded with the package.".to_string(),
-            FontId::proportional(10.0),
-            MUTED,
-            body.width(),
-        );
-        p.galley(body.left_top() + Vec2::new(0.0, 54.0), intro, MUTED);
-        p.text(
-            body.left_top() + Vec2::new(0.0, 108.0),
-            Align2::LEFT_TOP,
-            "Installing a map fetches its audio from the source link when needed.",
-            FontId::proportional(10.0),
-            MUTED2,
-        );
-        let browse = Rect::from_min_size(body.left_top() + Vec2::new(0.0, 140.0), Vec2::new(body.width(), 44.0));
-        paint_button(ui, browse, "OPEN MAP BROWSER", true);
-        if click(ui, browse, "maps_browse") {
-            actions.push(Action::OpenMapBrowser);
-        }
-        let install = Rect::from_min_size(body.left_top() + Vec2::new(0.0, 194.0), Vec2::new(body.width(), 38.0));
-        paint_button(ui, install, "INSTALL MAP FILE", false);
-        if click(ui, install, "maps_install") {
+        let import = Rect::from_min_size(body.left_top(), Vec2::new(body.width(), 38.0));
+        paint_button(ui, import, "IMPORT MAP FILE", false);
+        if click(ui, import, "maps_install") {
             actions.push(Action::InstallMap);
         }
-        p.text(
-            body.left_top() + Vec2::new(0.0, 254.0),
-            Align2::LEFT_TOP,
-            "EXPORT YOUR OWN MAP",
-            FontId::monospace(8.0),
-            MUTED2,
-        );
-        let instructions = p.layout(
-            "Play or edit a mapped song, open the editor, then use EXPORT MAP. Put the resulting JSON in site/maps and open a pull request.".to_string(),
-            FontId::proportional(10.0),
-            MUTED,
-            body.width(),
-        );
-        p.galley(body.left_top() + Vec2::new(0.0, 272.0), instructions, MUTED);
-        p.text(
-            body.left_bottom() + Vec2::new(0.0, -24.0),
-            Align2::LEFT_BOTTOM,
-            "Only mappings are shared. Audio remains tied to its source link.",
-            FontId::monospace(7.0),
-            MUTED2,
-        );
+        let list_top = body.top() + 50.0 - self.drawer_scroll;
+        for (i, entry) in self.map_index.iter().enumerate() {
+            let row = Rect::from_min_size(
+                Pos2::new(body.left(), list_top + i as f32 * 68.0),
+                Vec2::new(body.width(), 62.0),
+            );
+            if row.bottom() < body.top() || row.top() > body.bottom() {
+                continue;
+            }
+            let cover = Rect::from_min_size(row.left_top(), Vec2::new(54.0, 54.0));
+            p.rect_filled(cover, 8.0, Color32::from_rgb(18, 25, 42));
+            if let Some(texture) = self.map_covers.get(&entry.id) {
+                p.image(
+                    texture.id(),
+                    cover,
+                    Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                    Color32::WHITE,
+                );
+            } else {
+                paint_cover_fallback(p, cover, &entry.title);
+            }
+            p.text(
+                Pos2::new(row.left() + 66.0, row.top() + 9.0),
+                Align2::LEFT_TOP,
+                &entry.title,
+                FontId::proportional(12.0),
+                INK,
+            );
+            p.text(
+                Pos2::new(row.left() + 66.0, row.top() + 27.0),
+                Align2::LEFT_TOP,
+                &entry.artist,
+                FontId::monospace(7.0),
+                MUTED,
+            );
+            let install = Rect::from_min_size(
+                Pos2::new(row.right() - 82.0, row.top() + 17.0),
+                Vec2::new(76.0, 28.0),
+            );
+            if self.map_downloading.as_deref() == Some(entry.id.as_str()) {
+                paint_toggle(ui, install, "...", false);
+            } else {
+                paint_button(ui, install, "INSTALL", true);
+                if click(ui, install, ("map_remote_install", i)) {
+                    actions.push(Action::InstallRemoteMap(i));
+                }
+            }
+            p.line_segment(
+                [row.left_bottom(), row.right_bottom()],
+                Stroke::new(0.6f32, Color32::from_white_alpha(14)),
+            );
+        }
     }
 
     fn draw_drawer_imports(&self, ui: &mut egui::Ui, p: &egui::Painter, body: Rect, actions: &mut Vec<Action>) {
@@ -2125,6 +2154,97 @@ impl KaraokeMachineApp {
     }
 
 
+
+
+    fn start_map_index_fetch(&mut self) {
+        if self.map_index_loading {
+            return;
+        }
+        self.map_index_loading = true;
+        let (tx, rx) = mpsc::channel();
+        self.map_index_rx = Some(rx);
+        std::thread::spawn(move || {
+            let base = std::env::var("KARAOKEMACHINE_MAPS_BASE_URL")
+                .unwrap_or_else(|_| MAPS_BASE_URL.to_string());
+            let result = http_get_text(&format!("{base}index.json"))
+                .and_then(|raw| serde_json::from_str::<MapIndex>(&raw).map_err(|error| format!("Could not parse map index: {error}")));
+            let _ = tx.send(result);
+        });
+    }
+
+    fn start_remote_map_install(&mut self, entry: MapIndexEntry) {
+        if self.map_downloading.is_some() || entry.file.is_empty() {
+            return;
+        }
+        let base = std::env::var("KARAOKEMACHINE_MAPS_BASE_URL")
+            .unwrap_or_else(|_| MAPS_BASE_URL.to_string());
+        let url = format!("{base}{}", encode_path_segment(&entry.file));
+        let id = entry.id.clone();
+        self.map_downloading = Some(id);
+        let (tx, rx) = mpsc::channel();
+        self.map_download_rx = Some(rx);
+        std::thread::spawn(move || {
+            let result = http_get_text(&url).and_then(|raw| MapPackage::from_json(&raw));
+            let _ = tx.send(result);
+        });
+    }
+
+    fn poll_maps(&mut self, ctx: &egui::Context, now: f64) {
+        let mut index_result: Option<Result<MapIndex, String>> = None;
+        if let Some(rx) = &self.map_index_rx {
+            match rx.try_recv() {
+                Ok(result) => index_result = Some(result),
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    index_result = Some(Err("The map browser stopped unexpectedly.".into()));
+                }
+                Err(mpsc::TryRecvError::Empty) => {}
+            }
+        }
+        if let Some(result) = index_result {
+            self.map_index_rx = None;
+            self.map_index_loading = false;
+            self.map_index_loaded = true;
+            match result {
+                Ok(index) => {
+                    self.map_index = index.maps;
+                    for entry in &self.map_index {
+                        if !entry.cover.trim().is_empty()
+                            && !self.map_covers.contains_key(&entry.id)
+                        {
+                            if let Some(texture) =
+                                load_data_uri_texture(ctx, &entry.id, &entry.cover)
+                            {
+                                self.map_covers.insert(entry.id.clone(), texture);
+                            }
+                        }
+                    }
+                }
+                Err(error) => {
+                    self.map_index.clear();
+                    eprintln!("map browser: {error}");
+                }
+            }
+        }
+
+        let mut download_result: Option<Result<MapPackage, String>> = None;
+        if let Some(rx) = &self.map_download_rx {
+            match rx.try_recv() {
+                Ok(result) => download_result = Some(result),
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    download_result = Some(Err("The map download stopped unexpectedly.".into()));
+                }
+                Err(mpsc::TryRecvError::Empty) => {}
+            }
+        }
+        if let Some(result) = download_result {
+            self.map_download_rx = None;
+            self.map_downloading = None;
+            match result {
+                Ok(map) => self.install_map(map, now, ctx),
+                Err(error) => self.toast(error, now),
+            }
+        }
+    }
 
     fn install_map_file(&mut self, now: f64, ctx: &egui::Context) {
         let Some(path) = rfd::FileDialog::new()
@@ -3547,6 +3667,7 @@ impl eframe::App for KaraokeMachineApp {
         self.update_pitch();
         self.update_range_test();
         self.poll_upload(ctx, now);
+        self.poll_maps(ctx, now);
         let mut actions = Vec::new();
         let mut editor_event = EditorEvent::None;
         egui::CentralPanel::default()
@@ -3858,29 +3979,69 @@ fn paint_cover_preview(
     );
 }
 
+fn http_get_text(url: &str) -> Result<String, String> {
+    let script = "fetch(process.argv[1],{headers:{'user-agent':'KaraokeMachine/2.0'}}).then(async r=>{if(!r.ok)throw new Error('HTTP '+r.status);process.stdout.write(await r.text())}).catch(e=>{console.error(e.message);process.exit(1)})";
+    let node_error = match Command::new("node")
+        .arg("-e")
+        .arg(script)
+        .arg(url)
+        .output()
+    {
+        Ok(output) if output.status.success() => {
+            return Ok(String::from_utf8_lossy(&output.stdout).to_string());
+        }
+        Ok(output) => String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        Err(error) => error.to_string(),
+    };
+
+    let output = Command::new("curl")
+        .args(["-fsSL", url])
+        .output()
+        .map_err(|error| format!("Could not download {url}: {error}"))?;
+    if !output.status.success() {
+        let message = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(if message.is_empty() { node_error } else { message });
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+fn encode_path_segment(value: &str) -> String {
+    let mut output = String::new();
+    for byte in value.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
+            output.push(byte as char);
+        } else {
+            output.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    output
+}
+
+fn load_data_uri_texture(
+    ctx: &egui::Context,
+    key: &str,
+    data_uri: &str,
+) -> Option<TextureHandle> {
+    let (_, payload) = data_uri.split_once(";base64,")?;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(payload)
+        .ok()?;
+    let image = image::load_from_memory(&bytes).ok()?.to_rgba8();
+    let size = [image.width() as usize, image.height() as usize];
+    let pixels = image.into_raw();
+    let color = egui::ColorImage::from_rgba_unmultiplied(size, &pixels);
+    Some(ctx.load_texture(
+        format!("map-cover-{key}"),
+        color,
+        TextureOptions::LINEAR,
+    ))
+}
+
 fn write_song_file(dir: &Path, song: &Song) -> Result<(), String> {
     let path = dir.join("song.json");
     let raw = serde_json::to_string_pretty(song).map_err(|error| error.to_string())?;
     std::fs::write(&path, raw)
         .map_err(|error| format!("Could not write {}: {error}", path.display()))
-}
-
-fn open_external(url: &str) -> Result<(), String> {
-    #[cfg(target_os = "linux")]
-    let mut command = Command::new("xdg-open");
-    #[cfg(target_os = "macos")]
-    let mut command = Command::new("open");
-    #[cfg(target_os = "windows")]
-    let mut command = {
-        let mut command = Command::new("cmd");
-        command.args(["/C", "start", ""]);
-        command
-    };
-    command
-        .arg(url)
-        .spawn()
-        .map(|_| ())
-        .map_err(|error| error.to_string())
 }
 
 fn run_song_info(root: &Path, url: &str) -> Result<TrackInfo, String> {
