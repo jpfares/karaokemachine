@@ -2133,6 +2133,14 @@ impl KaraokeMachineApp {
             self.upload.message = "Title and artist are required.".into();
             return;
         }
+        if self.upload.audio_url.trim().is_empty()
+            && self.upload.url.to_lowercase().contains("spotify.com")
+        {
+            self.upload.message =
+                "Spotify needs Fetch Details first so KaraokeMachine can match a public audio source."
+                    .into();
+            return;
+        }
         let script = self.root.join("dist-tools/import-song.js");
         if !script.exists() {
             self.upload.message = "Import tools are not built. Run `npm install && npm run assets` first.".into();
