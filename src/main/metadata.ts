@@ -95,17 +95,19 @@ export async function lookupItunes(
       const track = normalize(candidate.trackName ?? '');
       const performer = normalize(candidate.artistName ?? '');
       let score = 0;
-      if (track === wantedTitle) score += 8;
-      else if (track.startsWith(wantedTitle) || wantedTitle.startsWith(track)) score += 4;
-      if (performer === wantedArtist) score += 5;
-      else if (performer.includes(wantedArtist) || wantedArtist.includes(performer)) score += 2;
+      if (track === wantedTitle) score += 20;
+      else if (track.startsWith(wantedTitle) || wantedTitle.startsWith(track)) score += 8;
+      else score -= 16;
+      if (performer === wantedArtist) score += 14;
+      else if (performer.includes(wantedArtist) || wantedArtist.includes(performer)) score += 4;
+      else score -= 20;
       if (candidate.collectionName) score += 1;
       const collection = candidate.collectionName ?? '';
       if (/greatest hits|best of|essential|anthology|collection|compilation|live|soundtrack|hits/i.test(collection)) {
-        score -= 7;
+        score -= 25;
       }
       if (/tribute|karaoke|lullaby|cover|instrumental|quartet|workout|made famous|in the style/i.test(`${collection} ${performer}`)) {
-        score -= 12;
+        score -= 30;
       }
       const year = Number.parseInt(candidate.releaseDate?.slice(0, 4) ?? '', 10);
       if (Number.isFinite(year)) score += Math.max(0, Math.min(2, (2010 - year) / 20));
@@ -114,7 +116,7 @@ export async function lookupItunes(
         bestScore = score;
       }
     }
-    if (!best || bestScore < 3 || !best.artworkUrl100) return null;
+    if (!best || bestScore < 20 || !best.artworkUrl100) return null;
     return {
       album: best.collectionName ?? title,
       coverUrl: best.artworkUrl100.replace(/\/\d+x\d+bb\./, '/600x600bb.'),

@@ -19,7 +19,8 @@ await build({
     path.join(root, 'scripts/enrich-covers.ts'),
     path.join(root, 'scripts/realign-lyrics.ts'),
     path.join(root, 'scripts/song-info.ts'),
-    path.join(root, 'scripts/import-song.ts')
+    path.join(root, 'scripts/import-song.ts'),
+    path.join(root, 'scripts/fetch-cover.ts')
   ],
   outdir
 });

@@ -571,6 +571,17 @@ struct UploadState {
     progress: f32,
     stage: String,
     message: String,
+    artist_search: String,
+    album_search: String,
+    cover_popup_open: bool,
+    cover_link: String,
+    cover_preview_path: Option<PathBuf>,
+    cover_preview_tex: Option<TextureHandle>,
+    cover_preview_loaded: Option<PathBuf>,
+    cover_fetching: bool,
+    cover_fetch_rx: Option<Receiver<Result<PathBuf, String>>>,
+    cover_message: String,
+    cover_error: bool,
     fetch_rx: Option<Receiver<Result<TrackInfo, String>>>,
     import_rx: Option<Receiver<ImportMessage>>,
 }
@@ -725,6 +736,10 @@ impl KaraokeMachineApp {
         }
         if setting_env("UPLOAD_FETCH").is_some() && !app.upload.url.trim().is_empty() {
             app.start_fetch(0.0);
+        }
+        if setting_env("COVER_POPUP").is_some() {
+            app.upload.open = true;
+            app.upload.cover_popup_open = true;
         }
         match setting_env("DRAWER").as_deref() {
             Some("imports") => {
@@ -2006,7 +2021,36 @@ impl KaraokeMachineApp {
 
 
     fn poll_upload(&mut self, ctx: &egui::Context, now: f64) {
+        let mut cover_result: Option<Result<PathBuf, String>> = None;
+        if let Some(rx) = &self.upload.cover_fetch_rx {
+            match rx.try_recv() {
+                Ok(result) => cover_result = Some(result),
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    cover_result = Some(Err("The cover preview helper stopped unexpectedly.".into()));
+                }
+                Err(mpsc::TryRecvError::Empty) => {}
+            }
+        }
+        if let Some(result) = cover_result {
+            self.upload.cover_fetch_rx = None;
+            self.upload.cover_fetching = false;
+            match result {
+                Ok(path) => {
+                    self.upload.cover = path.to_string_lossy().to_string();
+                    self.upload.cover_preview_path = Some(path);
+                    self.upload.cover_preview_loaded = None;
+                    self.upload.cover_message = "Cover art ready.".into();
+                    self.upload.cover_error = false;
+                }
+                Err(error) => {
+                    self.upload.cover_message = error;
+                    self.upload.cover_error = true;
+                }
+            }
+        }
+
         let mut fetched: Option<Result<TrackInfo, String>> = None;
+        let mut start_cover: Option<String> = None;
         if let Some(rx) = &self.upload.fetch_rx {
             match rx.try_recv() {
                 Ok(result) => fetched = Some(result),
@@ -2024,6 +2068,10 @@ impl KaraokeMachineApp {
                     if let Some(error) = info.error {
                         self.upload.message = error;
                     } else {
+                        let cover_url = info
+                            .cover
+                            .clone()
+                            .filter(|value| !value.trim().is_empty());
                         self.upload.title = info.title;
                         self.upload.artist = info.artist;
                         self.upload.album = info.album.unwrap_or_default();
@@ -2037,6 +2085,17 @@ impl KaraokeMachineApp {
                         self.upload.audio_url = info.audio_url;
                         self.upload.duration = info.duration;
                         self.upload.info_loaded = true;
+                        self.upload.artist_search.clear();
+                        self.upload.album_search.clear();
+                        if let Some(url) = cover_url {
+                            start_cover = Some(url);
+                        } else {
+                            self.upload.cover_preview_path = None;
+                            self.upload.cover_preview_tex = None;
+                            self.upload.cover_preview_loaded = None;
+                            self.upload.cover_message.clear();
+                            self.upload.cover_error = false;
+                        }
                         self.upload.message = if self.upload.lyrics.trim().is_empty() {
                             "Details fetched. No free lyrics were found — paste or edit them below.".into()
                         } else {
@@ -2048,6 +2107,10 @@ impl KaraokeMachineApp {
                     self.upload.message = error;
                 }
             }
+        }
+
+        if let Some(url) = start_cover {
+            self.start_cover_fetch(url);
         }
 
         let mut messages = Vec::new();
@@ -2099,10 +2162,256 @@ impl KaraokeMachineApp {
         }
     }
 
+
+    fn update_cover_preview(&mut self, ctx: &egui::Context) {
+        if self.upload.cover_preview_path != self.upload.cover_preview_loaded {
+            self.upload.cover_preview_loaded = self.upload.cover_preview_path.clone();
+            self.upload.cover_preview_tex = self
+                .upload
+                .cover_preview_path
+                .as_ref()
+                .and_then(|path| load_texture(ctx, path));
+        }
+    }
+
+    fn set_cover_from_path(&mut self, path: PathBuf, message: impl Into<String>) {
+        if !path.exists() {
+            self.upload.cover_error = true;
+            self.upload.cover_message = format!("Cover image not found: {}", path.display());
+            return;
+        }
+        self.upload.cover = path.to_string_lossy().to_string();
+        self.upload.cover_preview_path = Some(path);
+        self.upload.cover_preview_loaded = None;
+        self.upload.cover_preview_tex = None;
+        self.upload.cover_fetching = false;
+        self.upload.cover_fetch_rx = None;
+        self.upload.cover_error = false;
+        self.upload.cover_message = message.into();
+    }
+
+    fn start_cover_fetch(&mut self, url: String) {
+        let url = url.trim().to_string();
+        if url.is_empty() {
+            return;
+        }
+        self.upload.cover_link = url.clone();
+        if !url.starts_with("http://") && !url.starts_with("https://") {
+            self.set_cover_from_path(PathBuf::from(&url), "Cover image selected.");
+            return;
+        }
+        if self.upload.cover_fetching {
+            return;
+        }
+        let script = self.root.join("dist-tools/fetch-cover.js");
+        if !script.exists() {
+            self.upload.cover_error = true;
+            self.upload.cover_message =
+                "Cover preview tools are not built. Run `npm install && npm run assets`.".into();
+            return;
+        }
+        let work = self.root.join(".work");
+        if let Err(error) = std::fs::create_dir_all(&work) {
+            self.upload.cover_error = true;
+            self.upload.cover_message = format!("Could not create the work directory: {error}");
+            return;
+        }
+        let out = work.join("upload-cover-preview.bin");
+        let root = self.root.clone();
+        let (tx, rx) = mpsc::channel();
+        self.upload.cover_fetch_rx = Some(rx);
+        self.upload.cover_fetching = true;
+        self.upload.cover_error = false;
+        self.upload.cover_message = "Downloading cover preview…".into();
+        std::thread::spawn(move || {
+            let result = run_cover_download(&root, &url, &out);
+            let _ = tx.send(result);
+        });
+    }
+
+    fn pick_cover_file(&mut self) {
+        if let Some(path) = rfd::FileDialog::new()
+            .add_filter("Image files", &["png", "jpg", "jpeg", "webp"])
+            .pick_file()
+        {
+            self.set_cover_from_path(path, "Cover image selected. Click DONE to continue.");
+        }
+    }
+
+    fn paste_cover_image(&mut self) {
+        let image = arboard::Clipboard::new().and_then(|mut clipboard| clipboard.get_image());
+        let image = match image {
+            Ok(image) => image,
+            Err(error) => {
+                self.upload.cover_error = true;
+                self.upload.cover_message = format!("Clipboard image unavailable: {error}");
+                return;
+            }
+        };
+        let work = self.root.join(".work");
+        if let Err(error) = std::fs::create_dir_all(&work) {
+            self.upload.cover_error = true;
+            self.upload.cover_message = format!("Could not create the work directory: {error}");
+            return;
+        }
+        let path = work.join("upload-cover-paste.png");
+        let Some(buffer) = image::RgbaImage::from_raw(
+            image.width as u32,
+            image.height as u32,
+            image.bytes.into_owned(),
+        ) else {
+            self.upload.cover_error = true;
+            self.upload.cover_message = "The clipboard image was not readable.".into();
+            return;
+        };
+        if let Err(error) = buffer.save(&path) {
+            self.upload.cover_error = true;
+            self.upload.cover_message = format!("Could not save the clipboard image: {error}");
+            return;
+        }
+        self.set_cover_from_path(path, "Cover pasted from the clipboard. Click DONE to continue.");
+    }
+
+    fn draw_cover_popup(&mut self, ctx: &egui::Context) {
+        if !self.upload.cover_popup_open {
+            return;
+        }
+        let mut open = self.upload.cover_popup_open;
+        let mut load_link = false;
+        let mut pick_file = false;
+        let mut paste_image = false;
+        let mut remove_cover = false;
+        let mut done = false;
+        egui::Window::new("Cover art")
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .fixed_size(Vec2::new(560.0, 780.0))
+            .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
+            .show(ctx, |ui| {
+                ui.set_min_width(520.0);
+                egui::ScrollArea::vertical().max_height(720.0).show(ui, |ui| {
+                    let (preview, _) = ui.allocate_exact_size(
+                        Vec2::new(ui.available_width(), 270.0),
+                        Sense::hover(),
+                    );
+                    paint_cover_preview(
+                        ui,
+                        preview,
+                        self.upload.cover_preview_tex.as_ref(),
+                        !self.upload.cover.trim().is_empty(),
+                        self.upload.cover_fetching,
+                    );
+                    if !self.upload.cover_message.is_empty() {
+                        ui.add_space(4.0);
+                        ui.label(
+                            RichText::new(&self.upload.cover_message)
+                                .size(10.0)
+                                .color(if self.upload.cover_error { PINK } else { MUTED }),
+                        );
+                    }
+                    ui.add_space(8.0);
+                    ui.label(
+                        RichText::new("PASTE AN IMAGE LINK")
+                            .monospace()
+                            .size(8.0)
+                            .color(MUTED2),
+                    );
+                    ui.horizontal(|ui| {
+                        let response = ui.add(
+                            egui::TextEdit::singleline(&mut self.upload.cover_link)
+                                .desired_width(380.0),
+                        );
+                        if self.upload.cover_link.is_empty() {
+                            paint_placeholder(
+                                ui,
+                                response.rect,
+                                "https://…/cover.jpg",
+                                false,
+                            );
+                        }
+                        if ui
+                            .add_enabled(
+                                !self.upload.cover_fetching
+                                    && !self.upload.cover_link.trim().is_empty(),
+                                egui::Button::new("LOAD LINK"),
+                            )
+                            .clicked()
+                        {
+                            load_link = true;
+                        }
+                    });
+                    ui.add_space(10.0);
+                    ui.label(
+                        RichText::new("UPLOAD A FILE")
+                            .monospace()
+                            .size(8.0)
+                            .color(MUTED2),
+                    );
+                    if ui.button("SELECT AN IMAGE FILE").clicked() {
+                        pick_file = true;
+                    }
+                    ui.add_space(10.0);
+                    ui.label(
+                        RichText::new("PASTE FROM CLIPBOARD")
+                            .monospace()
+                            .size(8.0)
+                            .color(MUTED2),
+                    );
+                    if ui.button("PASTE IMAGE").clicked() {
+                        paste_image = true;
+                    }
+                    ui.add_space(14.0);
+                    ui.horizontal(|ui| {
+                        if ui
+                            .add_enabled(
+                                self.upload.cover_preview_tex.is_some(),
+                                egui::Button::new("USE THIS COVER"),
+                            )
+                            .clicked()
+                        {
+                            done = true;
+                        }
+                        if ui.button("REMOVE COVER").clicked() {
+                            remove_cover = true;
+                        }
+                    });
+                });
+            });
+        if !open {
+            self.upload.cover_popup_open = false;
+        }
+        if done {
+            self.upload.cover_popup_open = false;
+        }
+        if load_link {
+            self.start_cover_fetch(self.upload.cover_link.clone());
+        }
+        if pick_file {
+            self.pick_cover_file();
+        }
+        if paste_image {
+            self.paste_cover_image();
+        }
+        if remove_cover {
+            self.upload.cover.clear();
+            self.upload.cover_preview_path = None;
+            self.upload.cover_preview_tex = None;
+            self.upload.cover_preview_loaded = None;
+            self.upload.cover_link.clear();
+            self.upload.cover_fetching = false;
+            self.upload.cover_fetch_rx = None;
+            self.upload.cover_message = "Cover removed.".into();
+            self.upload.cover_error = false;
+        }
+    }
+
     fn start_fetch(&mut self, now: f64) {
         if self.upload.fetching || self.upload.importing {
             return;
         }
+        self.upload.cover_fetch_rx = None;
+        self.upload.cover_fetching = false;
         let url = self.upload.url.trim().to_string();
         if url.is_empty() {
             self.upload.message = "Paste a YouTube, Spotify or SoundCloud link first.".into();
@@ -2272,6 +2581,8 @@ impl KaraokeMachineApp {
         let mut import_clicked = false;
         let mut pick_artist: Option<String> = None;
         let mut pick_album: Option<(String, String)> = None;
+
+        self.update_cover_preview(ctx);
         {
             let upload = &mut self.upload;
             egui::Window::new("Upload a song")
@@ -2282,7 +2593,8 @@ impl KaraokeMachineApp {
                 .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
                 .show(ctx, |ui| {
                     ui.set_min_width(890.0);
-                    egui::ScrollArea::vertical().max_height(790.0).show(ui, |ui| {
+                    ui.spacing_mut().interact_size.y = 28.0;
+                    egui::ScrollArea::vertical().max_height(700.0).show(ui, |ui| {
                         ui.label(
                             RichText::new("Paste a YouTube, Spotify or SoundCloud link. Fetch fills in whatever it can; every field remains editable.")
                                 .size(11.0)
@@ -2291,62 +2603,193 @@ impl KaraokeMachineApp {
                         ui.add_space(4.0);
                         ui.horizontal(|ui| {
                             ui.label(RichText::new("LINK").monospace().size(8.0).color(MUTED2));
-                            ui.add(
+                            let link = ui.add(
                                 egui::TextEdit::singleline(&mut upload.url)
-                                    .hint_text("https://open.spotify.com/track/…  ·  https://youtu.be/…  ·  https://soundcloud.com/…")
-                                    .desired_width(420.0),
+                                    .desired_width(640.0),
                             );
+                            if upload.url.is_empty() {
+                                paint_placeholder(
+                                    ui,
+                                    link.rect,
+                                    "https://open.spotify.com/track/…  ·  https://youtu.be/…",
+                                    false,
+                                );
+                            }
+                            let fetch_label = if upload.fetching {
+                                "FETCHING…"
+                            } else if upload.info_loaded {
+                                "REFETCH"
+                            } else {
+                                "FETCH DETAILS"
+                            };
                             if ui
                                 .add_enabled(
                                     !upload.fetching && !upload.importing,
-                                    egui::Button::new(if upload.fetching { "FETCHING…" } else { "FETCH DETAILS" }),
+                                    egui::Button::new(fetch_label),
                                 )
                                 .clicked()
                             {
                                 fetch_clicked = true;
                             }
-                            if ui
-                                .add_enabled(
-                                    !upload.fetching && !upload.importing && !upload.url.trim().is_empty(),
-                                    egui::Button::new("DOWNLOAD & OPEN EDITOR"),
-                                )
-                                .clicked()
-                            {
-                                import_clicked = true;
-                            }
                         });
+                        if upload.fetching {
+                            ui.horizontal(|ui| {
+                                ui.spinner();
+                                ui.label(
+                                    RichText::new("Reading the link and resolving the audio source…")
+                                        .size(10.0)
+                                        .color(MUTED),
+                                );
+                            });
+                        }
+                        if upload.info_loaded {
+                            let audio_ok = !upload.audio_url.trim().is_empty();
+                            let accent = if audio_ok { MINT } else { GOLD };
+                            egui::Frame::NONE
+                                .fill(alpha(accent, 18))
+                                .corner_radius(8.0)
+                                .inner_margin(egui::Margin::symmetric(10, 8))
+                                .show(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            RichText::new(if audio_ok {
+                                                "AUDIO READY"
+                                            } else {
+                                                "AUDIO NOT RESOLVED"
+                                            })
+                                            .size(12.0)
+                                            .strong()
+                                            .color(accent),
+                                        );
+                                        if upload.duration > 0.0 {
+                                            ui.label(
+                                                RichText::new(format!(
+                                                    "· {}",
+                                                    format_time(upload.duration)
+                                                ))
+                                                .size(10.0)
+                                                .color(MUTED),
+                                            );
+                                        }
+                                        let lyric_lines = upload
+                                            .lyrics
+                                            .lines()
+                                            .filter(|line| !line.trim().is_empty())
+                                            .count();
+                                        ui.label(
+                                            RichText::new(if lyric_lines > 0 {
+                                                format!("· {lyric_lines} lyric lines")
+                                            } else {
+                                                "· no lyrics found — add them below".into()
+                                            })
+                                            .size(10.0)
+                                            .color(MUTED),
+                                        );
+                                    });
+                                    if audio_ok {
+                                        ui.label(
+                                            RichText::new("The audio source is resolved. Edit anything before importing.")
+                                                .size(10.0)
+                                                .color(MUTED),
+                                        );
+                                    }
+                                });
+                        }
                         ui.add_space(10.0);
                         ui.label(RichText::new("EXISTING METADATA").monospace().size(8.0).color(MUTED2));
                         ui.horizontal(|ui| {
+                            let combo_width = 400.0;
+                            let artist_label = if upload.artist.trim().is_empty() {
+                                "Choose an existing artist".to_string()
+                            } else {
+                                format!("Artist: {}", upload.artist)
+                            };
                             egui::ComboBox::from_id_salt("upload_existing_artist")
-                                .selected_text("Copy an existing artist…")
-                                .width(250.0)
+                                .selected_text(artist_label)
+                                .width(combo_width)
+                                .close_behavior(egui::popup::PopupCloseBehavior::CloseOnClickOutside)
                                 .show_ui(ui, |ui| {
-                                    for artist in &artists {
-                                        if ui.selectable_label(false, artist).clicked() {
-                                            pick_artist = Some(artist.clone());
+                                    ui.add(
+                                        egui::TextEdit::singleline(&mut upload.artist_search)
+                                            .hint_text("Search artists…")
+                                            .desired_width(f32::INFINITY),
+                                    );
+                                    let query = upload.artist_search.trim().to_lowercase();
+                                    egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
+                                        let mut matches = 0usize;
+                                        for artist in &artists {
+                                            if !query.is_empty()
+                                                && !artist.to_lowercase().contains(&query)
+                                            {
+                                                continue;
+                                            }
+                                            matches += 1;
+                                            if ui.selectable_label(false, artist).clicked() {
+                                                pick_artist = Some(artist.clone());
+                                                ui.close_menu();
+                                                ui.memory_mut(|memory| memory.close_popup());
+                                            }
                                         }
-                                    }
+                                        if matches == 0 {
+                                            ui.label(
+                                                RichText::new("No matching artists")
+                                                    .size(10.0)
+                                                    .color(MUTED2),
+                                            );
+                                        }
+                                    });
                                 });
-                            let filtered: Vec<&(String, String)> = albums
-                                .iter()
-                                .filter(|(_, artist)| upload.artist.trim().is_empty() || artist.eq_ignore_ascii_case(upload.artist.trim()))
-                                .collect();
+                            ui.add_space(12.0);
+                            let album_label = if upload.album.trim().is_empty() {
+                                "Choose an existing album".to_string()
+                            } else if upload.artist.trim().is_empty() {
+                                format!("Album: {}", upload.album)
+                            } else {
+                                format!("{} · {}", upload.album, upload.artist)
+                            };
                             egui::ComboBox::from_id_salt("upload_existing_album")
-                                .selected_text("Copy an existing album…")
-                                .width(320.0)
+                                .selected_text(album_label)
+                                .width(combo_width)
+                                .close_behavior(egui::popup::PopupCloseBehavior::CloseOnClickOutside)
                                 .show_ui(ui, |ui| {
-                                    if filtered.is_empty() {
-                                        ui.label(RichText::new("No matching album — create a new one below.").size(10.0).color(MUTED2));
-                                    }
-                                    for (album, artist) in filtered {
-                                        if ui.selectable_label(false, format!("{album} · {artist}")).clicked() {
-                                            pick_album = Some((album.clone(), artist.clone()));
+                                    ui.add(
+                                        egui::TextEdit::singleline(&mut upload.album_search)
+                                            .hint_text("Search albums…")
+                                            .desired_width(f32::INFINITY),
+                                    );
+                                    let query = upload.album_search.trim().to_lowercase();
+                                    let filtered: Vec<&(String, String)> = albums
+                                        .iter()
+                                        .filter(|(album, artist)| {
+                                            (upload.artist.trim().is_empty()
+                                                || artist.eq_ignore_ascii_case(upload.artist.trim()))
+                                                && (query.is_empty()
+                                                    || album.to_lowercase().contains(&query)
+                                                    || artist.to_lowercase().contains(&query))
+                                        })
+                                        .collect();
+                                    egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
+                                        if filtered.is_empty() {
+                                            ui.label(
+                                                RichText::new("No matching albums — create a new one below.")
+                                                    .size(10.0)
+                                                    .color(MUTED2),
+                                            );
                                         }
-                                    }
+                                        for (album, artist) in filtered {
+                                            if ui
+                                                .selectable_label(false, format!("{album} · {artist}"))
+                                                .clicked()
+                                            {
+                                                pick_album = Some((album.clone(), artist.clone()));
+                                                ui.close_menu();
+                                                ui.memory_mut(|memory| memory.close_popup());
+                                            }
+                                        }
+                                    });
                                 });
                         });
-                        ui.add_space(8.0);
+                        ui.add_space(10.0);
                         egui::Grid::new("upload_metadata_grid")
                             .num_columns(2)
                             .spacing([12.0, 6.0])
@@ -2361,10 +2804,13 @@ impl KaraokeMachineApp {
                                 ui.add(egui::TextEdit::singleline(&mut upload.album).desired_width(680.0));
                                 ui.end_row();
                                 ui.label("Release date");
-                                ui.add(egui::TextEdit::singleline(&mut upload.release_date).hint_text("YYYY-MM-DD").desired_width(680.0));
-                                ui.end_row();
-                                ui.label("Cover art");
-                                ui.add(egui::TextEdit::singleline(&mut upload.cover).hint_text("Image URL or local file path").desired_width(680.0));
+                                let release = ui.add(
+                                    egui::TextEdit::singleline(&mut upload.release_date)
+                                        .desired_width(680.0),
+                                );
+                                if upload.release_date.is_empty() {
+                                    paint_placeholder(ui, release.rect, "YYYY-MM-DD", false);
+                                }
                                 ui.end_row();
                                 ui.label("Artist bio");
                                 ui.add(egui::TextEdit::multiline(&mut upload.artist_bio).desired_rows(2).desired_width(680.0));
@@ -2373,6 +2819,41 @@ impl KaraokeMachineApp {
                                 ui.add(egui::TextEdit::multiline(&mut upload.album_bio).desired_rows(2).desired_width(680.0));
                                 ui.end_row();
                             });
+                        ui.add_space(10.0);
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new("COVER ART").monospace().size(8.0).color(MUTED2));
+                            if upload.cover_fetching {
+                                ui.spinner();
+                                ui.label(RichText::new("Loading preview…").size(10.0).color(GOLD));
+                            } else {
+                                ui.label(
+                                    RichText::new("Click the image area to choose, link, or paste artwork.")
+                                        .size(10.0)
+                                        .color(MUTED2),
+                                );
+                            }
+                        });
+                        let (cover_rect, cover_response) = ui.allocate_exact_size(
+                            Vec2::new(ui.available_width(), 150.0),
+                            Sense::click(),
+                        );
+                        paint_cover_preview(
+                            ui,
+                            cover_rect,
+                            upload.cover_preview_tex.as_ref(),
+                            !upload.cover.trim().is_empty(),
+                            upload.cover_fetching,
+                        );
+                        if cover_response.clicked() {
+                            upload.cover_popup_open = true;
+                        }
+                        if !upload.cover_message.is_empty() {
+                            ui.label(
+                                RichText::new(&upload.cover_message)
+                                    .size(10.0)
+                                    .color(if upload.cover_error { PINK } else { MUTED }),
+                            );
+                        }
                         ui.add_space(8.0);
                         ui.horizontal(|ui| {
                             ui.label(RichText::new("LYRICS").monospace().size(8.0).color(MUTED2));
@@ -2396,59 +2877,110 @@ impl KaraokeMachineApp {
                                 .size(10.0)
                                 .color(MUTED2),
                         );
-                        ui.add(
+                        let lyrics = ui.add(
                             egui::TextEdit::multiline(&mut upload.lyrics)
-                                .desired_rows(8)
-                                .desired_width(f32::INFINITY)
-                                .hint_text("Paste lyrics here if the lookup did not find them."),
+                                .desired_rows(6)
+                                .desired_width(f32::INFINITY),
                         );
-                        ui.add_space(8.0);
-                        if upload.importing {
-                            ui.add(
-                                egui::ProgressBar::new(upload.progress / 100.0)
-                                    .show_percentage()
-                                    .text(format!("{} · {}", upload.stage, upload.message)),
+                        if upload.lyrics.is_empty() {
+                            paint_placeholder(
+                                ui,
+                                lyrics.rect,
+                                "Paste lyrics here if the lookup did not find them.",
+                                true,
                             );
-                            ui.label(
-                                RichText::new("The editor opens automatically after the backing and vocal stems are ready.")
-                                    .size(10.0)
-                                    .color(MUTED),
-                            );
-                        } else {
-                            ui.horizontal(|ui| {
-                                if ui
-                                    .add_enabled(
-                                        !upload.url.trim().is_empty(),
-                                        egui::Button::new("DOWNLOAD, SPLIT & OPEN EDITOR"),
-                                    )
-                                    .clicked()
-                                {
-                                    import_clicked = true;
-                                }
-                                ui.label(
-                                    RichText::new("Requires Node, yt-dlp, ffmpeg and Demucs. The repo .venv is detected automatically.")
-                                        .size(9.0)
-                                        .color(MUTED2),
-                                );
-                            });
-                        }
-                        if !upload.message.is_empty() {
-                            ui.add_space(4.0);
-                            ui.label(RichText::new(&upload.message).size(11.0).color(if upload.info_loaded { MUTED } else { PINK }));
                         }
                     });
+                    ui.add_space(6.0);
+                    ui.separator();
+                    if upload.importing {
+                        ui.add(
+                            egui::ProgressBar::new(upload.progress / 100.0)
+                                .show_percentage()
+                                .text(format!("{} · {}", upload.stage, upload.message)),
+                        );
+                        ui.label(
+                            RichText::new("The editor opens automatically after the backing and vocal stems are ready.")
+                                .size(10.0)
+                                .color(MUTED),
+                        );
+                    } else {
+                        let button = egui::Button::new("DOWNLOAD, SPLIT & OPEN EDITOR")
+                            .min_size(Vec2::new(ui.available_width(), 36.0));
+                        if ui
+                            .add_enabled(!upload.url.trim().is_empty(), button)
+                            .clicked()
+                        {
+                            import_clicked = true;
+                        }
+                        ui.label(
+                            RichText::new("Requires Node, yt-dlp, ffmpeg and Demucs. The repo .venv is detected automatically.")
+                                .size(9.0)
+                                .color(MUTED2),
+                        );
+                    }
+                    if !upload.message.is_empty() {
+                        ui.add_space(4.0);
+                        ui.label(
+                            RichText::new(&upload.message)
+                                .size(11.0)
+                                .color(if upload.info_loaded { MUTED } else { PINK }),
+                        );
+                    }
                 });
             if !open && !upload.importing {
                 upload.open = false;
             }
         }
         if let Some(artist) = pick_artist {
-            self.upload.artist = artist;
+            self.upload.artist = artist.clone();
+            self.upload.artist_search.clear();
+            self.upload.album_search.clear();
+            if self.upload.artist_bio.trim().is_empty() {
+                if let Some(bio) = self
+                    .songs
+                    .iter()
+                    .find(|song| song.artist.as_deref() == Some(artist.as_str()))
+                    .and_then(|song| song.artist_bio.clone())
+                {
+                    self.upload.artist_bio = bio;
+                }
+            }
         }
         if let Some((album, artist)) = pick_album {
+            let from_song = self
+                .songs
+                .iter()
+                .find(|song| {
+                    song.album.as_deref() == Some(album.as_str())
+                        && song.artist.as_deref() == Some(artist.as_str())
+                })
+                .cloned();
             self.upload.album = album;
+            self.upload.album_search.clear();
             if self.upload.artist.trim().is_empty() {
                 self.upload.artist = artist;
+            }
+            if let Some(song) = from_song {
+                if self.upload.release_date.trim().is_empty() {
+                    self.upload.release_date = song.release_date.unwrap_or_default();
+                }
+                if self.upload.album_bio.trim().is_empty() {
+                    self.upload.album_bio = song.album_bio.unwrap_or_default();
+                }
+                if self.upload.artist_bio.trim().is_empty() {
+                    self.upload.artist_bio = song.artist_bio.unwrap_or_default();
+                }
+                if self.upload.cover.trim().is_empty() {
+                    if let Some(cover) = &song.cover {
+                        let path = self
+                            .root
+                            .join("assets/songs")
+                            .join(&song.id)
+                            .join(cover);
+                        self.set_cover_from_path(path, "Cover copied from the existing album.");
+                    }
+                }
             }
         }
         if fetch_clicked {
@@ -2457,6 +2989,7 @@ impl KaraokeMachineApp {
         if import_clicked {
             self.start_import(now);
         }
+        self.draw_cover_popup(ctx);
     }
 
     fn draw_range_test(&mut self, ctx: &egui::Context) {
@@ -2864,6 +3397,163 @@ impl eframe::App for KaraokeMachineApp {
             ctx.request_repaint();
         }
     }
+}
+
+fn run_cover_download(root: &Path, url: &str, out: &Path) -> Result<PathBuf, String> {
+    let script = root.join("dist-tools/fetch-cover.js");
+    if !script.exists() {
+        return Err("Cover preview tools are not built. Run `npm install && npm run assets`.".into());
+    }
+    let output = Command::new("node")
+        .arg(&script)
+        .arg("--url")
+        .arg(url)
+        .arg("--out")
+        .arg(out)
+        .current_dir(root)
+        .output()
+        .map_err(|error| format!("Could not start the cover downloader: {error}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!(
+            "Cover download failed: {}",
+            stderr
+                .lines()
+                .next_back()
+                .unwrap_or("unknown error")
+        ));
+    }
+    let bytes = std::fs::read(out)
+        .map_err(|error| format!("Could not read the downloaded cover: {error}"))?;
+    let image = image::load_from_memory(&bytes)
+        .map_err(|error| format!("The downloaded cover was not an image: {error}"))?;
+    let png = out.with_extension("png");
+    image
+        .save(&png)
+        .map_err(|error| format!("Could not save the cover preview: {error}"))?;
+    let _ = std::fs::remove_file(out);
+    Ok(png)
+}
+
+fn paint_placeholder(ui: &egui::Ui, rect: Rect, text: &str, multiline: bool) {
+    let painter = ui.painter();
+    let color = Color32::from_rgba_unmultiplied(94, 102, 121, 55);
+    if multiline {
+        painter.text(
+            rect.left_top() + Vec2::new(8.0, 7.0),
+            Align2::LEFT_TOP,
+            text,
+            FontId::proportional(12.0),
+            color,
+        );
+    } else {
+        painter.text(
+            rect.left_center() + Vec2::new(7.0, 0.0),
+            Align2::LEFT_CENTER,
+            text,
+            FontId::proportional(12.0),
+            color,
+        );
+    }
+}
+
+fn paint_cover_preview(
+    ui: &egui::Ui,
+    rect: Rect,
+    texture: Option<&TextureHandle>,
+    has_cover: bool,
+    loading: bool,
+) {
+    let p = ui.painter();
+    p.rect_filled(rect, 12.0, Color32::from_rgb(8, 12, 21));
+    if let Some(texture) = texture {
+        let size = texture.size_vec2();
+        let scale = (rect.width() / size.x.max(1.0))
+            .min(rect.height() / size.y.max(1.0));
+        let target = Rect::from_center_size(rect.center(), size * scale);
+        p.image(
+            texture.id(),
+            target,
+            Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+            Color32::WHITE,
+        );
+        let label = Rect::from_min_size(
+            Pos2::new(rect.right() - 126.0, rect.bottom() - 36.0),
+            Vec2::new(114.0, 24.0),
+        );
+        p.rect_filled(label, 7.0, Color32::from_rgba_unmultiplied(5, 8, 15, 210));
+        p.text(
+            label.center(),
+            Align2::CENTER_CENTER,
+            "CHANGE COVER",
+            FontId::monospace(7.0),
+            MINT,
+        );
+    } else {
+        let center = rect.center() + Vec2::new(0.0, -20.0);
+        let tray = Rect::from_center_size(center + Vec2::new(0.0, 12.0), Vec2::new(42.0, 10.0));
+        p.rect_stroke(
+            tray,
+            3.0,
+            Stroke::new(1.6f32, alpha(MUTED, 180)),
+            StrokeKind::Inside,
+        );
+        p.line_segment(
+            [
+                Pos2::new(center.x, center.y - 16.0),
+                Pos2::new(center.x, center.y + 10.0),
+            ],
+            Stroke::new(1.7f32, MUTED),
+        );
+        p.line_segment(
+            [
+                Pos2::new(center.x - 9.0, center.y - 7.0),
+                Pos2::new(center.x, center.y - 16.0),
+            ],
+            Stroke::new(1.7f32, MUTED),
+        );
+        p.line_segment(
+            [
+                Pos2::new(center.x + 9.0, center.y - 7.0),
+                Pos2::new(center.x, center.y - 16.0),
+            ],
+            Stroke::new(1.7f32, MUTED),
+        );
+        let title = if loading {
+            "Loading cover art…"
+        } else if has_cover {
+            "Cover linked — click to preview or replace"
+        } else {
+            "Click to upload cover art"
+        };
+        p.text(
+            center + Vec2::new(0.0, 48.0),
+            Align2::CENTER_CENTER,
+            title,
+            FontId::proportional(14.0),
+            if loading { GOLD } else { MUTED },
+        );
+        p.text(
+            center + Vec2::new(0.0, 68.0),
+            Align2::CENTER_CENTER,
+            "PNG, JPG, image link, or clipboard paste",
+            FontId::monospace(8.0),
+            MUTED2,
+        );
+    }
+    p.rect_stroke(
+        rect,
+        12.0,
+        Stroke::new(
+            1.0f32,
+            if has_cover {
+                alpha(MINT, 80)
+            } else {
+                Color32::from_white_alpha(28)
+            },
+        ),
+        StrokeKind::Inside,
+    );
 }
 
 fn run_song_info(root: &Path, url: &str) -> Result<TrackInfo, String> {

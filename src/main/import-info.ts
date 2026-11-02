@@ -203,10 +203,17 @@ async function readYtDlp(url: string): Promise<YtDlpInfo> {
   return JSON.parse(raw.slice(start)) as YtDlpInfo;
 }
 
+function formatCompactDate(value: string): string {
+  if (/^\d{8}$/.test(value)) {
+    return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
+  }
+  return value;
+}
+
 function releaseFromInfo(info: YtDlpInfo): string | undefined {
-  if (info.release_date) return info.release_date;
+  if (info.release_date) return formatCompactDate(info.release_date);
   if (info.upload_date && /^\d{8}$/.test(info.upload_date)) {
-    return `${info.upload_date.slice(0, 4)}-${info.upload_date.slice(4, 6)}-${info.upload_date.slice(6, 8)}`;
+    return formatCompactDate(info.upload_date);
   }
   return undefined;
 }

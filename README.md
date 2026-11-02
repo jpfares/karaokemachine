@@ -108,9 +108,11 @@ Details**:
   source for the stems)
 
 Everything fetched remains editable: title, artist, album, release date, cover art,
-artist/album bios, and lyrics. You can copy metadata from an existing artist/album or
-create new values. Then **Download & Open Editor** downloads the audio, separates the
-backing and guide vocals, and opens the manual mapper.
+artist/album bios, and lyrics. Artist and album dropdowns have their own search boxes.
+Click the large cover tile to paste an image link, choose a local file, or paste an image
+from the clipboard; a preview is shown before import. You can also copy metadata from an
+existing artist/album or create new values. Then **Download & Open Editor** downloads the
+audio, separates the backing and guide vocals, and opens the manual mapper.
 
 Lyrics are fetched from LRCLIB, lyrics.ovh, or Genius, with manual editing always
 available. The automatic chart is stored only as an editor suggestion; the imported song
