@@ -30,7 +30,7 @@ only as a translucent suggestion behind your work.
   picker, backing/vocal toggles, a vocal-range test, octave-aware scoring, and an
   **OCTAVE** cap when you sing the right note in the wrong octave.
 - **Albums and warm-ups.** Album covers, release dates, track ordering, imported-song
-  queue, and six built-in warm-up albums.
+  queue, and six built-in warm-up tracks.
 
 ## Why everything is UNMAPPED
 
@@ -150,9 +150,9 @@ finds a matching public audio source for the stems. Every metadata field remains
 ## Repository and media
 
 The public repository contains the application, tools, documentation and the six
-generated warm-ups. It **does not** contain the copyrighted commercial recordings used
-during development. `assets/songs/*` is gitignored; use the upload flow or place licensed
-audio in your local library.
+generated warm-up tracks. It **does not** contain the copyrighted commercial recordings
+used during development. Commercial tracks under `assets/songs/*` are gitignored; use the
+upload flow or place licensed audio in your local library.
 
 Two useful paths:
 
