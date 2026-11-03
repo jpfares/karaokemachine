@@ -1,5 +1,7 @@
 use crate::audio::AudioEngine;
 use crate::model::{format_time, note_name, pitch_color, CustomWord, LyricLine, Note, PlacedWord, Song};
+use crate::theme::{alpha, BG, GOLD, INK, MINT, MUTED, MUTED2, PANEL, PANEL2, PINK};
+use crate::widgets::{button, toggle};
 use eframe::egui::{
     self, Align2, Color32, CursorIcon, FontId, Id, LayerId, Order, PointerButton, Pos2, Rect, RichText, Sense,
     Stroke, StrokeKind, Ui, Vec2,
@@ -10,15 +12,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-const BG: Color32 = Color32::from_rgb(5, 7, 14);
-const INK: Color32 = Color32::from_rgb(244, 247, 251);
-const MUTED: Color32 = Color32::from_rgb(142, 150, 170);
-const MUTED2: Color32 = Color32::from_rgb(94, 102, 121);
-const MINT: Color32 = Color32::from_rgb(124, 247, 196);
-const PINK: Color32 = Color32::from_rgb(255, 93, 158);
-const GOLD: Color32 = Color32::from_rgb(255, 209, 102);
-const PANEL: Color32 = Color32::from_rgb(9, 13, 23);
-const PANEL2: Color32 = Color32::from_rgb(12, 17, 29);
 pub const VOCAL_BINS_PER_SECOND: f32 = 80.0;
 pub const RAW_PITCH_SAMPLE_RATE: f32 = 8000.0;
 
@@ -1802,11 +1795,11 @@ impl Editor {
         p.rect_filled(tray, 0.0, PANEL);
         p.line_segment([tray.left_top(), tray.right_top()], Stroke::new(1.0f32, Color32::from_white_alpha(18)));
         let play = Rect::from_min_size(Pos2::new(tray.left() + 16.0, tray.top() + 8.0), Vec2::new(86.0, 34.0));
-        if paint_button(ui, play, if self.playing { "PAUSE" } else { "PLAY" }, true, true) {
+        if button(ui, play, if self.playing { "PAUSE" } else { "PLAY" }, true, true) {
             self.toggle_play(audio);
         }
         let stop = Rect::from_min_size(Pos2::new(play.right() + 7.0, play.top()), Vec2::new(62.0, 34.0));
-        if paint_button(ui, stop, "STOP", false, true) {
+        if button(ui, stop, "STOP", false, true) {
             self.playing = false;
             if let Some(audio) = audio {
                 audio.pause();
@@ -1830,7 +1823,7 @@ impl Editor {
         let mut x = stop.right() + 146.0;
         for speed in [0.5f32, 0.75, 1.0, 1.25, 1.5] {
             let r = Rect::from_min_size(Pos2::new(x, tray.top() + 8.0), Vec2::new(44.0, 34.0));
-            if paint_toggle(ui, r, &format!("{speed:.2}×").replace("1.00×", "1×").replace("0.50×", "0.5×").replace("1.50×", "1.5×"), (self.speed - speed).abs() < 0.01) {
+            if toggle(ui, r, &format!("{speed:.2}×").replace("1.00×", "1×").replace("0.50×", "0.5×").replace("1.50×", "1.5×"), (self.speed - speed).abs() < 0.01) {
                 self.speed = speed;
                 if let Some(audio) = audio {
                     audio.set_rate(speed);
@@ -1839,12 +1832,12 @@ impl Editor {
             x += 48.0;
         }
         let vocals = Rect::from_min_size(Pos2::new(tray.right() - 290.0, tray.top() + 8.0), Vec2::new(94.0, 34.0));
-        if paint_toggle(ui, vocals, if self.vocals_on { "VOCALS ON" } else { "VOCALS OFF" }, self.vocals_on) {
+        if toggle(ui, vocals, if self.vocals_on { "VOCALS ON" } else { "VOCALS OFF" }, self.vocals_on) {
             self.vocals_on = !self.vocals_on;
             self.apply_editor_volumes(audio);
         }
         let backing = Rect::from_min_size(Pos2::new(vocals.right() + 7.0, vocals.top()), Vec2::new(100.0, 34.0));
-        if paint_toggle(ui, backing, if self.backing_on { "BACKING ON" } else { "BACKING OFF" }, self.backing_on) {
+        if toggle(ui, backing, if self.backing_on { "BACKING ON" } else { "BACKING OFF" }, self.backing_on) {
             self.backing_on = !self.backing_on;
             self.apply_editor_volumes(audio);
         }
@@ -2160,7 +2153,7 @@ impl Editor {
                 );
                 y += 28.0;
                 let delete = Rect::from_min_size(Pos2::new(x, y), Vec2::new(r.width() - 28.0, 30.0));
-                if paint_button(ui, delete, "DELETE WORD", false, true) {
+                if button(ui, delete, "DELETE WORD", false, true) {
                     self.delete_selected();
                 }
                 y += 40.0;
@@ -2220,7 +2213,7 @@ impl Editor {
             let bw = (r.width() - 38.0) / 2.0;
             for (i, label) in ["− OCT", "+ OCT"].iter().enumerate() {
                 let b = Rect::from_min_size(Pos2::new(x + i as f32 * (bw + 10.0), y), Vec2::new(bw, 30.0));
-                if paint_button(ui, b, label, false, true) {
+                if button(ui, b, label, false, true) {
                     self.transpose_selected(if i == 0 { -12 } else { 12 });
                 }
             }
@@ -2230,12 +2223,12 @@ impl Editor {
                 .selected
                 .iter()
                 .any(|index| self.notes.get(*index).and_then(|note| note.ribbon).is_some());
-            if paint_button(ui, detach, "DETACH RIBBON", false, has_ribbon) && has_ribbon {
+            if button(ui, detach, "DETACH RIBBON", false, has_ribbon) && has_ribbon {
                 self.detach_selected_ribbons();
             }
             y += 36.0;
             let delete = Rect::from_min_size(Pos2::new(x, y), Vec2::new(r.width() - 28.0, 28.0));
-            if paint_button(ui, delete, "DELETE NOTE", false, true) {
+            if button(ui, delete, "DELETE NOTE", false, true) {
                 self.delete_selected();
             }
             y += 44.0;
@@ -2311,14 +2304,14 @@ impl Editor {
             );
         }
         if self.song.mapped {
-            if paint_button(ui, export, "EXPORT MAP", false, true) {
+            if button(ui, export, "EXPORT MAP", false, true) {
                 *event = EditorEvent::ExportMap;
             }
         }
-        if paint_button(ui, save, "SAVE AS DRAFT", false, true) {
+        if button(ui, save, "SAVE AS DRAFT", false, true) {
             *event = EditorEvent::SaveDraft;
         }
-        if paint_button(ui, submit, "SUBMIT MAPPING", ok, ok) && ok {
+        if button(ui, submit, "SUBMIT MAPPING", ok, ok) && ok {
             *event = EditorEvent::Submit;
         }
     }
@@ -2846,10 +2839,6 @@ fn format_time_precise(seconds: f64) -> String {
     format!("{minutes}:{rest:05.2}")
 }
 
-fn alpha(color: Color32, a: u8) -> Color32 {
-    Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), a)
-}
-
 fn build_word_bank(
     lines: &[LyricLine],
     custom_words: &[CustomWord],
@@ -3152,73 +3141,4 @@ fn paint_editor_icon(p: &egui::Painter, rect: Rect, icon: EditorIcon, color: Col
             );
         }
     }
-}
-
-fn paint_button(ui: &mut Ui, rect: Rect, text: &str, primary: bool, enabled: bool) -> bool {
-    let response = ui.interact(
-        rect,
-        Id::new(("editor_button", text, rect.left() as i32, rect.top() as i32)),
-        if enabled { Sense::click() } else { Sense::hover() },
-    );
-    let hovered = response.hovered() && enabled;
-    let p = ui.painter();
-    let fill = if primary {
-        if hovered { Color32::from_rgb(152, 255, 213) } else { MINT }
-    } else if hovered {
-        Color32::from_rgb(24, 32, 49)
-    } else {
-        Color32::from_rgba_unmultiplied(255, 255, 255, 9)
-    };
-    p.rect_filled(rect, 7.0, if enabled { fill } else { Color32::from_white_alpha(5) });
-    if !primary {
-        p.rect_stroke(
-            rect,
-            7.0,
-            Stroke::new(1.0f32, if enabled { Color32::from_white_alpha(35) } else { Color32::from_white_alpha(12) }),
-            StrokeKind::Inside,
-        );
-    }
-    p.text(
-        rect.center(),
-        Align2::CENTER_CENTER,
-        text,
-        FontId::monospace(if text.len() > 8 { 7.5 } else { 9.0 }),
-        if !enabled {
-            MUTED2
-        } else if primary {
-            Color32::from_rgb(5, 18, 13)
-        } else {
-            INK
-        },
-    );
-    enabled && response.clicked()
-}
-
-fn paint_toggle(ui: &mut Ui, rect: Rect, text: &str, active: bool) -> bool {
-    let response = ui.interact(
-        rect,
-        Id::new(("editor_toggle", text, rect.left() as i32, rect.top() as i32)),
-        Sense::click(),
-    );
-    let p = ui.painter();
-    let fill = if active {
-        Color32::from_rgba_unmultiplied(124, 247, 196, 24)
-    } else {
-        Color32::from_rgba_unmultiplied(255, 255, 255, 7)
-    };
-    p.rect_filled(rect, 7.0, fill);
-    p.rect_stroke(
-        rect,
-        7.0,
-        Stroke::new(1.0f32, if active { alpha(MINT, 95) } else { Color32::from_white_alpha(26) }),
-        StrokeKind::Inside,
-    );
-    p.text(
-        rect.center(),
-        Align2::CENTER_CENTER,
-        text,
-        FontId::monospace(if text.len() > 10 { 6.5 } else { 8.0 }),
-        if active { MINT } else { MUTED },
-    );
-    response.clicked()
 }

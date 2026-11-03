@@ -5,6 +5,8 @@ use crate::map_package::{MapIndex, MapIndexEntry, MapPackage};
 use base64::Engine;
 use crate::model::*;
 use crate::pitch::{detect_pitch, PitchReading, PitchTracker};
+use crate::theme::{alpha, BG, GOLD, INK, LINE, MINT, MUTED, MUTED2, OCTAVE_BLUE, PINK};
+use crate::widgets::{click, glyph_button, pill_button, pill_toggle, round_button};
 use eframe::egui::{
     self, Align2, Color32, FontId, Id, Mesh, Pos2, Rect, RichText, Sense, Shape, Stroke,
     StrokeKind, TextureHandle, TextureOptions, Vec2,
@@ -21,15 +23,6 @@ const DESIGN_WIDTH: f32 = 1600.0;
 const DESIGN_HEIGHT: f32 = 980.0;
 const MAPS_BASE_URL: &str = "https://rgbeans.github.io/karaokemachine/maps/";
 
-const BG: Color32 = Color32::from_rgb(5, 7, 14);
-const INK: Color32 = Color32::from_rgb(244, 247, 251);
-const MUTED: Color32 = Color32::from_rgb(142, 150, 170);
-const MUTED2: Color32 = Color32::from_rgb(94, 102, 121);
-const MINT: Color32 = Color32::from_rgb(124, 247, 196);
-const PINK: Color32 = Color32::from_rgb(255, 93, 158);
-const GOLD: Color32 = Color32::from_rgb(255, 209, 102);
-const LINE: Color32 = Color32::from_rgba_premultiplied(255, 255, 255, 22);
-const OCTAVE_BLUE: Color32 = Color32::from_rgb(100, 200, 255);
 const OCTAVE_TOLERANCE_CENTS: f32 = 50.0;
 const IN_TUNE_TOLERANCE_CENTS: f32 = 85.0;
 
@@ -53,10 +46,6 @@ fn same_lyric_word(a: &Note, b: &Note) -> bool {
         (Some(left), Some(right)) => left == right,
         _ => true,
     }
-}
-
-fn alpha(color: Color32, a: u8) -> Color32 {
-    Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), a)
 }
 
 fn pitch_col(t: f32) -> Color32 {
@@ -1423,14 +1412,12 @@ impl KaraokeMachineApp {
         p.text(Pos2::new(28.0, 30.0), Align2::LEFT_CENTER, "KARAOKEMACHINE", FontId::proportional(18.0), alpha(INK, 200));
         p.text(Pos2::new(28.0, 50.0), Align2::LEFT_CENTER, "MUSIC LIBRARY", FontId::monospace(8.0), MUTED2);
         let brand = Rect::from_min_size(Pos2::new(rect.width() - 170.0, 22.0), Vec2::new(140.0, 34.0));
-        paint_button(ui, brand, "LIBRARY", true);
-        if click(ui, brand, "lobby_library") {
+        if pill_button(ui, brand, "LIBRARY", true) {
             actions.push(Action::OpenMenu);
         }
         if !self.drawer_open {
             let center = Rect::from_center_size(rect.center() + Vec2::new(-100.0, 0.0), Vec2::new(220.0, 46.0));
-            paint_button(ui, center, "OPEN LIBRARY", true);
-            if click(ui, center, "lobby_open") {
+            if pill_button(ui, center, "OPEN LIBRARY", true) {
                 actions.push(Action::OpenMenu);
             }
         }
@@ -1450,8 +1437,7 @@ impl KaraokeMachineApp {
         p.rect_filled(header, 0.0, Color32::from_rgba_unmultiplied(5, 8, 15, 242));
         p.line_segment([header.left_bottom(), header.right_bottom()], Stroke::new(1.0f32, LINE));
         let back = Rect::from_min_size(Pos2::new(16.0, 15.0), Vec2::new(36.0, 34.0));
-        paint_icon_button(ui, back, "BACK");
-        if click(ui, back, "back") {
+        if glyph_button(ui, back, "BACK") {
             actions.push(Action::OpenMenu);
         }
         p.text(Pos2::new(66.0, 17.0), Align2::LEFT_TOP, "NOW SINGING", FontId::monospace(8.0), MUTED2);
@@ -1482,8 +1468,7 @@ impl KaraokeMachineApp {
             p.text(Pos2::new(x, 28.0), Align2::LEFT_TOP, value, FontId::monospace(16.0), *color);
         }
         let settings_btn = Rect::from_min_size(Pos2::new(rect.width() - 50.0, 14.0), Vec2::new(34.0, 34.0));
-        paint_icon_button(ui, settings_btn, "SET");
-        if click(ui, settings_btn, "settings_btn") {
+        if glyph_button(ui, settings_btn, "SET") {
             actions.push(Action::OpenSettings);
         }
 
@@ -1716,38 +1701,31 @@ impl KaraokeMachineApp {
         p.rect_filled(tray, 24.0, Color32::from_rgba_unmultiplied(9, 13, 23, 235));
         p.rect_stroke(tray, 24.0, Stroke::new(1.0f32, Color32::from_white_alpha(26)), StrokeKind::Inside);
         let play_rect = Rect::from_center_size(Pos2::new(rect.width() * 0.5, tray.center().y), Vec2::new(58.0, 58.0));
-        paint_round_button(ui, play_rect, if stage.playing { "PAUSE" } else { "PLAY" }, true);
-        if click(ui, play_rect, "play_btn") {
+        if round_button(ui, play_rect, if stage.playing { "PAUSE" } else { "PLAY" }, true) {
             actions.push(Action::TogglePlay);
         }
         let restart = Rect::from_center_size(Pos2::new(play_rect.left() - 46.0, tray.center().y), Vec2::new(38.0, 38.0));
-        paint_round_button(ui, restart, "R", false);
-        if click(ui, restart, "restart") {
+        if round_button(ui, restart, "R", false) {
             actions.push(Action::Restart);
         }
         let lyrics = Rect::from_min_size(Pos2::new(play_rect.right() + 36.0, tray.center().y - 17.0), Vec2::new(96.0, 34.0));
-        paint_toggle(ui, lyrics, if self.settings.show_lyrics { "LYRICS ON" } else { "LYRICS OFF" }, self.settings.show_lyrics);
-        if click(ui, lyrics, "lyrics_toggle") {
+        if pill_toggle(ui, lyrics, if self.settings.show_lyrics { "LYRICS ON" } else { "LYRICS OFF" }, self.settings.show_lyrics) {
             actions.push(Action::ToggleLyrics);
         }
         let vocals = Rect::from_min_size(lyrics.right_top() + Vec2::new(8.0, 0.0), lyrics.size());
-        paint_toggle(ui, vocals, if self.settings.vocals_volume > 0.01 { "VOCALS ON" } else { "VOCALS OFF" }, self.settings.vocals_volume > 0.01);
-        if click(ui, vocals, "vocals_toggle") {
+        if pill_toggle(ui, vocals, if self.settings.vocals_volume > 0.01 { "VOCALS ON" } else { "VOCALS OFF" }, self.settings.vocals_volume > 0.01) {
             actions.push(Action::ToggleVocals);
         }
         let backing = Rect::from_min_size(vocals.right_top() + Vec2::new(8.0, 0.0), lyrics.size());
-        paint_toggle(ui, backing, if self.settings.backing_enabled { "BACKING ON" } else { "BACKING OFF" }, self.settings.backing_enabled);
-        if click(ui, backing, "backing_toggle") {
+        if pill_toggle(ui, backing, if self.settings.backing_enabled { "BACKING ON" } else { "BACKING OFF" }, self.settings.backing_enabled) {
             actions.push(Action::ToggleBacking);
         }
         let menu_btn = Rect::from_min_size(Pos2::new(tray.left() + 16.0, tray.center().y - 17.0), Vec2::new(100.0, 34.0));
-        paint_toggle(ui, menu_btn, "LIBRARY", false);
-        if click(ui, menu_btn, "tray_library") {
+        if pill_toggle(ui, menu_btn, "LIBRARY", false) {
             actions.push(Action::OpenMenu);
         }
         let settings_tray = Rect::from_min_size(Pos2::new(tray.right() - 120.0, tray.center().y - 17.0), Vec2::new(100.0, 34.0));
-        paint_toggle(ui, settings_tray, "SETTINGS", false);
-        if click(ui, settings_tray, "tray_settings") {
+        if pill_toggle(ui, settings_tray, "SETTINGS", false) {
             actions.push(Action::OpenSettings);
         }
 
@@ -1785,13 +1763,11 @@ impl KaraokeMachineApp {
                 p.text(Pos2::new(x, card.center().y + 76.0), Align2::LEFT_TOP, value, FontId::monospace(17.0), INK);
             }
             let retry = Rect::from_center_size(Pos2::new(card.center().x - 90.0, card.bottom() - 70.0), Vec2::new(160.0, 44.0));
-            paint_button(ui, retry, "SING IT AGAIN", true);
-            if click(ui, retry, "results_retry") {
+            if pill_button(ui, retry, "SING IT AGAIN", true) {
                 actions.push(Action::RetrySong);
             }
             let library = Rect::from_center_size(Pos2::new(card.center().x + 110.0, card.bottom() - 70.0), Vec2::new(170.0, 44.0));
-            paint_button(ui, library, "BACK TO LIBRARY", false);
-            if click(ui, library, "results_library") {
+            if pill_button(ui, library, "BACK TO LIBRARY", false) {
                 actions.push(Action::OpenLibraryFromResults);
             }
         }
@@ -1831,8 +1807,7 @@ impl KaraokeMachineApp {
         };
         p.text(panel.left_top() + Vec2::new(20.0, 38.0), Align2::LEFT_TOP, drawer_title, FontId::proportional(24.0), INK);
         let close = Rect::from_min_size(panel.right_top() + Vec2::new(-48.0, 16.0), Vec2::new(30.0, 30.0));
-        paint_icon_button(ui, close, "X");
-        if click(ui, close, "drawer_close") {
+        if glyph_button(ui, close, "X") {
             actions.push(Action::CloseMenu);
         }
         let body = Rect::from_min_max(
@@ -1874,7 +1849,7 @@ impl KaraokeMachineApp {
         .enumerate()
         {
             let br = Rect::from_min_size(Pos2::new(foot.left() + 6.0 + i as f32 * (btn_w + 4.0), foot.top() + 11.0), Vec2::new(btn_w, 34.0));
-            paint_toggle(
+            if pill_toggle(
                 ui,
                 br,
                 label,
@@ -1883,8 +1858,7 @@ impl KaraokeMachineApp {
                     && self.selected_album.is_none())
                     || (*view == 1 && self.drawer_view == DrawerViewRust::Imports)
                     || (*view == 2 && self.drawer_view == DrawerViewRust::Maps),
-            );
-            if click(ui, br, ("drawer_footer", i)) {
+            ) {
                 match view {
                     0 => actions.push(Action::ShowAlbums),
                     1 => actions.push(Action::ShowImports),
@@ -1962,8 +1936,7 @@ impl KaraokeMachineApp {
             return;
         };
         let back = Rect::from_min_size(body.left_top(), Vec2::new(90.0, 28.0));
-        paint_toggle(ui, back, "← ALBUMS", false);
-        if click(ui, back, "drawer_album_back") {
+        if pill_toggle(ui, back, "← ALBUMS", false) {
             actions.push(Action::BackToAlbums);
         }
         let art = Rect::from_min_size(body.left_top() + Vec2::new(0.0, 42.0), Vec2::new(126.0, 126.0));
@@ -2028,8 +2001,7 @@ impl KaraokeMachineApp {
             p.text(Pos2::new(row.right() - 104.0, row.center().y), Align2::RIGHT_CENTER, meta, FontId::monospace(7.0), MUTED2);
             p.text(Pos2::new(row.right() - 66.0, row.center().y), Align2::RIGHT_CENTER, if song.mapped { "PLAY" } else { "MAP" }, FontId::monospace(7.0), if song.mapped { MINT } else { PINK });
             let edit = Rect::from_min_size(Pos2::new(row.right() - 36.0, row.top() + 9.0), Vec2::new(30.0, 24.0));
-            paint_toggle(ui, edit, "EDIT", !song.mapped);
-            if click(ui, edit, ("track_edit", song_index)) {
+            if pill_toggle(ui, edit, "EDIT", !song.mapped) {
                 actions.push(Action::EditSong(song_index));
             }
             let main = Rect::from_min_max(row.min, Pos2::new(row.right() - 42.0, row.bottom()));
@@ -2041,8 +2013,7 @@ impl KaraokeMachineApp {
 
     fn draw_drawer_maps(&self, ui: &mut egui::Ui, p: &egui::Painter, body: Rect, actions: &mut Vec<Action>) {
         let import = Rect::from_min_size(body.left_top(), Vec2::new(body.width(), 38.0));
-        paint_button(ui, import, "IMPORT MAP FILE", false);
-        if click(ui, import, "maps_install") {
+        if pill_button(ui, import, "IMPORT MAP FILE", false) {
             actions.push(Action::InstallMap);
         }
         let list_top = body.top() + 50.0 - self.drawer_scroll;
@@ -2085,10 +2056,9 @@ impl KaraokeMachineApp {
                 Vec2::new(76.0, 28.0),
             );
             if self.map_downloading.as_deref() == Some(entry.id.as_str()) {
-                paint_toggle(ui, install, "...", false);
+                let _ = pill_toggle(ui, install, "...", false);
             } else {
-                paint_button(ui, install, "INSTALL", true);
-                if click(ui, install, ("map_remote_install", i)) {
+                if pill_button(ui, install, "INSTALL", true) {
                     actions.push(Action::InstallRemoteMap(i));
                 }
             }
@@ -2143,8 +2113,7 @@ impl KaraokeMachineApp {
                 Pos2::new(row.right() - 82.0, row.top() + 17.0),
                 Vec2::new(76.0, 28.0),
             );
-            paint_button(ui, sing, "SING", true);
-            if click(ui, sing, ("map_warmup_play", song_index)) {
+            if pill_button(ui, sing, "SING", true) {
                 actions.push(Action::PlaySong(song_index));
             }
             let main = Rect::from_min_max(row.min, Pos2::new(row.right() - 90.0, row.bottom()));
@@ -2165,13 +2134,11 @@ impl KaraokeMachineApp {
         let ready = self.songlist.iter().filter(|url| self.songs.iter().any(|s| s.youtube_url.as_deref() == Some(url.as_str()))).count();
         p.text(body.left_top() + Vec2::new(0.0, 76.0), Align2::LEFT_TOP, format!("{ready}/{} ready", self.songlist.len()), FontId::monospace(8.0), MUTED);
         let reload = Rect::from_min_size(Pos2::new(body.right() - 100.0, body.top() + 70.0), Vec2::new(100.0, 30.0));
-        paint_toggle(ui, reload, "RELOAD", false);
-        if click(ui, reload, "drawer_reload") {
+        if pill_toggle(ui, reload, "RELOAD", false) {
             actions.push(Action::Reload);
         }
         let upload = Rect::from_min_size(Pos2::new(body.right() - 250.0, body.top() + 70.0), Vec2::new(138.0, 30.0));
-        paint_toggle(ui, upload, "UPLOAD SONG", true);
-        if click(ui, upload, "drawer_upload") {
+        if pill_toggle(ui, upload, "UPLOAD SONG", true) {
             actions.push(Action::OpenUpload);
         }
         let list_top = body.top() + 104.0 - self.drawer_scroll;
@@ -4146,67 +4113,6 @@ fn stage_needs_input(stage: &Option<Stage>) -> bool {
 
 fn ctx_pointer(ui: &egui::Ui) -> Option<Pos2> {
     ui.input(|i| i.pointer.interact_pos())
-}
-
-fn click(ui: &mut egui::Ui, rect: Rect, id: impl std::hash::Hash) -> bool {
-    ui.interact(rect, Id::new(id), Sense::click()).clicked()
-}
-
-fn paint_button(ui: &mut egui::Ui, rect: Rect, text: &str, primary: bool) {
-    let p = ui.painter();
-    let (fill, fg) = if primary {
-        (MINT, Color32::from_rgb(5, 18, 13))
-    } else {
-        (Color32::from_rgba_unmultiplied(9, 13, 23, 220), INK)
-    };
-    p.rect_filled(rect, rect.height() / 2.0, fill);
-    if !primary {
-        p.rect_stroke(rect, rect.height() / 2.0, Stroke::new(1.0f32, Color32::from_white_alpha(35)), StrokeKind::Inside);
-    }
-    p.text(rect.center(), Align2::CENTER_CENTER, text, FontId::proportional(12.0), fg);
-}
-
-fn paint_toggle(ui: &mut egui::Ui, rect: Rect, text: &str, active: bool) {
-    let p = ui.painter();
-    let fill = if active {
-        Color32::from_rgba_unmultiplied(124, 247, 196, 22)
-    } else {
-        Color32::from_rgba_unmultiplied(255, 255, 255, 7)
-    };
-    p.rect_filled(rect, rect.height() / 2.0, fill);
-    p.rect_stroke(
-        rect,
-        rect.height() / 2.0,
-        Stroke::new(1.0f32, if active { alpha(MINT, 90) } else { Color32::from_white_alpha(28) }),
-        StrokeKind::Inside,
-    );
-    p.text(
-        rect.center(),
-        Align2::CENTER_CENTER,
-        text,
-        FontId::monospace(8.0),
-        if active { MINT } else { MUTED },
-    );
-}
-
-fn paint_icon_button(ui: &mut egui::Ui, rect: Rect, glyph: &str) {
-    let p = ui.painter();
-    p.rect_filled(rect, 8.0, Color32::from_rgba_unmultiplied(255, 255, 255, 8));
-    let size = if glyph.len() <= 1 { 15.0 } else { 8.0 };
-    p.text(rect.center(), Align2::CENTER_CENTER, glyph, FontId::monospace(size), INK);
-}
-
-fn paint_round_button(ui: &mut egui::Ui, rect: Rect, glyph: &str, primary: bool) {
-    let p = ui.painter();
-    p.circle_filled(rect.center(), rect.width() / 2.0, if primary { MINT } else { Color32::from_rgba_unmultiplied(255, 255, 255, 12) });
-    let font_size = if glyph.len() > 2 { 9.0 } else { if primary { 20.0 } else { 17.0 } };
-    p.text(
-        rect.center() + Vec2::new(0.0, -1.0),
-        Align2::CENTER_CENTER,
-        glyph,
-        FontId::monospace(font_size),
-        if primary { Color32::from_rgb(5, 18, 13) } else { MUTED },
-    );
 }
 
 fn paint_cover_fallback(p: &egui::Painter, rect: Rect, title: &str) {
