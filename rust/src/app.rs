@@ -194,6 +194,26 @@ impl Stage {
             note.midi += 12 * delta;
         }
         self.octave_shift = shift;
+        self.reset_scoring(self.time);
+    }
+
+    /// Forget every judgment and score again from `from_time`.
+    ///
+    /// Notes that end before `from_time` count as already past and are never
+    /// judged; everything later is judged fresh. This is the single place
+    /// scoring state is rewound, so a restart, a seek and an octave change
+    /// cannot drift apart.
+    fn reset_scoring(&mut self, from_time: f64) {
+        self.score = 0;
+        self.combo = 0;
+        self.best_combo = 0;
+        self.hit_notes = 0;
+        self.perfects = 0;
+        self.total_probe = 0;
+        self.hit_probe = 0;
+        self.active = -1;
+        self.judgment = None;
+        self.result = None;
         for stat in &mut self.stats {
             *stat = NoteStat::default();
         }
@@ -201,17 +221,21 @@ impl Stage {
             .song
             .notes
             .iter()
-            .position(|note| note.start + note.dur >= self.time)
+            .position(|note| note.start + note.dur >= from_time)
             .unwrap_or(self.song.notes.len());
-        self.score = 0;
-        self.combo = 0;
-        self.best_combo = 0;
-        self.hit_notes = 0;
-        self.perfects = 0;
-        self.total_probe = 0;
-        self.hit_probe = 0;
-        self.active = -1;
-        self.result = None;
+    }
+
+    /// Move the playhead and score again from there. Callers seek the audio
+    /// engine separately; the stage only owns chart time.
+    ///
+    /// Ignored while the results card is showing: a stray scrub must not
+    /// dismiss a finished run. Sing It Again goes through `reset` instead.
+    fn seek(&mut self, time: f64) {
+        if self.result.is_some() {
+            return;
+        }
+        self.time = time.clamp(0.0, self.duration);
+        self.reset_scoring(self.time);
     }
 
     fn reset(&mut self) {
@@ -219,20 +243,7 @@ impl Stage {
         self.playing = false;
         self.started = false;
         self.count_in_until = None;
-        self.score = 0;
-        self.combo = 0;
-        self.best_combo = 0;
-        self.hit_notes = 0;
-        self.perfects = 0;
-        self.total_probe = 0;
-        self.hit_probe = 0;
-        self.finalize_ptr = 0;
-        self.active = -1;
-        for stat in &mut self.stats {
-            *stat = NoteStat::default();
-        }
-        self.judgment = None;
-        self.result = None;
+        self.reset_scoring(0.0);
     }
 
     fn active_note_at(&self, time: f64) -> i32 {
@@ -1171,20 +1182,7 @@ impl KaraokeMachineApp {
             }
             Action::Seek(time) => {
                 if let Some(stage) = &mut self.stage {
-                    stage.time = time.clamp(0.0, stage.duration);
-                    stage.finalize_ptr = stage
-                        .song
-                        .notes
-                        .iter()
-                        .position(|n| n.start + n.dur >= stage.time)
-                        .unwrap_or(stage.song.notes.len());
-                    for stat in &mut stage.stats {
-                        *stat = NoteStat::default();
-                    }
-                    stage.score = 0;
-                    stage.combo = 0;
-                    stage.total_probe = 0;
-                    stage.hit_probe = 0;
+                    stage.seek(time);
                     if let Some(audio) = &self.audio {
                         audio.seek(stage.time);
                     }
@@ -1355,20 +1353,18 @@ impl KaraokeMachineApp {
         }
         if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
             if let Some(stage) = &mut self.stage {
-                let target = (stage.time - 5.0).max(0.0);
+                stage.seek(stage.time - 5.0);
                 if let Some(audio) = &self.audio {
-                    audio.seek(target);
+                    audio.seek(stage.time);
                 }
-                stage.time = target;
             }
         }
         if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight)) {
             if let Some(stage) = &mut self.stage {
-                let target = (stage.time + 5.0).min(stage.duration);
+                stage.seek(stage.time + 5.0);
                 if let Some(audio) = &self.audio {
-                    audio.seek(target);
+                    audio.seek(stage.time);
                 }
-                stage.time = target;
             }
         }
     }
@@ -4395,5 +4391,154 @@ fn draw_words(p: &egui::Painter, stage: &Stage, layout: &Layout, time: f64, widt
             text.to_string()
         };
         p.text(pill.center(), Align2::CENTER_CENTER, display, font, fg);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    /// A song whose notes are `(start, dur, midi)` triples.
+    fn song(notes: &[(f64, f64, i32)]) -> Song {
+        let notes: Vec<_> = notes
+            .iter()
+            .map(|(start, dur, midi)| json!({ "start": start, "dur": dur, "midi": midi }))
+            .collect();
+        serde_json::from_value(json!({
+            "id": "test",
+            "title": "Test",
+            "duration": 10.0,
+            "mapped": true,
+            "notes": notes,
+        }))
+        .expect("test song")
+    }
+
+    fn stage(notes: &[(f64, f64, i32)]) -> Stage {
+        Stage::new(song(notes), &Settings::default())
+    }
+
+    fn reading(midi: f32) -> Option<PitchReading> {
+        Some(PitchReading {
+            midi,
+            cents: (midi - midi.round()) * 100.0,
+            clarity: 1.0,
+            rms: 0.2,
+        })
+    }
+
+    /// Feed the stage one reading every 20 ms from `from` to `to` seconds.
+    /// Running past a note's end lets `score_tick` finalize it, so tests do
+    /// not need `finish`, which would also write the user's scores file.
+    fn sing(stage: &mut Stage, from: f64, to: f64, midi: f32) {
+        let mut t = from;
+        while t <= to {
+            stage.score_tick(t, reading(midi), true);
+            t += 0.02;
+        }
+    }
+
+    fn judgment(stage: &Stage) -> &str {
+        stage.judgment.as_ref().map(|j| j.text.as_str()).unwrap_or("")
+    }
+
+    #[test]
+    fn fold_octave_keeps_cents_and_reports_the_shift() {
+        assert_eq!(fold_octave(60.0, 60), (0.0, 0));
+        assert_eq!(fold_octave(72.0, 60), (0.0, 1));
+        assert_eq!(fold_octave(47.5, 60), (-50.0, -1));
+    }
+
+    #[test]
+    fn in_tune_notes_are_perfect() {
+        let mut stage = stage(&[(0.0, 1.0, 60), (2.0, 1.0, 64)]);
+        // Everything is sung at 60: the first note is perfect, the second
+        // (target 64) is a miss.
+        sing(&mut stage, 0.0, 3.5, 60.0);
+        assert_eq!(stage.hit_notes, 1);
+        assert_eq!(stage.perfects, 1);
+        assert_eq!(judgment(&stage), "MISS");
+    }
+
+    #[test]
+    fn singing_an_octave_down_counts_as_octave_not_perfect() {
+        let mut stage = stage(&[(0.0, 1.0, 60)]);
+        sing(&mut stage, 0.0, 1.5, 48.0);
+        assert_eq!(stage.hit_notes, 1);
+        assert_eq!(stage.perfects, 0);
+        assert_eq!(judgment(&stage), "OCTAVE");
+    }
+
+    #[test]
+    fn seeking_back_and_singing_again_does_not_double_count() {
+        let mut stage = stage(&[(0.0, 1.0, 60), (2.0, 1.0, 60)]);
+        sing(&mut stage, 0.0, 3.5, 60.0);
+        assert_eq!(stage.hit_notes, 2);
+        let first_score = stage.score;
+
+        stage.seek(0.0);
+        assert_eq!(stage.hit_notes, 0);
+        assert_eq!(stage.score, 0);
+        assert_eq!(stage.finalize_ptr, 0);
+
+        sing(&mut stage, 0.0, 3.5, 60.0);
+        assert_eq!(stage.hit_notes, 2);
+        assert_eq!(stage.perfects, 2);
+        assert_eq!(stage.score, first_score);
+    }
+
+    #[test]
+    fn seeking_forward_skips_notes_without_judging_them() {
+        let mut stage = stage(&[(0.0, 1.0, 60), (2.0, 1.0, 60)]);
+        stage.seek(1.5);
+        assert_eq!(stage.finalize_ptr, 1);
+        sing(&mut stage, 1.5, 3.5, 60.0);
+        assert_eq!(stage.hit_notes, 1);
+        assert_eq!(stage.combo, 1);
+        assert_eq!(judgment(&stage), "PERFECT");
+    }
+
+    #[test]
+    fn seek_clamps_to_the_song() {
+        let mut stage = stage(&[(0.0, 1.0, 60)]);
+        stage.seek(-3.0);
+        assert_eq!(stage.time, 0.0);
+        stage.seek(1e9);
+        assert_eq!(stage.time, stage.duration);
+        assert_eq!(stage.finalize_ptr, 1);
+    }
+
+    #[test]
+    fn seek_is_ignored_while_a_result_is_showing() {
+        let mut stage = stage(&[(0.0, 1.0, 60)]);
+        sing(&mut stage, 0.0, 1.5, 60.0);
+        stage.time = 1.5;
+        stage.result = Some(ResultData {
+            accuracy: 100.0,
+            rank: 'S',
+            perfect: 1,
+            hit: 1,
+            combo: 1,
+            score: stage.score,
+            new_best: false,
+        });
+        stage.seek(0.0);
+        assert!(stage.result.is_some());
+        assert_eq!(stage.time, 1.5);
+        assert_eq!(stage.hit_notes, 1);
+    }
+
+    #[test]
+    fn octave_shift_transposes_notes_and_rescans_from_the_playhead() {
+        let mut stage = stage(&[(0.0, 1.0, 60), (2.0, 1.0, 60)]);
+        sing(&mut stage, 0.0, 1.5, 60.0);
+        stage.time = 1.5;
+        stage.set_octave_shift(1);
+        assert_eq!(stage.song.notes[0].midi, 72);
+        assert_eq!(stage.hit_notes, 0);
+        assert_eq!(stage.finalize_ptr, 1);
+        sing(&mut stage, 1.5, 3.5, 72.0);
+        assert_eq!(stage.perfects, 1);
     }
 }
