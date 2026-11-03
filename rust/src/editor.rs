@@ -8,8 +8,7 @@ use eframe::egui::{
     Stroke, StrokeKind, Ui, Vec2,
 };
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
 
 pub const VOCAL_BINS_PER_SECOND: f32 = 80.0;
@@ -306,9 +305,14 @@ impl Editor {
         self.status = "Draft saved. The song remains UNMAPPED.".into();
     }
 
+    /// Unsaved edits since the last draft save or submission.
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+
     pub fn save_draft(&mut self, root: &Path) -> Result<(), String> {
         if self.song.mapped {
-            return Ok(());
+            return Err("This song is already mapped. Use Submit Mapping to save edits.".into());
         }
         self.notes.sort_by(note_order);
         self.sync_words_to_song();
@@ -316,7 +320,9 @@ impl Editor {
         self.song.draft_notes = self.notes.clone();
         self.song.suggested_notes = self.suggestions.clone();
         self.song.mapped = false;
-        write_song(root, &self.song)
+        write_song(root, &self.song)?;
+        self.dirty = false;
+        Ok(())
     }
 
     pub fn submit(&mut self, root: &Path) -> Result<(), String> {
@@ -2911,9 +2917,8 @@ fn split_line_words(line: &LyricLine) -> Vec<(String, f64, f64)> {
 }
 
 fn write_song(root: &Path, song: &Song) -> Result<(), String> {
-    let path = PathBuf::from(root).join("assets/songs").join(&song.id).join("song.json");
-    let raw = serde_json::to_string_pretty(song).map_err(|error| error.to_string())?;
-    fs::write(&path, raw).map_err(|error| format!("Could not save {}: {error}", path.display()))
+    let path = root.join("assets/songs").join(&song.id).join("song.json");
+    crate::library::write_json_atomic(&path, song)
 }
 
 fn paint_icon_button(

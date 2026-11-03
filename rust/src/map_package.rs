@@ -215,8 +215,7 @@ impl MapPackage {
     }
 
     pub fn save(&self, path: &Path) -> Result<(), String> {
-        let raw = serde_json::to_string_pretty(self).map_err(|error| error.to_string())?;
-        fs::write(path, raw).map_err(|error| format!("Could not write {}: {error}", path.display()))
+        crate::library::write_json_atomic(path, self)
     }
 
     pub fn from_json(raw: &str) -> Result<Self, String> {

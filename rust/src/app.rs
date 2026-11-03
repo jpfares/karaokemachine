@@ -2283,6 +2283,17 @@ impl KaraokeMachineApp {
             let backing = song_audio_path(&self.root, &existing, "backing");
             if backing.exists() {
                 let mut song = existing.clone();
+                let backed_up = if has_hand_mapping(&song) {
+                    match backup_song_file(&dir) {
+                        Ok(backed_up) => backed_up,
+                        Err(error) => {
+                            self.toast(error, now);
+                            return;
+                        }
+                    }
+                } else {
+                    false
+                };
                 match map.save_cover(&dir) {
                     Ok(cover) => {
                         if cover.is_some() {
@@ -2306,7 +2317,11 @@ impl KaraokeMachineApp {
                 if let Some(index) = self.songs.iter().position(|song| song.id == existing.id) {
                     self.drawer_open = false;
                     self.open_song(index, now);
-                    self.toast("Map installed on the existing local audio.", now);
+                    if backed_up {
+                        self.toast("Map installed. Your previous mapping was kept as song.json.bak.", now);
+                    } else {
+                        self.toast("Map installed on the existing local audio.", now);
+                    }
                 } else {
                     self.toast("Map saved. Reload the library to see it.", now);
                 }
@@ -2314,6 +2329,11 @@ impl KaraokeMachineApp {
             }
         }
 
+        if self.upload.fetching() || self.upload.importing() {
+            // start_import would refuse silently; say why the map was not queued.
+            self.toast("Finish the current import before installing a map.", now);
+            return;
+        }
         let work = self.root.join(".work/map-cover");
         let cover = if let Err(error) = std::fs::create_dir_all(&work) {
             self.toast(format!("Could not prepare the map installer: {error}"), now);
@@ -2353,7 +2373,11 @@ impl KaraokeMachineApp {
         self.upload.message = "Map loaded. Downloading audio from the source link…".into();
         self.upload.open = true;
         self.upload.pending_map = Some(map);
-        self.start_import(now);
+        if !self.start_import(now) {
+            // The import did not start, so the map must not wait around to be
+            // applied to whatever the user imports next.
+            self.upload.pending_map = None;
+        }
     }
 
     fn export_editor_map(&mut self, now: f64) {
@@ -2492,31 +2516,40 @@ impl KaraokeMachineApp {
         }
         if finished {
             self.upload.import = None;
+            // Taken on every outcome: a map must never outlive its own import.
+            let pending_map = self.upload.pending_map.take();
             match result {
                 Some(Ok(id)) => {
                     self.upload.open = false;
-                    let pending_map = self.upload.pending_map.take();
                     if let Some(map) = pending_map {
                         let dir = self.root.join("assets/songs").join(&id);
-                        let result: Result<(), String> = (|| {
+                        let result: Result<bool, String> = (|| {
                             let path = dir.join("song.json");
                             let raw = std::fs::read_to_string(&path)
                                 .map_err(|error| format!("Could not read the imported song: {error}"))?;
                             let mut song: Song = serde_json::from_str(&raw)
                                 .map_err(|error| format!("Could not parse the imported song: {error}"))?;
+                            // The importer returns an existing folder untouched, so
+                            // a song mapped by hand can reach this point.
+                            let backed_up = has_hand_mapping(&song) && backup_song_file(&dir)?;
                             if let Some(cover) = map.save_cover(&dir)? {
                                 song.cover = Some(cover);
                             }
                             map.apply_to_song(&mut song)?;
-                            write_song_file(&dir, &song)
+                            write_song_file(&dir, &song)?;
+                            Ok(backed_up)
                         })();
                         match result {
-                            Ok(()) => {
+                            Ok(backed_up) => {
                                 self.reload_library(ctx, now);
                                 if let Some(index) = self.songs.iter().position(|song| song.id == id) {
                                     self.open_song(index, now);
                                     self.toast(
-                                        "Map installed. Audio was downloaded from its source link.",
+                                        if backed_up {
+                                            "Map installed. Your previous mapping was kept as song.json.bak."
+                                        } else {
+                                            "Map installed. Audio was downloaded from its source link."
+                                        },
                                         now,
                                     );
                                 } else {
@@ -2807,17 +2840,17 @@ impl KaraokeMachineApp {
         }));
     }
 
-    fn start_import(&mut self, now: f64) {
+    fn start_import(&mut self, now: f64) -> bool {
         if self.upload.fetching() || self.upload.importing() {
-            return;
+            return false;
         }
         if self.upload.url.trim().is_empty() {
             self.upload.message = "Paste a link first.".into();
-            return;
+            return false;
         }
         if self.upload.title.trim().is_empty() || self.upload.artist.trim().is_empty() {
             self.upload.message = "Title and artist are required.".into();
-            return;
+            return false;
         }
         if self.upload.audio_url.trim().is_empty()
             && self.upload.url.to_lowercase().contains("spotify.com")
@@ -2825,12 +2858,12 @@ impl KaraokeMachineApp {
             self.upload.message =
                 "Spotify needs Fetch Details first so KaraokeMachine can match a public audio source."
                     .into();
-            return;
+            return false;
         }
         let script = self.root.join("dist-tools/import-song.js");
         if !script.exists() {
             self.upload.message = "Import tools are not built. Run `npm install && npm run assets` first.".into();
-            return;
+            return false;
         }
         let meta = serde_json::json!({
             "audioUrl": self.upload.audio_url,
@@ -2846,19 +2879,19 @@ impl KaraokeMachineApp {
         let work = self.root.join(".work");
         if let Err(error) = std::fs::create_dir_all(&work) {
             self.upload.message = format!("Could not create the work directory: {error}");
-            return;
+            return false;
         }
         let meta_path = work.join("editor-import.json");
         if let Err(error) = std::fs::write(&meta_path, serde_json::to_string_pretty(&meta).unwrap_or_default()) {
             self.upload.message = format!("Could not write import metadata: {error}");
-            return;
+            return false;
         }
         let log_path = work.join("editor-import.log");
         let log = match std::fs::File::create(&log_path) {
             Ok(file) => file,
             Err(error) => {
                 self.upload.message = format!("Could not open the import log: {error}");
-                return;
+                return false;
             }
         };
         let root = self.root.clone();
@@ -2928,6 +2961,7 @@ impl KaraokeMachineApp {
                 }
             }
         }));
+        true
     }
 
     fn draw_upload(&mut self, ctx: &egui::Context, now: f64) {
@@ -3665,17 +3699,40 @@ impl eframe::App for KaraokeMachineApp {
         match editor_event {
             EditorEvent::None => {}
             EditorEvent::Back => {
+                let mut leaving = true;
                 if let Some(mut editor) = self.editor.take() {
-                    editor.pause_audio(&self.audio);
-                    if let Err(error) = editor.save_draft(&self.root) {
-                        self.toast(error, now);
+                    if !editor.song.mapped {
+                        match editor.save_draft(&self.root) {
+                            Ok(()) => self.toast("Draft saved. The song remains UNMAPPED.", now),
+                            Err(error) => self.toast(error, now),
+                        }
+                    } else if editor.is_dirty() {
+                        // A mapped song only persists through Submit. Save the
+                        // edits that way, or stay in the editor if they cannot
+                        // be submitted yet; never discard them.
+                        match editor.submit(&self.root) {
+                            Ok(()) => self.toast("Mapping updated.", now),
+                            Err(error) => {
+                                leaving = false;
+                                self.toast(
+                                    format!("{error} Fix that or undo your edits before leaving."),
+                                    now,
+                                );
+                            }
+                        }
+                    }
+                    if leaving {
+                        editor.pause_audio(&self.audio);
+                    } else {
+                        self.editor = Some(editor);
                     }
                 }
-                self.audio.as_mut().map(|audio| audio.pause());
-                self.settings_open = false;
-                self.reload_library(ctx, now);
-                self.drawer_open = true;
-                self.toast("Draft saved. The song remains UNMAPPED.", now);
+                if leaving {
+                    self.audio.as_mut().map(|audio| audio.pause());
+                    self.settings_open = false;
+                    self.reload_library(ctx, now);
+                    self.drawer_open = true;
+                }
             }
             EditorEvent::ExportMap => self.export_editor_map(now),
             EditorEvent::SaveDraft => {
@@ -4012,10 +4069,12 @@ fn load_data_uri_texture(
 }
 
 fn write_song_file(dir: &Path, song: &Song) -> Result<(), String> {
-    let path = dir.join("song.json");
-    let raw = serde_json::to_string_pretty(song).map_err(|error| error.to_string())?;
-    std::fs::write(&path, raw)
-        .map_err(|error| format!("Could not write {}: {error}", path.display()))
+    write_json_atomic(&dir.join("song.json"), song)
+}
+
+/// Whether a song folder holds work a map install would destroy.
+fn has_hand_mapping(song: &Song) -> bool {
+    song.mapped || !song.draft_notes.is_empty()
 }
 
 fn run_song_info(root: &Path, url: &str) -> Result<TrackInfo, String> {
