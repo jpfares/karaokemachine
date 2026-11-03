@@ -1,4 +1,5 @@
 use crate::audio::AudioEngine;
+use crate::jobs::Job;
 use crate::model::{format_time, note_name, pitch_color, CustomWord, LyricLine, Note, PlacedWord, Song};
 use crate::theme::{alpha, BG, GOLD, INK, MINT, MUTED, MUTED2, PANEL, PANEL2, PINK};
 use crate::widgets::{button, toggle};
@@ -7,7 +8,6 @@ use eframe::egui::{
     Stroke, StrokeKind, Ui, Vec2,
 };
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::mpsc::{self, Receiver};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -125,8 +125,7 @@ pub struct Editor {
     notes: Vec<Note>,
     vocal_peaks: Vec<f32>,
     raw_pitch: Vec<Option<f32>>,
-    pitch_rx: Option<Receiver<Vec<Option<f32>>>>,
-    pitch_analyzing: bool,
+    pitch_job: Option<Job<Vec<Option<f32>>>>,
     words: Vec<PlacedWord>,
     custom_words: Vec<CustomWord>,
     word_bank: Vec<WordToken>,
@@ -236,8 +235,7 @@ impl Editor {
             notes: initial_notes,
             vocal_peaks: Vec::new(),
             raw_pitch: Vec::new(),
-            pitch_rx: None,
-            pitch_analyzing: false,
+            pitch_job: None,
             words,
             custom_words,
             word_bank,
@@ -283,29 +281,18 @@ impl Editor {
         self.vocal_peaks = peaks;
     }
 
-    pub fn set_pitch_track_rx(&mut self, rx: Receiver<Vec<Option<f32>>>) {
-        self.pitch_rx = Some(rx);
-        self.pitch_analyzing = true;
+    pub fn set_pitch_job(&mut self, job: Job<Vec<Option<f32>>>) {
+        self.pitch_job = Some(job);
     }
 
     fn poll_pitch_track(&mut self) {
-        let mut received = None;
-        let mut disconnected = false;
-        if let Some(rx) = &self.pitch_rx {
-            match rx.try_recv() {
-                Ok(track) => received = Some(track),
-                Err(mpsc::TryRecvError::Empty) => {}
-                Err(mpsc::TryRecvError::Disconnected) => disconnected = true,
+        let result = self.pitch_job.as_mut().and_then(Job::poll);
+        if let Some(result) = result {
+            self.pitch_job = None;
+            // A failed analysis simply leaves the raw pitch lane empty.
+            if let Ok(track) = result {
+                self.raw_pitch = track;
             }
-        }
-        if disconnected {
-            self.pitch_rx = None;
-            self.pitch_analyzing = false;
-        }
-        if let Some(track) = received {
-            self.pitch_rx = None;
-            self.pitch_analyzing = false;
-            self.raw_pitch = track;
         }
     }
 
@@ -1547,13 +1534,13 @@ impl Editor {
             painter.text(
                 Pos2::new(pitch_area.left() + 8.0, pitch_area.center().y),
                 Align2::LEFT_CENTER,
-                if self.pitch_analyzing {
+                if self.pitch_job.is_some() {
                     "Analyzing raw vocal pitch…"
                 } else {
                     "Raw pitch unavailable"
                 },
                 FontId::proportional(9.0),
-                if self.pitch_analyzing { GOLD } else { MUTED2 },
+                if self.pitch_job.is_some() { GOLD } else { MUTED2 },
             );
         } else {
             // The raw pitch overview is independent of the piano-rail scroll.
@@ -1636,7 +1623,7 @@ impl Editor {
                     format!("{} {:+.0}¢", note_name(rounded as i32), cents)
                 })
                 .unwrap_or_else(|| {
-                    if self.pitch_analyzing {
+                    if self.pitch_job.is_some() {
                         "analyzing…".into()
                     } else {
                         "—".into()
@@ -2794,14 +2781,11 @@ fn migrate_legacy_ribbons(notes: &mut [Note], next_ribbon_id: &mut u32) {
 /// Analyze raw vocal pitch in a worker thread. The result is deliberately not
 /// smoothed or reduced to note groups: the mapper decides how to simplify it.
 pub fn spawn_raw_pitch_track(
+    ctx: &egui::Context,
     mono: Vec<f32>,
     bins_per_second: f32,
-) -> Receiver<Vec<Option<f32>>> {
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let _ = tx.send(analyze_raw_pitch(&mono, bins_per_second));
-    });
-    rx
+) -> Job<Vec<Option<f32>>> {
+    Job::run("The pitch analysis", ctx, move || Ok(analyze_raw_pitch(&mono, bins_per_second)))
 }
 
 fn analyze_raw_pitch(mono: &[f32], bins_per_second: f32) -> Vec<Option<f32>> {

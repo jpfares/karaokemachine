@@ -1,5 +1,6 @@
 use crate::audio::{input_device_names, AudioEngine, Microphone};
 use crate::editor::{spawn_raw_pitch_track, Editor, EditorEvent, VOCAL_BINS_PER_SECOND, RAW_PITCH_SAMPLE_RATE};
+use crate::jobs::{Job, StreamJob};
 use crate::library::*;
 use crate::map_package::{MapIndex, MapIndexEntry, MapPackage};
 use base64::Engine;
@@ -16,7 +17,6 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
 const DESIGN_WIDTH: f32 = 1600.0;
@@ -563,8 +563,6 @@ struct UploadState {
     lyrics_synced: bool,
     duration: f64,
     info_loaded: bool,
-    fetching: bool,
-    importing: bool,
     progress: f32,
     stage: String,
     message: String,
@@ -575,16 +573,31 @@ struct UploadState {
     cover_preview_path: Option<PathBuf>,
     cover_preview_tex: Option<TextureHandle>,
     cover_preview_loaded: Option<PathBuf>,
-    cover_fetching: bool,
-    cover_fetch_rx: Option<Receiver<Result<PathBuf, String>>>,
+    cover_fetch: Option<Job<PathBuf>>,
     cover_message: String,
     cover_error: bool,
     pending_map: Option<MapPackage>,
-    fetch_rx: Option<Receiver<Result<TrackInfo, String>>>,
-    import_rx: Option<Receiver<ImportMessage>>,
+    fetch: Option<Job<TrackInfo>>,
+    import: Option<StreamJob<ImportMessage>>,
+}
+
+impl UploadState {
+    fn fetching(&self) -> bool {
+        self.fetch.is_some()
+    }
+
+    fn importing(&self) -> bool {
+        self.import.is_some()
+    }
+
+    fn cover_fetching(&self) -> bool {
+        self.cover_fetch.is_some()
+    }
 }
 
 pub struct KaraokeMachineApp {
+    /// Cloned into every background job so a finished job can repaint.
+    ctx: egui::Context,
     root: PathBuf,
     songs: Vec<Song>,
     albums: Vec<Album>,
@@ -611,12 +624,11 @@ pub struct KaraokeMachineApp {
     range_note_frames: u32,
     upload: UploadState,
     map_index: Vec<MapIndexEntry>,
-    map_index_rx: Option<Receiver<Result<MapIndex, String>>>,
-    map_index_loading: bool,
+    map_index_job: Option<Job<MapIndex>>,
     map_index_loaded: bool,
     map_covers: HashMap<String, TextureHandle>,
-    map_download_rx: Option<Receiver<Result<MapPackage, String>>>,
-    map_downloading: Option<String>,
+    /// The id of the map being downloaded, and the download itself.
+    map_download: Option<(String, Job<MapPackage>)>,
     stage: Option<Stage>,
     editor: Option<Editor>,
     songlist: Vec<String>,
@@ -676,6 +688,7 @@ impl KaraokeMachineApp {
             songs.iter().position(|s| s.id.to_lowercase() == needle || s.title.to_lowercase().contains(&needle))
         });
         let mut app = Self {
+            ctx: cc.egui_ctx.clone(),
             root,
             songs,
             albums,
@@ -708,12 +721,10 @@ impl KaraokeMachineApp {
             range_note_frames: 0,
             upload: UploadState::default(),
             map_index: Vec::new(),
-            map_index_rx: None,
-            map_index_loading: false,
+            map_index_job: None,
             map_index_loaded: false,
             map_covers: HashMap::new(),
-            map_download_rx: None,
-            map_downloading: None,
+            map_download: None,
             stage: None,
             editor: None,
             songlist,
@@ -966,7 +977,8 @@ impl KaraokeMachineApp {
                     editor.set_vocal_peaks(audio.vocal_peaks(VOCAL_BINS_PER_SECOND));
                     let mono = audio.vocal_mono(RAW_PITCH_SAMPLE_RATE);
                     if !mono.is_empty() {
-                        editor.set_pitch_track_rx(spawn_raw_pitch_track(
+                        editor.set_pitch_job(spawn_raw_pitch_track(
+                            &self.ctx,
                             mono,
                             VOCAL_BINS_PER_SECOND,
                         ));
@@ -1193,9 +1205,7 @@ impl KaraokeMachineApp {
                 self.drawer_view = DrawerViewRust::Maps;
                 self.selected_album = None;
                 self.drawer_scroll = 0.0;
-                if !self.map_index_loading {
-                    self.start_map_index_fetch();
-                }
+                self.start_map_index_fetch();
             }
             Action::InstallMap => self.install_map_file(now, ctx),
             Action::InstallRemoteMap(index) => {
@@ -1301,7 +1311,7 @@ impl KaraokeMachineApp {
             return;
         }
         if self.upload.open {
-            if ctx.input(|i| i.key_pressed(egui::Key::Escape)) && !self.upload.importing {
+            if ctx.input(|i| i.key_pressed(egui::Key::Escape)) && !self.upload.importing() {
                 self.upload.open = false;
             }
             return;
@@ -2055,7 +2065,7 @@ impl KaraokeMachineApp {
                 Pos2::new(row.right() - 82.0, row.top() + 17.0),
                 Vec2::new(76.0, 28.0),
             );
-            if self.map_downloading.as_deref() == Some(entry.id.as_str()) {
+            if self.map_download.as_ref().map(|(id, _)| id.as_str()) == Some(entry.id.as_str()) {
                 let _ = pill_toggle(ui, install, "...", false);
             } else {
                 if pill_button(ui, install, "INSTALL", true) {
@@ -2183,52 +2193,34 @@ impl KaraokeMachineApp {
 
 
     fn start_map_index_fetch(&mut self) {
-        if self.map_index_loading {
+        if self.map_index_job.is_some() {
             return;
         }
-        self.map_index_loading = true;
-        let (tx, rx) = mpsc::channel();
-        self.map_index_rx = Some(rx);
-        std::thread::spawn(move || {
+        self.map_index_job = Some(Job::run("The map browser", &self.ctx, || {
             let base = std::env::var("KARAOKEMACHINE_MAPS_BASE_URL")
                 .unwrap_or_else(|_| MAPS_BASE_URL.to_string());
-            let result = http_get_text(&format!("{base}index.json"))
-                .and_then(|raw| serde_json::from_str::<MapIndex>(&raw).map_err(|error| format!("Could not parse map index: {error}")));
-            let _ = tx.send(result);
-        });
+            http_get_text(&format!("{base}index.json"))
+                .and_then(|raw| serde_json::from_str::<MapIndex>(&raw).map_err(|error| format!("Could not parse map index: {error}")))
+        }));
     }
 
     fn start_remote_map_install(&mut self, entry: MapIndexEntry) {
-        if self.map_downloading.is_some() || entry.file.is_empty() {
+        if self.map_download.is_some() || entry.file.is_empty() {
             return;
         }
         let base = std::env::var("KARAOKEMACHINE_MAPS_BASE_URL")
             .unwrap_or_else(|_| MAPS_BASE_URL.to_string());
         let url = format!("{base}{}", encode_path_segment(&entry.file));
-        let id = entry.id.clone();
-        self.map_downloading = Some(id);
-        let (tx, rx) = mpsc::channel();
-        self.map_download_rx = Some(rx);
-        std::thread::spawn(move || {
-            let result = http_get_text(&url).and_then(|raw| MapPackage::from_json(&raw));
-            let _ = tx.send(result);
+        let job = Job::run("The map download", &self.ctx, move || {
+            http_get_text(&url).and_then(|raw| MapPackage::from_json(&raw))
         });
+        self.map_download = Some((entry.id.clone(), job));
     }
 
     fn poll_maps(&mut self, ctx: &egui::Context, now: f64) {
-        let mut index_result: Option<Result<MapIndex, String>> = None;
-        if let Some(rx) = &self.map_index_rx {
-            match rx.try_recv() {
-                Ok(result) => index_result = Some(result),
-                Err(mpsc::TryRecvError::Disconnected) => {
-                    index_result = Some(Err("The map browser stopped unexpectedly.".into()));
-                }
-                Err(mpsc::TryRecvError::Empty) => {}
-            }
-        }
+        let index_result = self.map_index_job.as_mut().and_then(Job::poll);
         if let Some(result) = index_result {
-            self.map_index_rx = None;
-            self.map_index_loading = false;
+            self.map_index_job = None;
             self.map_index_loaded = true;
             match result {
                 Ok(index) => {
@@ -2252,19 +2244,9 @@ impl KaraokeMachineApp {
             }
         }
 
-        let mut download_result: Option<Result<MapPackage, String>> = None;
-        if let Some(rx) = &self.map_download_rx {
-            match rx.try_recv() {
-                Ok(result) => download_result = Some(result),
-                Err(mpsc::TryRecvError::Disconnected) => {
-                    download_result = Some(Err("The map download stopped unexpectedly.".into()));
-                }
-                Err(mpsc::TryRecvError::Empty) => {}
-            }
-        }
+        let download_result = self.map_download.as_mut().and_then(|(_, job)| job.poll());
         if let Some(result) = download_result {
-            self.map_download_rx = None;
-            self.map_downloading = None;
+            self.map_download = None;
             match result {
                 Ok(map) => self.install_map(map, now, ctx),
                 Err(error) => self.toast(error, now),
@@ -2410,19 +2392,9 @@ impl KaraokeMachineApp {
     }
 
     fn poll_upload(&mut self, ctx: &egui::Context, now: f64) {
-        let mut cover_result: Option<Result<PathBuf, String>> = None;
-        if let Some(rx) = &self.upload.cover_fetch_rx {
-            match rx.try_recv() {
-                Ok(result) => cover_result = Some(result),
-                Err(mpsc::TryRecvError::Disconnected) => {
-                    cover_result = Some(Err("The cover preview helper stopped unexpectedly.".into()));
-                }
-                Err(mpsc::TryRecvError::Empty) => {}
-            }
-        }
+        let cover_result = self.upload.cover_fetch.as_mut().and_then(Job::poll);
         if let Some(result) = cover_result {
-            self.upload.cover_fetch_rx = None;
-            self.upload.cover_fetching = false;
+            self.upload.cover_fetch = None;
             match result {
                 Ok(path) => {
                     self.upload.cover = path.to_string_lossy().to_string();
@@ -2438,20 +2410,10 @@ impl KaraokeMachineApp {
             }
         }
 
-        let mut fetched: Option<Result<TrackInfo, String>> = None;
+        let fetched = self.upload.fetch.as_mut().and_then(Job::poll);
         let mut start_cover: Option<String> = None;
-        if let Some(rx) = &self.upload.fetch_rx {
-            match rx.try_recv() {
-                Ok(result) => fetched = Some(result),
-                Err(mpsc::TryRecvError::Disconnected) => {
-                    fetched = Some(Err("The metadata helper stopped unexpectedly.".into()));
-                }
-                Err(mpsc::TryRecvError::Empty) => {}
-            }
-        }
         if let Some(result) = fetched {
-            self.upload.fetch_rx = None;
-            self.upload.fetching = false;
+            self.upload.fetch = None;
             match result {
                 Ok(info) => {
                     if let Some(error) = info.error {
@@ -2502,16 +2464,10 @@ impl KaraokeMachineApp {
             self.start_cover_fetch(url);
         }
 
-        let mut messages = Vec::new();
-        if let Some(rx) = &self.upload.import_rx {
-            loop {
-                match rx.try_recv() {
-                    Ok(message) => messages.push(message),
-                    Err(mpsc::TryRecvError::Empty) => break,
-                    Err(mpsc::TryRecvError::Disconnected) => break,
-                }
-            }
-        }
+        let (messages, ended) = match self.upload.import.as_mut().map(StreamJob::drain) {
+            Some(drained) => (drained.messages, drained.ended),
+            None => (Vec::new(), false),
+        };
         let mut finished = false;
         let mut result: Option<Result<String, String>> = None;
         for message in messages {
@@ -2527,9 +2483,19 @@ impl KaraokeMachineApp {
                 }
             }
         }
+        if ended && !finished {
+            // The worker exited without reporting. Treat it as a failed import
+            // rather than leaving the dialog stuck on "importing".
+            finished = true;
+            result = Some(Err(self
+                .upload
+                .import
+                .as_ref()
+                .map(StreamJob::death_notice)
+                .unwrap_or_default()));
+        }
         if finished {
-            self.upload.import_rx = None;
-            self.upload.importing = false;
+            self.upload.import = None;
             match result {
                 Some(Ok(id)) => {
                     self.upload.open = false;
@@ -2605,8 +2571,7 @@ impl KaraokeMachineApp {
         self.upload.cover_preview_path = Some(path);
         self.upload.cover_preview_loaded = None;
         self.upload.cover_preview_tex = None;
-        self.upload.cover_fetching = false;
-        self.upload.cover_fetch_rx = None;
+        self.upload.cover_fetch = None;
         self.upload.cover_error = false;
         self.upload.cover_message = message.into();
     }
@@ -2621,7 +2586,7 @@ impl KaraokeMachineApp {
             self.set_cover_from_path(PathBuf::from(&url), "Cover image selected.");
             return;
         }
-        if self.upload.cover_fetching {
+        if self.upload.cover_fetching() {
             return;
         }
         let script = self.root.join("dist-tools/fetch-cover.js");
@@ -2639,15 +2604,11 @@ impl KaraokeMachineApp {
         }
         let out = work.join("upload-cover-preview.bin");
         let root = self.root.clone();
-        let (tx, rx) = mpsc::channel();
-        self.upload.cover_fetch_rx = Some(rx);
-        self.upload.cover_fetching = true;
         self.upload.cover_error = false;
         self.upload.cover_message = "Downloading cover preview…".into();
-        std::thread::spawn(move || {
-            let result = run_cover_download(&root, &url, &out);
-            let _ = tx.send(result);
-        });
+        self.upload.cover_fetch = Some(Job::run("The cover preview helper", &self.ctx, move || {
+            run_cover_download(&root, &url, &out)
+        }));
     }
 
     fn pick_cover_file(&mut self) {
@@ -2721,7 +2682,7 @@ impl KaraokeMachineApp {
                         preview,
                         self.upload.cover_preview_tex.as_ref(),
                         !self.upload.cover.trim().is_empty(),
-                        self.upload.cover_fetching,
+                        self.upload.cover_fetching(),
                     );
                     if !self.upload.cover_message.is_empty() {
                         ui.add_space(4.0);
@@ -2753,7 +2714,7 @@ impl KaraokeMachineApp {
                         }
                         if ui
                             .add_enabled(
-                                !self.upload.cover_fetching
+                                !self.upload.cover_fetching()
                                     && !self.upload.cover_link.trim().is_empty(),
                                 egui::Button::new("LOAD LINK"),
                             )
@@ -2820,19 +2781,17 @@ impl KaraokeMachineApp {
             self.upload.cover_preview_tex = None;
             self.upload.cover_preview_loaded = None;
             self.upload.cover_link.clear();
-            self.upload.cover_fetching = false;
-            self.upload.cover_fetch_rx = None;
+            self.upload.cover_fetch = None;
             self.upload.cover_message = "Cover removed.".into();
             self.upload.cover_error = false;
         }
     }
 
     fn start_fetch(&mut self, now: f64) {
-        if self.upload.fetching || self.upload.importing {
+        if self.upload.fetching() || self.upload.importing() {
             return;
         }
-        self.upload.cover_fetch_rx = None;
-        self.upload.cover_fetching = false;
+        self.upload.cover_fetch = None;
         let url = self.upload.url.trim().to_string();
         if url.is_empty() {
             self.upload.message = "Paste a YouTube, Spotify or SoundCloud link first.".into();
@@ -2844,20 +2803,16 @@ impl KaraokeMachineApp {
             return;
         }
         let root = self.root.clone();
-        let (tx, rx) = mpsc::channel();
-        self.upload.fetch_rx = Some(rx);
-        self.upload.fetching = true;
         self.upload.info_loaded = false;
         self.upload.message = "Reading the link and looking up lyrics…".into();
         let _ = now;
-        std::thread::spawn(move || {
-            let result = run_song_info(&root, &url);
-            let _ = tx.send(result);
-        });
+        self.upload.fetch = Some(Job::run("The metadata helper", &self.ctx, move || {
+            run_song_info(&root, &url)
+        }));
     }
 
     fn start_import(&mut self, now: f64) {
-        if self.upload.fetching || self.upload.importing {
+        if self.upload.fetching() || self.upload.importing() {
             return;
         }
         if self.upload.url.trim().is_empty() {
@@ -2912,14 +2867,11 @@ impl KaraokeMachineApp {
         };
         let root = self.root.clone();
         let url = self.upload.url.trim().to_string();
-        let (tx, rx) = mpsc::channel();
-        self.upload.import_rx = Some(rx);
-        self.upload.importing = true;
         self.upload.progress = 0.0;
         self.upload.stage = "Queued".into();
         self.upload.message = "Downloading and separating the audio. This can take several minutes.".into();
         let _ = now;
-        std::thread::spawn(move || {
+        self.upload.import = Some(StreamJob::run("The importer", &self.ctx, move |sender| {
             let child = Command::new("node")
                 .arg(&script)
                 .arg("--url")
@@ -2933,7 +2885,7 @@ impl KaraokeMachineApp {
             let mut child = match child {
                 Ok(child) => child,
                 Err(error) => {
-                    let _ = tx.send(ImportMessage::Done(Err(format!("Could not start Node: {error}"))));
+                    sender.send(ImportMessage::Done(Err(format!("Could not start Node: {error}"))));
                     return;
                 }
             };
@@ -2946,7 +2898,7 @@ impl KaraokeMachineApp {
                         if let Some(percent) = parts.first().and_then(|value| value.parse::<f32>().ok()) {
                             let stage = parts.get(1).copied().unwrap_or("Working");
                             let message = parts.get(2).copied().unwrap_or(stage);
-                            let _ = tx.send(ImportMessage::Progress(
+                            sender.send(ImportMessage::Progress(
                                 percent,
                                 stage.to_string(),
                                 message.to_string(),
@@ -2963,9 +2915,9 @@ impl KaraokeMachineApp {
             match status {
                 Ok(status) if status.success() => {
                     if let Some(id) = result_id {
-                        let _ = tx.send(ImportMessage::Done(Ok(id)));
+                        sender.send(ImportMessage::Done(Ok(id)));
                     } else {
-                        let _ = tx.send(ImportMessage::Done(Err(
+                        sender.send(ImportMessage::Done(Err(
                             "Import finished but did not report a song id.".into()
                         )));
                     }
@@ -2976,10 +2928,10 @@ impl KaraokeMachineApp {
                     let message = error_message
                         .or_else(|| if tail.trim().is_empty() { None } else { Some(tail) })
                         .unwrap_or_else(|| "The import failed. Check yt-dlp, ffmpeg and Demucs.".into());
-                    let _ = tx.send(ImportMessage::Done(Err(message)));
+                    sender.send(ImportMessage::Done(Err(message)));
                 }
             }
-        });
+        }));
     }
 
     fn draw_upload(&mut self, ctx: &egui::Context, now: f64) {
@@ -3036,8 +2988,8 @@ impl KaraokeMachineApp {
                                     false,
                                 );
                             }
-                            let can_fetch = !upload.fetching
-                                && !upload.importing
+                            let can_fetch = !upload.fetching()
+                                && !upload.importing()
                                 && !upload.url.trim().is_empty();
                             if can_fetch
                                 && (link.has_focus() || link.lost_focus())
@@ -3045,7 +2997,7 @@ impl KaraokeMachineApp {
                             {
                                 fetch_clicked = true;
                             }
-                            let fetch_label = if upload.fetching {
+                            let fetch_label = if upload.fetching() {
                                 "FETCHING…"
                             } else if upload.info_loaded {
                                 "REFETCH"
@@ -3054,7 +3006,7 @@ impl KaraokeMachineApp {
                             };
                             if ui
                                 .add_enabled(
-                                    !upload.fetching && !upload.importing,
+                                    !upload.fetching() && !upload.importing(),
                                     egui::Button::new(fetch_label),
                                 )
                                 .clicked()
@@ -3062,7 +3014,7 @@ impl KaraokeMachineApp {
                                 fetch_clicked = true;
                             }
                         });
-                        if upload.fetching {
+                        if upload.fetching() {
                             ui.horizontal(|ui| {
                                 ui.spinner();
                                 ui.label(
@@ -3252,7 +3204,7 @@ impl KaraokeMachineApp {
                         ui.add_space(10.0);
                         ui.horizontal(|ui| {
                             ui.label(RichText::new("COVER ART").monospace().size(8.0).color(MUTED2));
-                            if upload.cover_fetching {
+                            if upload.cover_fetching() {
                                 ui.spinner();
                                 ui.label(RichText::new("Loading preview…").size(10.0).color(GOLD));
                             } else {
@@ -3272,7 +3224,7 @@ impl KaraokeMachineApp {
                             cover_rect,
                             upload.cover_preview_tex.as_ref(),
                             !upload.cover.trim().is_empty(),
-                            upload.cover_fetching,
+                            upload.cover_fetching(),
                         );
                         if cover_response.clicked() {
                             upload.cover_popup_open = true;
@@ -3323,7 +3275,7 @@ impl KaraokeMachineApp {
                     });
                     ui.add_space(6.0);
                     ui.separator();
-                    if upload.importing {
+                    if upload.importing() {
                         ui.add(
                             egui::ProgressBar::new(upload.progress / 100.0)
                                 .show_percentage()
@@ -3358,7 +3310,7 @@ impl KaraokeMachineApp {
                         );
                     }
                 });
-            if !open && !upload.importing {
+            if !open && !upload.importing() {
                 upload.open = false;
             }
         }
