@@ -372,14 +372,10 @@ impl KaraokeMachineApp {
         self.upload.album = map.album.clone().unwrap_or_default();
         self.upload.release_date = map.release_date.clone().unwrap_or_default();
         self.upload.lyrics = lyrics;
-        self.upload.cover = cover
-            .as_ref()
-            .map(|path| path.to_string_lossy().to_string())
-            .unwrap_or_default();
-        self.upload.cover_preview_path = cover;
-        self.upload.cover_preview_loaded = None;
-        self.upload.cover_preview_tex = None;
-        self.upload.cover_error = false;
+        match cover {
+            Some(path) => self.upload.cover.set_from_path(path, "Cover art from the map."),
+            None => self.upload.cover.reset(),
+        }
         self.upload.info_loaded = true;
         self.upload.message = "Map loaded. Downloading audio from the source link…".into();
         self.upload.open = true;

@@ -1,3 +1,4 @@
+mod cover;
 mod lobby;
 mod maps;
 mod settings;
@@ -232,7 +233,7 @@ impl KaraokeMachineApp {
         }
         if setting_env("COVER_POPUP").is_some() {
             app.upload.open = true;
-            app.upload.cover_popup_open = true;
+            app.upload.cover.popup_open = true;
         }
         match setting_env("DRAWER").as_deref() {
             Some("imports") => {

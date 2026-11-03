@@ -232,12 +232,22 @@ or place licensed audio in your local library.
 ```text
 rust/
   src/main.rs          native entry point
-  src/app.rs           library, singing stage, settings, upload form
+  src/app.rs           app state, actions, keys and the frame loop
+  src/app/stage.rs     singing stage: scoring, pitch lanes, results
+  src/app/lobby.rs     lobby and the library drawer
+  src/app/maps.rs      community map browser and map installs
+  src/app/upload.rs    upload dialog, metadata fetch, import job
+  src/app/cover.rs     cover-art picker inside the upload dialog
+  src/app/settings.rs  settings window and vocal-range test
   src/editor.rs        manual level editor, word decorations, ribbons, submission gate
   src/audio.rs         cpal output/mic, symphonia decoding, varispeed playback
   src/pitch.rs         native YIN pitch detector
-  src/library.rs       song scan, albums, settings, scores
+  src/jobs.rs          background jobs polled by the UI
+  src/library.rs       song scan, albums, settings, scores, atomic JSON writes
+  src/map_package.rs   shareable map packages (no audio)
   src/model.rs         songs, notes, ribbons, placed words, settings
+  src/theme.rs         colour palette
+  src/widgets.rs       painter-drawn buttons and toggles
 tools/
   analyze_vocals.py    suggested-melody extraction
   clean_charts.py      legacy suggestion cleanup
