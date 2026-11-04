@@ -33,3 +33,16 @@ pub const LINE: Color32 = Color32::from_rgba_premultiplied(255, 255, 255, 22);
 pub fn alpha(color: Color32, a: u8) -> Color32 {
     Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), a)
 }
+
+/// Colour for a results rank, best to worst, on the stage's own ladder
+/// (MINT is a hit, GOLD a near hit). Never OCTAVE_BLUE or PINK: those mean
+/// an octave slip and a miss, and PINK also marks unmapped songs.
+pub fn rank_colour(rank: char) -> Color32 {
+    match rank {
+        'S' => MINT,
+        'A' => GOLD,
+        'B' => INK,
+        'C' => MUTED,
+        _ => MUTED2,
+    }
+}

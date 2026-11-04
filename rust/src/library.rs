@@ -343,13 +343,22 @@ fn save_config_file(name: &str, value: &impl Serialize) {
     }
 }
 
-pub fn save_score(scores: &mut Scores, song_id: &str, record: ScoreRecord) -> bool {
+/// Keep `record` when it beats the stored take for `song_id` (see
+/// `ScoreRecord::beats`). Returns whether it did.
+pub fn record_best(scores: &mut Scores, song_id: &str, record: ScoreRecord) -> bool {
     let better = scores
         .get(song_id)
-        .map(|current| record.score > current.score)
+        .map(|current| record.beats(current))
         .unwrap_or(true);
     if better {
         scores.insert(song_id.to_string(), record);
+    }
+    better
+}
+
+pub fn save_score(scores: &mut Scores, song_id: &str, record: ScoreRecord) -> bool {
+    let better = record_best(scores, song_id, record);
+    if better {
         save_scores(scores);
     }
     better
@@ -383,6 +392,26 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).expect("scratch dir");
         dir
+    }
+
+    #[test]
+    fn a_more_accurate_take_replaces_a_higher_scoring_one() {
+        let mut scores = Scores::new();
+        let long_combos = ScoreRecord {
+            score: 5000,
+            accuracy: 78.0,
+            combo: 40,
+        };
+        let cleaner = ScoreRecord {
+            score: 4500,
+            accuracy: 85.0,
+            combo: 9,
+        };
+        assert!(record_best(&mut scores, "song", long_combos.clone()));
+        assert!(record_best(&mut scores, "song", cleaner.clone()));
+        assert_eq!(scores["song"].accuracy, 85.0);
+        assert!(!record_best(&mut scores, "song", long_combos));
+        assert_eq!(scores["song"].score, cleaner.score);
     }
 
     #[test]

@@ -403,6 +403,10 @@ pub struct Settings {
     pub vocal_high: Option<i32>,
     #[serde(default)]
     pub octave_shift: i32,
+    /// Id of the last song opened on the stage, for the home screen's
+    /// "continue" card.
+    #[serde(default)]
+    pub last_song: Option<String>,
 }
 
 fn default_input_gain() -> f32 {
@@ -437,6 +441,7 @@ impl Default for Settings {
             vocal_low: None,
             vocal_high: None,
             octave_shift: 0,
+            last_song: None,
         }
     }
 }
@@ -448,7 +453,47 @@ pub struct ScoreRecord {
     pub combo: u32,
 }
 
+impl ScoreRecord {
+    /// Accuracy first, then score: the rank letter is what singers chase,
+    /// and score alone would let a short scale outrank a full song.
+    pub fn beats(&self, other: &ScoreRecord) -> bool {
+        match self.accuracy.partial_cmp(&other.accuracy) {
+            Some(std::cmp::Ordering::Greater) => true,
+            Some(std::cmp::Ordering::Equal) => self.score > other.score,
+            _ => false,
+        }
+    }
+}
+
 pub type Scores = BTreeMap<String, ScoreRecord>;
+
+/// Accuracy for display next to a rank letter or a "+N% TO A" nudge. Floored,
+/// never rounded, so 91.6% can't read "92%" beside an A.
+pub fn accuracy_label(accuracy: f32) -> String {
+    format!("{}%", accuracy.floor())
+}
+
+/// Rank thresholds in pitch-accuracy percent, best first; below the last is D.
+pub const RANK_THRESHOLDS: [(char, f32); 4] = [('S', 92.0), ('A', 82.0), ('B', 70.0), ('C', 55.0)];
+
+/// Letter rank for a pitch accuracy percentage, as shown on the results card.
+pub fn rank_for(accuracy: f32) -> char {
+    RANK_THRESHOLDS
+        .iter()
+        .find(|(_, min)| accuracy >= *min)
+        .map(|(rank, _)| *rank)
+        .unwrap_or('D')
+}
+
+/// The next rank up and the whole accuracy points still needed for it
+/// (at least 1, so a near miss never reads "+0%"). `None` at the top.
+pub fn next_rank(accuracy: f32) -> Option<(char, f32)> {
+    RANK_THRESHOLDS
+        .iter()
+        .rev()
+        .find(|(_, min)| accuracy < *min)
+        .map(|(rank, min)| (*rank, (min - accuracy).ceil().max(1.0)))
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct Album {
@@ -539,4 +584,58 @@ pub fn split_line_words(line: &LyricLine) -> Vec<(String, f64, f64)> {
         ));
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ranks_follow_the_thresholds() {
+        assert_eq!(rank_for(100.0), 'S');
+        assert_eq!(rank_for(92.0), 'S');
+        assert_eq!(rank_for(91.9), 'A');
+        assert_eq!(rank_for(70.0), 'B');
+        assert_eq!(rank_for(55.0), 'C');
+        assert_eq!(rank_for(0.0), 'D');
+    }
+
+    #[test]
+    fn a_take_beats_another_on_accuracy_then_score() {
+        let a = ScoreRecord {
+            score: 5000,
+            accuracy: 78.0,
+            combo: 40,
+        };
+        let b = ScoreRecord {
+            score: 4500,
+            accuracy: 85.0,
+            combo: 9,
+        };
+        let c = ScoreRecord {
+            score: 4600,
+            accuracy: 85.0,
+            combo: 9,
+        };
+        assert!(b.beats(&a));
+        assert!(!a.beats(&b));
+        assert!(c.beats(&b));
+        assert!(!b.beats(&c));
+        assert!(!b.beats(&b));
+    }
+
+    #[test]
+    fn displayed_accuracy_never_rounds_past_a_rank() {
+        assert_eq!(accuracy_label(91.6), "91%");
+        assert_eq!(accuracy_label(92.0), "92%");
+        assert_eq!(accuracy_label(0.0), "0%");
+    }
+
+    #[test]
+    fn next_rank_names_the_tier_above() {
+        assert_eq!(next_rank(95.0), None);
+        assert_eq!(next_rank(84.0), Some(('S', 8.0)));
+        assert_eq!(next_rank(81.6), Some(('A', 1.0)));
+        assert_eq!(next_rank(10.0), Some(('C', 45.0)));
+    }
 }

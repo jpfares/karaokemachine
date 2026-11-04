@@ -3,9 +3,14 @@
 use super::{ctx_pointer, pitch_col, Action, KaraokeMachineApp, MapPickerMode};
 use crate::audio::Microphone;
 use crate::library::{load_map_file, save_score, save_settings, song_audio_path};
-use crate::model::{format_time, note_name, Note, RibbonSide, ScoreRecord, Scores, Settings, Song};
+use crate::model::{
+    accuracy_label, format_time, note_name, rank_for, Note, RibbonSide, ScoreRecord, Scores,
+    Settings, Song,
+};
 use crate::pitch::{detect_pitch, PitchReading};
-use crate::theme::{alpha, BG, GOLD, INK, LINE, MINT, MUTED, MUTED2, OCTAVE_BLUE, PINK};
+use crate::theme::{
+    alpha, rank_colour, BG, GOLD, INK, LINE, MINT, MUTED, MUTED2, OCTAVE_BLUE, PINK,
+};
 use crate::widgets::{click, glyph_button, pill_button, pill_toggle, round_button};
 use eframe::egui::{
     self, Align2, Color32, FontId, Mesh, Pos2, Rect, Shape, Stroke, StrokeKind, Vec2,
@@ -302,17 +307,7 @@ impl Stage {
         } else {
             0.0
         };
-        let rank = if accuracy >= 92.0 {
-            'S'
-        } else if accuracy >= 82.0 {
-            'A'
-        } else if accuracy >= 70.0 {
-            'B'
-        } else if accuracy >= 55.0 {
-            'C'
-        } else {
-            'D'
-        };
+        let rank = rank_for(accuracy);
         let new_best = save_score(
             scores,
             &self.song.id,
@@ -1131,6 +1126,10 @@ impl KaraokeMachineApp {
         }
         self.stage = Some(stage);
         self.start_audio_load(backing, Some(vocals), false);
+        if self.settings.last_song.as_deref() != Some(self.songs[index].id.as_str()) {
+            self.settings.last_song = Some(self.songs[index].id.clone());
+            save_settings(&self.settings);
+        }
         self.drawer_open = false;
         self.settings_open = false;
         self.started_at = now;
@@ -1352,7 +1351,7 @@ impl KaraokeMachineApp {
         );
         let back = Rect::from_min_size(Pos2::new(16.0, 15.0), Vec2::new(36.0, 34.0));
         if glyph_button(ui, back, "←") {
-            actions.push(Action::OpenMenu);
+            actions.push(Action::Home);
         }
         p.text(
             Pos2::new(66.0, 17.0),
@@ -1967,7 +1966,7 @@ impl KaraokeMachineApp {
                 Align2::CENTER_CENTER,
                 result.rank.to_string(),
                 FontId::proportional(64.0),
-                MINT,
+                rank_colour(result.rank),
             );
             let copy = match result.rank {
                 'S' => "Flawless. Every note landed.",
@@ -1985,7 +1984,7 @@ impl KaraokeMachineApp {
             );
             let stats = [
                 ("SCORE", result.score.to_string()),
-                ("PITCH ACCURACY", format!("{:.0}%", result.accuracy)),
+                ("PITCH ACCURACY", accuracy_label(result.accuracy)),
                 (
                     "NOTES HIT",
                     format!("{}/{}", result.hit, stage.song.notes.len()),
@@ -2021,8 +2020,8 @@ impl KaraokeMachineApp {
                 Pos2::new(card.center().x + 110.0, card.bottom() - 70.0),
                 Vec2::new(170.0, 44.0),
             );
-            if pill_button(ui, library, "BACK TO LIBRARY", false) {
-                actions.push(Action::OpenLibraryFromResults);
+            if pill_button(ui, library, "HOME", false) {
+                actions.push(Action::Home);
             }
         }
         let _ = now;

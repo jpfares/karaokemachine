@@ -4,8 +4,8 @@ use super::stage::add_ribbon_mesh;
 use super::{ctx_pointer, pitch_col, Action, DrawerView, KaraokeMachineApp};
 use crate::automap;
 use crate::library::{build_albums, load_songs, read_songlist};
-use crate::model::{format_time, note_name};
-use crate::theme::{alpha, BG, GOLD, INK, MINT, MUTED, MUTED2, PINK};
+use crate::model::{accuracy_label, format_time, next_rank, rank_for, ScoreRecord};
+use crate::theme::{alpha, rank_colour, BG, GOLD, INK, LINE, MINT, MUTED, MUTED2, PANEL, PINK};
 use crate::widgets::{click, glyph_button, pill_button, pill_toggle};
 use eframe::egui::{
     self, Align2, Color32, FontId, Id, Mesh, Pos2, Rect, Shape, Stroke, StrokeKind, TextureHandle,
@@ -13,17 +13,72 @@ use eframe::egui::{
 };
 use std::path::Path;
 
-pub(super) fn paint_cover_fallback(p: &egui::Painter, rect: Rect, title: &str) {
+pub(super) fn paint_cover_fallback(p: &egui::Painter, rect: Rect, rounding: f32, title: &str) {
     let c = pitch_col(((title.len() * 37) % 100) as f32 / 100.0);
-    p.rect_filled(rect, 12.0, alpha(c, 80));
+    p.rect_filled(rect, rounding, alpha(c, 80));
     p.circle_filled(rect.center(), rect.width() * 0.22, alpha(c, 100));
     p.text(
         rect.center(),
         Align2::CENTER_CENTER,
         title.chars().next().unwrap_or('K').to_string(),
-        FontId::proportional(rect.width() * 0.25),
+        FontId::proportional((rect.width() * 0.25).max(10.0)),
         INK,
     );
+}
+
+/// Cover art at `rect`, or the generated fallback, with a hairline frame.
+fn paint_cover(
+    p: &egui::Painter,
+    rect: Rect,
+    rounding: f32,
+    tex: Option<&TextureHandle>,
+    title: &str,
+) {
+    p.rect_filled(rect, rounding, Color32::from_rgb(18, 25, 42));
+    match tex {
+        Some(tex) => {
+            p.image(
+                tex.id(),
+                rect,
+                Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                Color32::WHITE,
+            );
+        }
+        None => paint_cover_fallback(p, rect, rounding, title),
+    }
+    p.rect_stroke(
+        rect,
+        rounding,
+        Stroke::new(1.0f32, Color32::from_white_alpha(30)),
+        StrokeKind::Inside,
+    );
+}
+
+/// "+N% TO A" in gold, or "TOP RANK" in mint at S.
+fn nudge_text(accuracy: f32) -> (String, Color32) {
+    match next_rank(accuracy) {
+        Some((rank, needed)) => (format!("+{needed:.0}% TO {rank}"), GOLD),
+        None => ("TOP RANK".to_string(), MINT),
+    }
+}
+
+fn plural(count: usize, noun: &str) -> String {
+    if count == 1 {
+        format!("{count} {noun}")
+    } else {
+        format!("{count} {noun}S")
+    }
+}
+
+/// `ScoreRecord::beats` as an ordering, for sorting.
+fn compare_records(a: &ScoreRecord, b: &ScoreRecord) -> std::cmp::Ordering {
+    if a.beats(b) {
+        std::cmp::Ordering::Greater
+    } else if b.beats(a) {
+        std::cmp::Ordering::Less
+    } else {
+        std::cmp::Ordering::Equal
+    }
 }
 
 pub(super) fn load_texture(ctx: &egui::Context, path: &Path) -> Option<TextureHandle> {
@@ -59,57 +114,69 @@ impl KaraokeMachineApp {
         self.preload_covers(ctx);
     }
 
+    /// The song the home screen leads with: the last one sung, else the
+    /// best-scored, else the first warm-up, else the first mapped song.
+    /// The flag says whether it came from `last_song`.
+    fn home_hero(&self) -> Option<(usize, bool)> {
+        if let Some(id) = &self.settings.last_song {
+            if let Some(i) = self.songs.iter().position(|s| &s.id == id && s.mapped) {
+                return Some((i, true));
+            }
+        }
+        let best = self
+            .scored_mapped()
+            .into_iter()
+            .max_by(|a, b| compare_records(a.1, b.1));
+        if let Some((i, _)) = best {
+            return Some((i, false));
+        }
+        self.songs
+            .iter()
+            .position(|s| s.mapped && s.source == "scale")
+            .or_else(|| self.songs.iter().position(|s| s.mapped))
+            .map(|i| (i, false))
+    }
+
+    /// Every high score that still belongs to a mapped song.
+    fn scored_mapped(&self) -> Vec<(usize, &ScoreRecord)> {
+        self.scores
+            .iter()
+            .filter_map(|(id, record)| {
+                self.songs
+                    .iter()
+                    .position(|s| &s.id == id && s.mapped)
+                    .map(|i| (i, record))
+            })
+            .collect()
+    }
+
     pub(super) fn draw_lobby(&self, ui: &mut egui::Ui, actions: &mut Vec<Action>) {
         let rect = ui.max_rect();
         let p = ui.painter().clone();
         p.rect_filled(rect, 0.0, BG);
-        let left_w = 98.0;
-        let top = 74.0;
-        let low = 52;
-        let high = 80;
-        let lane_h = (rect.height() - top - 30.0) / (high - low + 1) as f32;
-        let lane_y = |midi: i32| top + (high - midi) as f32 * lane_h + lane_h / 2.0;
-        for i in 0..=(high - low) {
-            let y = top + i as f32 * lane_h;
-            let strong = (high - i) % 12 == 0;
-            p.line_segment(
-                [Pos2::new(0.0, y), Pos2::new(rect.width(), y)],
-                Stroke::new(
-                    if strong { 1.0f32 } else { 0.6f32 },
-                    Color32::from_white_alpha(if strong { 22 } else { 9 }),
-                ),
-            );
-        }
-        p.rect_filled(
-            Rect::from_min_size(Pos2::ZERO, Vec2::new(left_w, rect.height())),
-            0.0,
-            Color32::from_rgba_unmultiplied(5, 8, 15, 235),
-        );
-        p.line_segment(
-            [
-                Pos2::new(left_w, top),
-                Pos2::new(left_w, rect.height() - 30.0),
-            ],
-            Stroke::new(1.0f32, alpha(MINT, 80)),
-        );
-        for midi in [55, 60, 64, 67, 72, 76] {
-            let y = lane_y(midi);
-            p.text(
-                Pos2::new(left_w - 9.0, y),
-                Align2::RIGHT_CENTER,
-                note_name(midi),
-                FontId::monospace(10.0),
-                alpha(INK, 60),
-            );
-        }
+        let w = rect.width();
+        let h = rect.height();
+        let x0 = 40.0;
+        // The drawer covers the right 430 px; everything clickable stays left of it.
+        let safe_right = w - 470.0;
+        let cw = safe_right - x0;
+        let hero = Rect::from_min_max(Pos2::new(x0, 86.0), Pos2::new(safe_right, 386.0));
+        // Widgets are painted whether or not the drawer is open, but only the
+        // scrim answers clicks while it is: a tap on the dimmed home closes
+        // the drawer instead of starting a song.
+        let live = !self.drawer_open;
+
+        // The pitch ribbon, the app's signature, flows out from under the hero
+        // card into the strip the drawer covers.
+        let ribbon_x0 = safe_right - 200.0;
+        let ribbon_x1 = w - 40.0;
         let points: Vec<Pos2> = (0..=180)
             .map(|i| {
                 let t = i as f32 / 180.0;
-                let midi = 64.0
-                    + (t * std::f32::consts::TAU * 2.2).sin() * 7.0
-                    + (t * std::f32::consts::TAU * 5.0 + 0.7).sin() * 2.3;
-                let y = top + (high as f32 - midi + 0.5) * lane_h;
-                Pos2::new(left_w + 26.0 + t * (rect.width() - left_w - 56.0), y)
+                let y = 236.0
+                    + (t * std::f32::consts::TAU * 2.2).sin() * 100.0
+                    + (t * std::f32::consts::TAU * 5.0 + 0.7).sin() * 20.0;
+                Pos2::new(ribbon_x0 + t * (ribbon_x1 - ribbon_x0), y)
             })
             .collect();
         let mut mesh = Mesh::default();
@@ -117,41 +184,530 @@ impl KaraokeMachineApp {
             &mut mesh,
             &points,
             24.0,
-            low,
-            high,
-            top,
-            rect.height() - 30.0,
-            1.0,
+            52,
+            80,
+            hero.top(),
+            hero.bottom(),
+            0.9,
         );
         p.add(Shape::mesh(mesh));
+
+        // header
         p.text(
-            Pos2::new(28.0, 30.0),
+            Pos2::new(x0, 30.0),
             Align2::LEFT_CENTER,
             "KARAOKEMACHINE",
             FontId::proportional(18.0),
             alpha(INK, 200),
         );
         p.text(
-            Pos2::new(28.0, 50.0),
+            Pos2::new(x0, 50.0),
             Align2::LEFT_CENTER,
-            "MUSIC LIBRARY",
+            "HOME",
+            FontId::monospace(10.0),
+            MUTED,
+        );
+        let brand = Rect::from_min_size(Pos2::new(w - 170.0, 22.0), Vec2::new(140.0, 34.0));
+        if pill_button(ui, brand, "LIBRARY", false) && live {
+            actions.push(Action::OpenMenu);
+        }
+
+        // right strip: caption under the ribbon and a footer count
+        p.text(
+            Pos2::new(safe_right + 40.0, hero.bottom() + 24.0),
+            Align2::LEFT_TOP,
+            "ON STAGE, NOTES SCROLL BY AS",
+            FontId::monospace(10.0),
+            MUTED,
+        );
+        p.text(
+            Pos2::new(safe_right + 40.0, hero.bottom() + 40.0),
+            Align2::LEFT_TOP,
+            "COLOURED RIBBONS. YOU SING ALONG.",
+            FontId::monospace(10.0),
+            MUTED,
+        );
+        let mapped = self.songs.iter().filter(|s| s.mapped).count();
+        p.text(
+            Pos2::new(w - 40.0, h - 30.0),
+            Align2::RIGHT_CENTER,
+            format!(
+                "{} · {mapped} MAPPED · {}",
+                plural(self.songs.len(), "SONG"),
+                plural(self.albums.len(), "ALBUM")
+            ),
             FontId::monospace(10.0),
             MUTED2,
         );
-        let brand = Rect::from_min_size(
-            Pos2::new(rect.width() - 170.0, 22.0),
-            Vec2::new(140.0, 34.0),
+
+        // hero card
+        let hp = p.with_clip_rect(hero);
+        hp.rect_filled(hero, 18.0, PANEL);
+        hp.rect_stroke(hero, 18.0, Stroke::new(1.0f32, LINE), StrokeKind::Inside);
+        // The interior scales with the card so the window minimum (1100 pt
+        // wide) still fits the stat columns and both pills.
+        let cover_size = (cw * 0.27).clamp(160.0, 252.0);
+        let cover_rect = Rect::from_min_size(
+            Pos2::new(x0 + 24.0, hero.center().y - cover_size / 2.0),
+            Vec2::splat(cover_size),
         );
-        if pill_button(ui, brand, "LIBRARY", true) {
-            actions.push(Action::OpenMenu);
+        let text_x = cover_rect.right() + 28.0;
+        let avail = hero.right() - 24.0 - text_x;
+        let primary_w = (avail * 0.56).clamp(150.0, 240.0);
+        let secondary_w = (avail - primary_w - 16.0).min(170.0);
+        let show_secondary = secondary_w >= 110.0;
+        let column_pitch = ((avail - 84.0) / 3.0).min(160.0);
+        let hero_pick = self.home_hero();
+        let hero_idx = hero_pick.map(|(i, _)| i);
+        let primary = Rect::from_min_size(Pos2::new(text_x, 320.0), Vec2::new(primary_w, 48.0));
+        let secondary = Rect::from_min_size(
+            Pos2::new(text_x + primary_w + 16.0, 320.0),
+            Vec2::new(secondary_w, 48.0),
+        );
+        match hero_pick {
+            Some((index, from_last)) => {
+                let song = &self.songs[index];
+                let is_scale = song.source == "scale";
+                let record = self.scores.get(&song.id);
+                paint_cover(
+                    &hp,
+                    cover_rect,
+                    14.0,
+                    self.covers.get(&song.id),
+                    &song.title,
+                );
+                if click(ui, cover_rect, "home_hero_cover") && live {
+                    actions.push(Action::PlaySong(index));
+                }
+                let mut eyebrow = if from_last && record.is_none() {
+                    "CONTINUE"
+                } else if from_last {
+                    "SING AGAIN"
+                } else if record.is_some() {
+                    "YOUR BEST TAKE"
+                } else {
+                    "START HERE"
+                }
+                .to_string();
+                if is_scale {
+                    eyebrow.push_str(" · WARM-UP");
+                }
+                hp.text(
+                    Pos2::new(text_x, 110.0),
+                    Align2::LEFT_TOP,
+                    eyebrow,
+                    FontId::monospace(10.0),
+                    MUTED,
+                );
+                hp.text(
+                    Pos2::new(text_x, 130.0),
+                    Align2::LEFT_TOP,
+                    &song.title,
+                    FontId::proportional(24.0),
+                    INK,
+                );
+                hp.text(
+                    Pos2::new(text_x, 164.0),
+                    Align2::LEFT_TOP,
+                    format!(
+                        "{} · {}",
+                        song.artist_display(),
+                        format_time(song.duration())
+                    ),
+                    FontId::proportional(13.0),
+                    MUTED,
+                );
+                match record {
+                    Some(record) => {
+                        let rank = rank_for(record.accuracy);
+                        hp.text(
+                            Pos2::new(text_x, 192.0),
+                            Align2::LEFT_TOP,
+                            rank.to_string(),
+                            FontId::proportional(56.0),
+                            rank_colour(rank),
+                        );
+                        let columns = [
+                            ("SCORE", record.score.to_string()),
+                            ("ACCURACY", accuracy_label(record.accuracy)),
+                            ("COMBO", format!("{}×", record.combo)),
+                        ];
+                        for (i, (label, value)) in columns.iter().enumerate() {
+                            let cx = text_x + 84.0 + i as f32 * column_pitch;
+                            hp.text(
+                                Pos2::new(cx, 204.0),
+                                Align2::LEFT_TOP,
+                                *label,
+                                FontId::monospace(10.0),
+                                MUTED,
+                            );
+                            hp.text(
+                                Pos2::new(cx, 220.0),
+                                Align2::LEFT_TOP,
+                                value,
+                                FontId::proportional(22.0),
+                                INK,
+                            );
+                        }
+                        let (nudge, colour) = nudge_text(record.accuracy);
+                        hp.text(
+                            Pos2::new(text_x + 84.0, 260.0),
+                            Align2::LEFT_TOP,
+                            nudge,
+                            FontId::monospace(10.0),
+                            colour,
+                        );
+                    }
+                    None => {
+                        hp.text(
+                            Pos2::new(text_x, 200.0),
+                            Align2::LEFT_TOP,
+                            "Not scored yet. Sing it once to set a personal best.",
+                            FontId::proportional(13.0),
+                            MUTED,
+                        );
+                    }
+                }
+                let verb = if from_last && record.is_some() {
+                    "SING AGAIN"
+                } else {
+                    "SING THIS"
+                };
+                if pill_button(ui, primary, verb, true) && live {
+                    actions.push(Action::PlaySong(index));
+                }
+                if show_secondary && pill_button(ui, secondary, "PICK ANOTHER", false) && live {
+                    actions.push(Action::OpenMenu);
+                }
+            }
+            None => {
+                paint_cover(&hp, cover_rect, 14.0, None, "K");
+                hp.text(
+                    Pos2::new(text_x, 110.0),
+                    Align2::LEFT_TOP,
+                    "GET STARTED",
+                    FontId::monospace(10.0),
+                    MUTED,
+                );
+                hp.text(
+                    Pos2::new(text_x, 130.0),
+                    Align2::LEFT_TOP,
+                    "Add your first song",
+                    FontId::proportional(24.0),
+                    INK,
+                );
+                hp.text(
+                    Pos2::new(text_x, 164.0),
+                    Align2::LEFT_TOP,
+                    "A YouTube link or an audio file is enough. Auto-map charts it.",
+                    FontId::proportional(13.0),
+                    MUTED,
+                );
+                if pill_button(ui, primary, "UPLOAD A SONG", true) && live {
+                    actions.push(Action::OpenUpload);
+                }
+            }
         }
-        if !self.drawer_open {
-            let center = Rect::from_center_size(
-                rect.center() + Vec2::new(-100.0, 0.0),
-                Vec2::new(220.0, 46.0),
+
+        // three doors
+        let first_scale = self
+            .songs
+            .iter()
+            .position(|s| s.mapped && s.source == "scale");
+        let hero_is_scale = hero_idx
+            .map(|i| self.songs[i].source == "scale")
+            .unwrap_or(false);
+        let scale_count = self
+            .songs
+            .iter()
+            .filter(|s| s.mapped && s.source == "scale")
+            .count();
+        let card_w = (cw - 40.0) / 3.0;
+        let narrow = card_w < 260.0;
+        let warmup_sub;
+        let (warmup_sub_text, warmup_verb): (&str, &str) = match first_scale {
+            Some(index) if !hero_is_scale => {
+                let song = &self.songs[index];
+                warmup_sub = format!("{} · {}", song.title, format_time(song.duration()));
+                (&warmup_sub, "SING")
+            }
+            Some(_) if narrow => {
+                warmup_sub = format!("{} scales", scale_count);
+                (&warmup_sub, "BROWSE")
+            }
+            Some(_) => {
+                warmup_sub = format!("{} short scales · pick one", scale_count);
+                (&warmup_sub, "BROWSE")
+            }
+            None => ("No warm-ups installed", "LIBRARY"),
+        };
+        let cards = [
+            ("01", "Sing a warm-up", warmup_sub_text, warmup_verb),
+            (
+                "02",
+                "Upload a song",
+                if narrow {
+                    "Link or file · auto-mapped"
+                } else {
+                    "YouTube link or audio file · auto-mapped"
+                },
+                "IMPORT",
+            ),
+            (
+                "03",
+                "Browse maps",
+                if narrow {
+                    "Published charts"
+                } else {
+                    "Charts other singers published"
+                },
+                "BROWSE",
+            ),
+        ];
+        for (i, (numeral, title, sub, verb)) in cards.iter().enumerate() {
+            let c = Rect::from_min_size(
+                Pos2::new(x0 + i as f32 * (card_w + 20.0), 406.0),
+                Vec2::new(card_w, 100.0),
             );
-            if pill_button(ui, center, "OPEN LIBRARY", true) {
-                actions.push(Action::OpenMenu);
+            let cp = p.with_clip_rect(c);
+            cp.rect_filled(c, 14.0, PANEL);
+            cp.rect_stroke(
+                c,
+                14.0,
+                Stroke::new(1.0f32, Color32::from_white_alpha(28)),
+                StrokeKind::Inside,
+            );
+            cp.text(
+                c.left_top() + Vec2::new(20.0, 16.0),
+                Align2::LEFT_TOP,
+                *numeral,
+                FontId::monospace(10.0),
+                MUTED2,
+            );
+            cp.text(
+                c.right_top() + Vec2::new(-20.0, 16.0),
+                Align2::RIGHT_TOP,
+                *verb,
+                FontId::monospace(10.0),
+                MINT,
+            );
+            cp.text(
+                c.left_top() + Vec2::new(20.0, 38.0),
+                Align2::LEFT_TOP,
+                *title,
+                FontId::proportional(16.0),
+                INK,
+            );
+            cp.text(
+                c.left_top() + Vec2::new(20.0, 66.0),
+                Align2::LEFT_TOP,
+                *sub,
+                FontId::proportional(12.0),
+                MUTED,
+            );
+            if click(ui, c, ("home_card", i)) && live {
+                match i {
+                    0 => match first_scale {
+                        Some(index) if !hero_is_scale => actions.push(Action::PlaySong(index)),
+                        Some(_) => {
+                            actions.push(Action::OpenMenu);
+                            if let Some(album) = self.albums.iter().position(|a| a.warmup) {
+                                actions.push(Action::SelectAlbum(album));
+                            }
+                        }
+                        None => actions.push(Action::OpenMenu),
+                    },
+                    1 => actions.push(Action::OpenUpload),
+                    _ => {
+                        actions.push(Action::OpenMenu);
+                        actions.push(Action::ShowMaps);
+                    }
+                }
+            }
+        }
+
+        // personal bests, padded with songs still to sing
+        let rows_top = 552.0;
+        let row_h = 52.0;
+        let n_rows = (((h - 40.0 - rows_top) / row_h).floor() as usize).min(6);
+        let mut scored = self.scored_mapped();
+        let n_scored = scored.len();
+        scored.retain(|(i, _)| Some(*i) != hero_idx);
+        scored.sort_by(|a, b| compare_records(b.1, a.1));
+        let mut rows: Vec<(usize, Option<&ScoreRecord>)> =
+            scored.iter().map(|(i, r)| (*i, Some(*r))).collect();
+        rows.truncate(n_rows);
+        if rows.len() < n_rows {
+            let mut pad: Vec<usize> = (0..self.songs.len())
+                .filter(|i| {
+                    let song = &self.songs[*i];
+                    song.mapped && Some(*i) != hero_idx && !self.scores.contains_key(&song.id)
+                })
+                .collect();
+            pad.sort_by_key(|i| self.songs[*i].source != "scale");
+            for i in pad {
+                if rows.len() >= n_rows {
+                    break;
+                }
+                rows.push((i, None));
+            }
+        }
+        let header_y = 530.0;
+        p.text(
+            Pos2::new(x0, header_y),
+            Align2::LEFT_TOP,
+            if n_scored > 0 {
+                "PERSONAL BESTS · RANKED BY ACCURACY"
+            } else {
+                "UP NEXT"
+            },
+            FontId::monospace(10.0),
+            MUTED,
+        );
+        p.text(
+            Pos2::new(safe_right, header_y),
+            Align2::RIGHT_TOP,
+            if n_scored > 0 {
+                format!("{} SCORED", plural(n_scored, "SONG"))
+            } else {
+                "NOTHING SCORED YET".to_string()
+            },
+            FontId::monospace(10.0),
+            MUTED,
+        );
+        if rows.is_empty() {
+            p.text(
+                Pos2::new(x0, rows_top + 4.0),
+                Align2::LEFT_TOP,
+                if n_scored > 0 {
+                    "Your only score so far is on the song above."
+                } else {
+                    "No scores yet. Finish a song and your best runs land here."
+                },
+                FontId::proportional(12.0),
+                MUTED,
+            );
+        }
+        for (i, (index, record)) in rows.iter().enumerate() {
+            let song = &self.songs[*index];
+            let r = Rect::from_min_size(
+                Pos2::new(x0, rows_top + i as f32 * row_h),
+                Vec2::new(cw, row_h),
+            );
+            p.line_segment(
+                [r.left_bottom(), r.right_bottom()],
+                Stroke::new(1.0f32, Color32::from_white_alpha(12)),
+            );
+            // Keep the title and subtitle clear of the right-hand columns.
+            let right_cols = if record.is_some() { 362.0 } else { 120.0 };
+            let lp = p.with_clip_rect(Rect::from_min_max(
+                r.left_top(),
+                Pos2::new(r.right() - right_cols, r.bottom()),
+            ));
+            match record {
+                Some(record) => {
+                    let rank = rank_for(record.accuracy);
+                    lp.text(
+                        Pos2::new(r.left() + 30.0, r.center().y),
+                        Align2::CENTER_CENTER,
+                        rank.to_string(),
+                        FontId::proportional(20.0),
+                        rank_colour(rank),
+                    );
+                }
+                None => {
+                    lp.text(
+                        Pos2::new(r.left() + 30.0, r.center().y),
+                        Align2::CENTER_CENTER,
+                        "SING",
+                        FontId::monospace(10.0),
+                        MINT,
+                    );
+                }
+            }
+            let thumb = Rect::from_min_size(
+                Pos2::new(r.left() + 56.0, r.top() + 8.0),
+                Vec2::new(36.0, 36.0),
+            );
+            paint_cover(&lp, thumb, 8.0, self.covers.get(&song.id), &song.title);
+            lp.text(
+                Pos2::new(r.left() + 104.0, r.top() + 9.0),
+                Align2::LEFT_TOP,
+                &song.title,
+                FontId::proportional(13.0),
+                INK,
+            );
+            let mut sub = if cw < 800.0 && song.source == "scale" {
+                format_time(song.duration())
+            } else {
+                format!(
+                    "{} · {}",
+                    song.artist_display(),
+                    format_time(song.duration())
+                )
+            };
+            if song.source == "scale" {
+                sub.push_str(" · WARM-UP");
+            }
+            lp.text(
+                Pos2::new(r.left() + 104.0, r.top() + 29.0),
+                Align2::LEFT_TOP,
+                sub,
+                FontId::monospace(10.0),
+                MUTED,
+            );
+            match record {
+                Some(record) => {
+                    let (nudge, colour) = nudge_text(record.accuracy);
+                    let columns = [
+                        (
+                            r.right() - 16.0,
+                            record.score.to_string(),
+                            "SCORE".to_string(),
+                            MUTED,
+                        ),
+                        (
+                            r.right() - 140.0,
+                            format!("{}×", record.combo),
+                            "COMBO".to_string(),
+                            MUTED,
+                        ),
+                        (
+                            r.right() - 270.0,
+                            accuracy_label(record.accuracy),
+                            nudge,
+                            colour,
+                        ),
+                    ];
+                    for (x, value, label, colour) in columns {
+                        p.text(
+                            Pos2::new(x, r.top() + 8.0),
+                            Align2::RIGHT_TOP,
+                            value,
+                            FontId::proportional(16.0),
+                            INK,
+                        );
+                        p.text(
+                            Pos2::new(x, r.top() + 30.0),
+                            Align2::RIGHT_TOP,
+                            label,
+                            FontId::monospace(10.0),
+                            colour,
+                        );
+                    }
+                }
+                None => {
+                    p.text(
+                        Pos2::new(r.right() - 16.0, r.center().y),
+                        Align2::RIGHT_CENTER,
+                        "NOT YET SUNG",
+                        FontId::monospace(10.0),
+                        MUTED,
+                    );
+                }
+            }
+            if click(ui, r, ("home_best", i)) && live {
+                actions.push(Action::PlaySong(*index));
             }
         }
     }
@@ -356,7 +912,7 @@ impl KaraokeMachineApp {
                     Color32::WHITE,
                 );
             } else {
-                paint_cover_fallback(p, art_rect, &album.title);
+                paint_cover_fallback(p, art_rect, 12.0, &album.title);
             }
             p.rect_stroke(
                 art_rect,
@@ -446,7 +1002,7 @@ impl KaraokeMachineApp {
                 Color32::WHITE,
             );
         } else {
-            paint_cover_fallback(p, art, &album.title);
+            paint_cover_fallback(p, art, 12.0, &album.title);
         }
         p.rect_stroke(
             art,

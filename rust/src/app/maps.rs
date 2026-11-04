@@ -130,7 +130,7 @@ impl KaraokeMachineApp {
                     Color32::WHITE,
                 );
             } else {
-                paint_cover_fallback(p, cover, &entry.title);
+                paint_cover_fallback(p, cover, 8.0, &entry.title);
             }
             p.text(
                 Pos2::new(row.left() + 66.0, row.top() + 9.0),
@@ -185,7 +185,7 @@ impl KaraokeMachineApp {
                     Color32::WHITE,
                 );
             } else {
-                paint_cover_fallback(p, cover, &song.title);
+                paint_cover_fallback(p, cover, 8.0, &song.title);
             }
             p.text(
                 Pos2::new(row.left() + 66.0, row.top() + 9.0),

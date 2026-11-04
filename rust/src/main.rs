@@ -27,9 +27,18 @@ fn main() -> eframe::Result<()> {
             std::env::set_var("LIBGL_ALWAYS_SOFTWARE", "1");
         }
     }
+    // KARAOKEMACHINE_WINDOW=WxH opens at another size, for layout checks
+    // at the supported minimum (1100x700).
+    let inner_size = std::env::var("KARAOKEMACHINE_WINDOW")
+        .ok()
+        .and_then(|spec| {
+            let (w, h) = spec.split_once('x')?;
+            Some([w.trim().parse::<f32>().ok()?, h.trim().parse::<f32>().ok()?])
+        })
+        .unwrap_or([1600.0, 980.0]);
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1600.0, 980.0])
+            .with_inner_size(inner_size)
             .with_min_inner_size([1100.0, 700.0])
             .with_title("KaraokeMachine")
             .with_app_id("karaokemachine"),

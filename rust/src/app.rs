@@ -72,12 +72,13 @@ enum Action {
     Reload,
     Seek(f64),
     RetrySong,
-    OpenLibraryFromResults,
     OpenUpload,
     ShowMaps,
     InstallMap,
     InstallRemoteMap(usize),
     EditSong(usize),
+    /// Leave the stage for the home screen.
+    Home,
 }
 
 /// Vocal-stem analysis the editor needs, computed by the decode job.
@@ -214,7 +215,7 @@ impl KaraokeMachineApp {
             mic_devices: input_device_names(),
             tracker: PitchTracker::default(),
             reading: None,
-            drawer_open: true,
+            drawer_open: false,
             drawer_view: DrawerView::Albums,
             selected_album: None,
             drawer_scroll: 0.0,
@@ -672,8 +673,13 @@ impl KaraokeMachineApp {
                 }
             }
             Action::RetrySong => self.restart_song(now),
-            Action::OpenLibraryFromResults => {
-                self.open_menu();
+            Action::Home => {
+                if let Some(audio) = &self.audio {
+                    audio.stop();
+                }
+                self.stage = None;
+                self.drawer_open = false;
+                self.selected_album = None;
             }
             Action::OpenUpload => {
                 self.upload.open = true;
