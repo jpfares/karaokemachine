@@ -165,7 +165,7 @@ pub fn build_albums(songs: &[Song]) -> Vec<Album> {
         }
     }
     let mut imported: Vec<Album> = groups.into_values().collect();
-    imported.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+    imported.sort_by_key(|album| album.title.to_lowercase());
     albums.extend(imported);
     albums
 }

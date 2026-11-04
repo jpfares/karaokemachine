@@ -297,7 +297,9 @@ impl KaraokeMachineApp {
         let Some(song) = self.songs.get(index).cloned() else {
             return;
         };
-        self.audio.as_mut().map(|audio| audio.stop());
+        if let Some(audio) = &self.audio {
+            audio.stop();
+        }
         self.stage = None;
         self.drawer_open = false;
         self.settings_open = false;
@@ -703,7 +705,9 @@ impl eframe::App for KaraokeMachineApp {
                     }
                 }
                 if leaving {
-                    self.audio.as_mut().map(|audio| audio.pause());
+                    if let Some(audio) = &self.audio {
+                        audio.pause();
+                    }
                     self.settings_open = false;
                     self.reload_library(ctx, now);
                     self.drawer_open = true;

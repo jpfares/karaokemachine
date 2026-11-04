@@ -54,7 +54,7 @@ pub fn detect_pitch(samples: &[f32], sample_rate: f32) -> Option<PitchReading> {
     for tau in min_lag..=max_lag {
         if cmnd[tau] < threshold {
             let mut t = tau;
-            while t + 1 <= max_lag && cmnd[t + 1] < cmnd[t] {
+            while t < max_lag && cmnd[t + 1] < cmnd[t] {
                 t += 1;
             }
             estimate = t;
@@ -64,9 +64,9 @@ pub fn detect_pitch(samples: &[f32], sample_rate: f32) -> Option<PitchReading> {
     }
     if !found {
         let mut best = f32::INFINITY;
-        for tau in min_lag..=max_lag {
-            if cmnd[tau] < best {
-                best = cmnd[tau];
+        for (tau, &value) in cmnd.iter().enumerate().take(max_lag + 1).skip(min_lag) {
+            if value < best {
+                best = value;
                 estimate = tau;
             }
         }

@@ -576,6 +576,9 @@ pub(super) fn draw_melody(
     }
 }
 
+// The four lane parameters belong in a shared lane-geometry type; that
+// extraction is tracked in REVIEW.md and would remove this allowance.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn add_ribbon_mesh(
     mesh: &mut Mesh,
     points: &[Pos2],
@@ -871,7 +874,9 @@ impl KaraokeMachineApp {
             return;
         }
         self.editor = None;
-        self.audio.as_mut().map(|audio| audio.stop());
+        if let Some(audio) = &self.audio {
+            audio.stop();
+        }
         if let Some(audio) = &self.audio {
             audio.set_rate(1.0);
         }

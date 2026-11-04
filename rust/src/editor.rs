@@ -671,10 +671,11 @@ impl Editor {
                 i.pointer.delta(),
             )
         });
-        if middle_down && pointer.map(|pos| layout.note_area.contains(pos)).unwrap_or(false) {
-            if self.drag.is_none() {
-                self.scroll = (self.scroll - delta.x as f64 / self.zoom as f64).max(0.0);
-            }
+        if middle_down
+            && self.drag.is_none()
+            && pointer.map(|pos| layout.note_area.contains(pos)).unwrap_or(false)
+        {
+            self.scroll = (self.scroll - delta.x as f64 / self.zoom as f64).max(0.0);
         }
 
         if self.tool == EditorTool::Pan && response.dragged_by(PointerButton::Primary) {
@@ -938,11 +939,11 @@ impl Editor {
                         self.drag = Some(Drag::Erase);
                         self.erase_at(pos, layout);
                     }
-                } else if response.clicked_by(PointerButton::Primary) {
-                    if self.hit_word(pos, layout).is_some() || self.hit_note(pos, layout).is_some() {
-                        self.push_history();
-                        self.erase_at(pos, layout);
-                    }
+                } else if response.clicked_by(PointerButton::Primary)
+                    && (self.hit_word(pos, layout).is_some() || self.hit_note(pos, layout).is_some())
+                {
+                    self.push_history();
+                    self.erase_at(pos, layout);
                 }
             }
         }
@@ -2316,10 +2317,8 @@ impl Editor {
                 MINT,
             );
         }
-        if self.song.mapped {
-            if button(ui, export, "EXPORT MAP", false, true) {
-                *event = EditorEvent::ExportMap;
-            }
+        if self.song.mapped && button(ui, export, "EXPORT MAP", false, true) {
+            *event = EditorEvent::ExportMap;
         }
         if button(ui, save, "SAVE AS DRAFT", false, true) {
             *event = EditorEvent::SaveDraft;
@@ -2434,13 +2433,12 @@ impl Editor {
             } else {
                 (right, false)
             };
-            if distance <= tolerance {
-                if best
+            if distance <= tolerance
+                && best
                     .map(|(best_distance, _, _)| distance < best_distance)
                     .unwrap_or(true)
-                {
-                    best = Some((distance, index, is_left));
-                }
+            {
+                best = Some((distance, index, is_left));
             }
         }
         best.map(|(_, index, left)| (index, left))
