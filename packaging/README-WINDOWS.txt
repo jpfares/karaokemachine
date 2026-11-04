@@ -32,8 +32,10 @@ MAPS AND AUDIO
   link. It never contains audio.
 - Library -> Maps -> Import Map File applies a downloaded JSON map. If the
   audio is not local, the app fetches it from the source link and separates it.
-- Uploading a brand new song also needs Node.js 22+, ffmpeg, yt-dlp and Demucs.
-  They are not bundled with this portable build.
+- Uploading a brand new song, or installing a map whose audio is not already
+  local, also needs Node.js 22+, ffmpeg, yt-dlp, and Python 3 with Demucs and
+  numpy. They are not bundled with this portable build; the import scripts
+  that drive them are (the dist-tools and tools folders).
 - If those tools are installed on PATH, paste a YouTube, Spotify or
   SoundCloud link in Library -> Imports -> Upload Song. KaraokeMachine will
   fetch editable metadata and lyrics, download the audio, separate the

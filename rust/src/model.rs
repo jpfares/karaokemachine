@@ -31,8 +31,10 @@ pub fn pitch_color(t: f32) -> [u8; 3] {
 }
 
 pub fn note_name(midi: i32) -> String {
-    const NAMES: [&str; 12] = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
-    let n = ((midi % 12) + 12) % 12;
+    const NAMES: [&str; 12] = [
+        "C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B",
+    ];
+    let n = midi.rem_euclid(12);
     format!("{}{}", NAMES[n as usize], midi / 12 - 1)
 }
 
@@ -184,7 +186,11 @@ pub struct Song {
     #[serde(rename = "albumBio", default)]
     pub album_bio: Option<String>,
     /// The old automatic chart, kept only as a translucent guide in the editor.
-    #[serde(rename = "suggestedNotes", default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        rename = "suggestedNotes",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
     pub suggested_notes: Vec<Note>,
     /// Work in progress for an unmapped song.
     #[serde(rename = "draftNotes", default, skip_serializing_if = "Vec::is_empty")]
@@ -239,8 +245,6 @@ pub struct Settings {
     pub vocals_volume: f32,
     #[serde(default = "default_true")]
     pub show_lyrics: bool,
-    #[serde(default = "default_true")]
-    pub show_note_words: bool,
     #[serde(default)]
     pub mic_device: Option<String>,
     #[serde(default)]
@@ -279,7 +283,6 @@ impl Default for Settings {
             backing_enabled: true,
             vocals_volume: 0.0,
             show_lyrics: true,
-            show_note_words: true,
             mic_device: None,
             vocal_low: None,
             vocal_high: None,

@@ -101,7 +101,11 @@ fn default_version() -> u32 {
 }
 
 impl MapPackage {
-    pub fn from_song(root: &Path, song: &Song, contributor: Option<String>) -> Result<Self, String> {
+    pub fn from_song(
+        root: &Path,
+        song: &Song,
+        contributor: Option<String>,
+    ) -> Result<Self, String> {
         if !song.mapped {
             return Err("Only a submitted mapping can be exported.".into());
         }
@@ -207,7 +211,21 @@ impl MapPackage {
         let bytes = STANDARD
             .decode(payload)
             .map_err(|error| format!("Could not decode the map cover: {error}"))?;
-        let name = format!("cover.{extension}");
+        // Use a filename derived from the map id so installing a map cannot
+        // overwrite a hand-picked `cover.jpg` (or another map's artwork).
+        let id: String = self
+            .id
+            .chars()
+            .map(|ch| {
+                if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+                    ch
+                } else {
+                    '-'
+                }
+            })
+            .collect();
+        let id = if id.is_empty() { "map" } else { &id };
+        let name = format!("community-cover-{id}.{extension}");
         let path = dir.join(&name);
         fs::write(&path, bytes)
             .map_err(|error| format!("Could not save the map cover: {error}"))?;
@@ -215,8 +233,7 @@ impl MapPackage {
     }
 
     pub fn save(&self, path: &Path) -> Result<(), String> {
-        let raw = serde_json::to_string_pretty(self).map_err(|error| error.to_string())?;
-        fs::write(path, raw).map_err(|error| format!("Could not write {}: {error}", path.display()))
+        crate::library::write_json_atomic(path, self)
     }
 
     pub fn from_json(raw: &str) -> Result<Self, String> {
@@ -273,10 +290,7 @@ fn read_cover_data_uri(root: &Path, song: &Song) -> Option<String> {
         "svg" => "image/svg+xml",
         _ => "image/jpeg",
     };
-    Some(format!(
-        "data:{mime};base64,{}",
-        STANDARD.encode(bytes)
-    ))
+    Some(format!("data:{mime};base64,{}", STANDARD.encode(bytes)))
 }
 
 #[cfg(test)]
@@ -324,8 +338,7 @@ mod tests {
         assert!(value.get("audio").is_none());
         assert!(value.get("audioFiles").is_none());
 
-        let detached: MapPackage =
-            serde_json::from_value(value).expect("deserialize map package");
+        let detached: MapPackage = serde_json::from_value(value).expect("deserialize map package");
         let mut target = song;
         target.mapped = false;
         target.notes.clear();
@@ -333,7 +346,14 @@ mod tests {
         assert!(target.mapped);
         assert_eq!(target.notes.len(), 1);
         assert_eq!(target.placed_words.len(), 1);
-        assert_eq!(target.tags.iter().filter(|tag| *tag == "Community map").count(), 1);
+        assert_eq!(
+            target
+                .tags
+                .iter()
+                .filter(|tag| *tag == "Community map")
+                .count(),
+            1
+        );
     }
 
     #[test]
@@ -341,5 +361,35 @@ mod tests {
         let mut song = song();
         song.mapped = false;
         assert!(MapPackage::from_song(Path::new("."), &song, None).is_err());
+    }
+
+    #[test]
+    fn map_cover_does_not_overwrite_a_hand_picked_cover() {
+        let dir =
+            std::env::temp_dir().join(format!("karaokemachine-map-cover-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("scratch dir");
+        fs::write(dir.join("cover.jpg"), b"old cover").expect("old cover");
+
+        let map: MapPackage = serde_json::from_value(json!({
+            "id": "yt-test",
+            "title": "Test Map",
+            "sourceUrl": "https://example.com/audio.mp3",
+            "cover": "data:image/png;base64,aGVsbG8=",
+            "notes": [{"start": 1.0, "dur": 0.5, "midi": 60}]
+        }))
+        .expect("map package");
+
+        let name = map
+            .save_cover(&dir)
+            .expect("save map cover")
+            .expect("cover");
+        assert_eq!(name, "community-cover-yt-test.png");
+        assert_eq!(
+            fs::read(dir.join("cover.jpg")).expect("old cover"),
+            b"old cover"
+        );
+        assert_eq!(fs::read(dir.join(&name)).expect("new cover"), b"hello");
+        let _ = fs::remove_dir_all(&dir);
     }
 }

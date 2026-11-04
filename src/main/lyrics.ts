@@ -381,7 +381,7 @@ export function alignLyrics(lines: LyricLine[], notes: MelodyNote[], duration: n
  * tracker missed a syllable, which is important when the words are drawn
  * directly over the melody.
  */
-export function reassignWordsToNotes(lines: LyricLine[], notes: MelodyNote[]): void {
+function reassignWordsToNotes(lines: LyricLine[], notes: MelodyNote[]): void {
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
     const line = lines[lineIndex]!;
     if (!line.words.length) continue;

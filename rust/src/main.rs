@@ -3,10 +3,14 @@
 mod app;
 mod audio;
 mod editor;
+mod jobs;
 mod library;
 mod map_package;
 mod model;
 mod pitch;
+mod theme;
+mod tools;
+mod widgets;
 
 use app::KaraokeMachineApp;
 use eframe::egui;

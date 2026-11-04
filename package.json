@@ -9,7 +9,7 @@
     "start": "npm run build && ./launch.sh",
     "dev": "cargo run --manifest-path rust/Cargo.toml",
     "typecheck": "tsc --noEmit",
-    "test": "npm run assets && node dist-tools/test-pitch.js",
+    "test": "npm run typecheck && cargo test --manifest-path rust/Cargo.toml",
     "assets": "node scripts/build-tools.mjs",
     "scales": "npm run assets && node dist-tools/generate-scales.js",
     "prepare-songs": "npm run assets && node dist-tools/prepare-songs.js",

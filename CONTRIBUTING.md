@@ -30,7 +30,8 @@ The app embeds the cover art and lyrics in the package. It does not copy the aud
    npm run maps:index
    ```
 
-3. Commit both the map JSON and the regenerated `site/maps/index.json`.
+3. Commit the map JSON, the regenerated `site/maps/index.json`, and the cover image it
+   wrote to `site/maps/covers/`.
 4. Open a pull request.
 
 The map browser is deployed from `site/` by `.github/workflows/pages.yml`.

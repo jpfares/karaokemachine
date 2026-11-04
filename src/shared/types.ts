@@ -94,50 +94,6 @@ export interface Song {
   customWords?: CustomWord[];
 }
 
-/** What the library screen needs. Audio files are resolved to media:// URLs. */
-export interface SongSummary {
-  id: string;
-  title: string;
-  artist?: string;
-  source: SongSource;
-  duration: number;
-  bpm?: number;
-  tags: string[];
-  album?: string;
-  cover?: string;
-  noteCount: number;
-  lyricLines: number;
-  low: number;
-  high: number;
-  /** first ~80 notes for library artwork */
-  preview: { start: number; dur: number; midi: number }[];
-  order?: number;
-  lyricsSynced?: boolean;
-  lyricsProvider?: string;
-  youtubeUrl?: string;
-  mapped?: boolean;
-}
-
-/** Song returned to the renderer, with playable media URLs. */
-export type PlayableSong = Omit<Song, 'audio'> & {
-  audio: {
-    backing: string;
-    vocals?: string;
-    guide?: string;
-  };
-};
-
-export interface SongListItem {
-  index: number;
-  url: string;
-  status: 'ready' | 'pending' | 'error';
-  songId?: string;
-  title?: string;
-  artist?: string;
-  error?: string;
-  hasLyrics?: boolean;
-}
-
 export interface ImportProgress {
   url: string;
   index?: number;
@@ -153,10 +109,4 @@ export interface ImportProgress {
     | 'error';
   percent: number;
   message: string;
-}
-
-export interface AppInfo {
-  version: string;
-  songListPath: string;
-  assetsPath: string;
 }

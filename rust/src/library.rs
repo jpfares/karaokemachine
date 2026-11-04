@@ -1,10 +1,62 @@
 use crate::model::{Album, ScoreRecord, Scores, Settings, Song};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Serialize `value` as pretty JSON and move it into place with a rename, so
+/// a crash or full disk mid-write leaves the previous file intact instead of
+/// a truncated one. The temporary file sits beside the target.
+pub fn write_json_atomic(path: &Path, value: &impl Serialize) -> Result<(), String> {
+    let raw = serde_json::to_string_pretty(value).map_err(|error| error.to_string())?;
+    let tmp = path.with_extension("json.tmp");
+    fs::write(&tmp, raw).map_err(|error| format!("Could not write {}: {error}", tmp.display()))?;
+    fs::rename(&tmp, path).map_err(|error| {
+        let _ = fs::remove_file(&tmp);
+        format!("Could not replace {}: {error}", path.display())
+    })
+}
+
+/// Read a JSON file, or the type's default when it is missing. A file that
+/// exists but does not parse is set aside as `<name>.json.bak` and reported,
+/// never silently replaced: the next save would otherwise destroy it.
+pub fn load_json_or_default<T: DeserializeOwned + Default>(path: &Path) -> T {
+    let Ok(raw) = fs::read_to_string(path) else {
+        return T::default();
+    };
+    match serde_json::from_str(&raw) {
+        Ok(value) => value,
+        Err(error) => {
+            let backup = path.with_extension("json.bak");
+            eprintln!(
+                "could not read {}: {error}; keeping it as {}",
+                path.display(),
+                backup.display()
+            );
+            if let Err(error) = fs::rename(path, &backup) {
+                eprintln!("could not set aside {}: {error}", path.display());
+            }
+            T::default()
+        }
+    }
+}
+
+/// Copy a song folder's `song.json` to `song.json.bak` before a mapping is
+/// replaced. Returns whether there was a file to back up.
+pub fn backup_song_file(dir: &Path) -> Result<bool, String> {
+    let path = dir.join("song.json");
+    if !path.exists() {
+        return Ok(false);
+    }
+    let backup = dir.join("song.json.bak");
+    fs::copy(&path, &backup)
+        .map(|_| true)
+        .map_err(|error| format!("Could not back up {}: {error}", path.display()))
+}
+
 pub fn find_root() -> PathBuf {
-    if let Ok(root) = std::env::var("KARAOKEMACHINE_ROOT").or_else(|_| std::env::var("KEYLINE_ROOT")) {
+    if let Ok(root) = std::env::var("KARAOKEMACHINE_ROOT") {
         let path = PathBuf::from(root);
         if path.join("assets/songs").is_dir() {
             return path;
@@ -56,11 +108,16 @@ pub fn load_songs(root: &Path) -> Vec<Song> {
         let a_scale = a.source == "scale";
         let b_scale = b.source == "scale";
         if a_scale != b_scale {
-            return if a_scale { std::cmp::Ordering::Less } else { std::cmp::Ordering::Greater };
+            return if a_scale {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Greater
+            };
         }
         let ao = a.order.unwrap_or(999);
         let bo = b.order.unwrap_or(999);
-        ao.cmp(&bo).then_with(|| a.title.to_lowercase().cmp(&b.title.to_lowercase()))
+        ao.cmp(&bo)
+            .then_with(|| a.title.to_lowercase().cmp(&b.title.to_lowercase()))
     });
     songs
 }
@@ -98,9 +155,10 @@ pub fn build_albums(songs: &[Song]) -> Vec<Album> {
         let album = groups.entry(key).or_insert_with(|| Album {
             title: title.clone(),
             artist: artist.clone(),
-            cover_path: song.cover.as_ref().map(|cover| {
-                PathBuf::from("assets/songs").join(&song.id).join(cover)
-            }),
+            cover_path: song
+                .cover
+                .as_ref()
+                .map(|cover| PathBuf::from("assets/songs").join(&song.id).join(cover)),
             warmup: false,
             songs: Vec::new(),
         });
@@ -113,7 +171,7 @@ pub fn build_albums(songs: &[Song]) -> Vec<Album> {
         }
     }
     let mut imported: Vec<Album> = groups.into_values().collect();
-    imported.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+    imported.sort_by_key(|album| album.title.to_lowercase());
     albums.extend(imported);
     albums
 }
@@ -146,7 +204,7 @@ fn home_dir() -> PathBuf {
 }
 
 fn config_dir() -> PathBuf {
-    if let Ok(dir) = std::env::var("KARAOKEMACHINE_CONFIG_DIR").or_else(|_| std::env::var("KEYLINE_CONFIG_DIR")) {
+    if let Ok(dir) = std::env::var("KARAOKEMACHINE_CONFIG_DIR") {
         if !dir.is_empty() {
             return PathBuf::from(dir);
         }
@@ -163,36 +221,29 @@ fn config_dir() -> PathBuf {
 }
 
 pub fn load_settings() -> Settings {
-    let file = config_dir().join("settings.json");
-    fs::read_to_string(file)
-        .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or_default()
+    load_json_or_default(&config_dir().join("settings.json"))
 }
 
 pub fn save_settings(settings: &Settings) {
-    let dir = config_dir();
-    let _ = fs::create_dir_all(&dir);
-    let file = dir.join("settings.json");
-    if let Ok(raw) = serde_json::to_string_pretty(settings) {
-        let _ = fs::write(file, raw);
-    }
+    save_config_file("settings.json", settings);
 }
 
 pub fn load_scores() -> Scores {
-    let file = config_dir().join("scores.json");
-    fs::read_to_string(file)
-        .ok()
-        .and_then(|raw| serde_json::from_str::<Scores>(&raw).ok())
-        .unwrap_or_default()
+    load_json_or_default(&config_dir().join("scores.json"))
 }
 
 pub fn save_scores(scores: &Scores) {
+    save_config_file("scores.json", scores);
+}
+
+fn save_config_file(name: &str, value: &impl Serialize) {
     let dir = config_dir();
-    let _ = fs::create_dir_all(&dir);
-    let file = dir.join("scores.json");
-    if let Ok(raw) = serde_json::to_string_pretty(scores) {
-        let _ = fs::write(file, raw);
+    if let Err(error) = fs::create_dir_all(&dir) {
+        eprintln!("could not create {}: {error}", dir.display());
+        return;
+    }
+    if let Err(error) = write_json_atomic(&dir.join(name), value) {
+        eprintln!("{error}");
     }
 }
 
@@ -224,4 +275,74 @@ pub fn read_songlist_path() -> String {
         .join("Downloads/karaoke-songs.txt")
         .to_string_lossy()
         .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("karaokemachine-{}-{name}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("scratch dir");
+        dir
+    }
+
+    #[test]
+    fn atomic_write_leaves_only_the_target() {
+        let dir = scratch("atomic");
+        let path = dir.join("scores.json");
+        let mut scores = Scores::new();
+        scores.insert(
+            "song".into(),
+            ScoreRecord {
+                score: 7,
+                accuracy: 1.0,
+                combo: 2,
+            },
+        );
+        write_json_atomic(&path, &scores).expect("write");
+        assert!(path.exists());
+        assert!(!dir.join("scores.json.tmp").exists());
+        let back: Scores = load_json_or_default(&path);
+        assert_eq!(back["song"].score, 7);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn missing_file_loads_as_default() {
+        let dir = scratch("missing");
+        let scores: Scores = load_json_or_default(&dir.join("scores.json"));
+        assert!(scores.is_empty());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn corrupt_file_is_set_aside_not_overwritten() {
+        let dir = scratch("corrupt");
+        let path = dir.join("scores.json");
+        fs::write(&path, "{").expect("corrupt file");
+        let scores: Scores = load_json_or_default(&path);
+        assert!(scores.is_empty());
+        assert!(!path.exists());
+        assert_eq!(
+            fs::read_to_string(dir.join("scores.json.bak")).expect("backup"),
+            "{"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn song_backup_copies_the_file() {
+        let dir = scratch("backup");
+        assert_eq!(backup_song_file(&dir), Ok(false));
+        fs::write(dir.join("song.json"), "{}").expect("song file");
+        assert_eq!(backup_song_file(&dir), Ok(true));
+        assert_eq!(
+            fs::read_to_string(dir.join("song.json.bak")).expect("backup"),
+            "{}"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
 }

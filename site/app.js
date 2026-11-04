@@ -53,7 +53,7 @@ function render() {
     cover.className = 'cover';
     if (text(map.cover)) {
       const img = document.createElement('img');
-      img.src = map.cover;
+      img.src = map.cover.startsWith('data:') ? map.cover : `maps/${map.cover}`;
       img.alt = `Cover art for ${text(map.title, 'map')}`;
       img.loading = 'lazy';
       img.onerror = () => { img.remove(); cover.append(fallback(map)); };

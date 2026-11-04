@@ -1,10 +1,9 @@
 import { spawn } from 'node:child_process';
-import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import type { MelodyNote } from '../shared/types';
 import { fetchLyrics } from './lyrics';
 import { lookupItunes } from './metadata';
+import { ytDlpCommand } from './tools';
 
 export interface TrackInfo {
   sourceUrl: string;
@@ -61,22 +60,8 @@ function run(command: string, args: string[], timeoutMs = 120_000): Promise<stri
   });
 }
 
-async function exists(file: string): Promise<boolean> {
-  try {
-    await fs.access(file);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function ytDlpPrefix(): Promise<string[]> {
-  const local = path.join(process.cwd(), '.venv', 'bin', 'yt-dlp');
-  const command = (await exists(local)) ? local : 'yt-dlp';
-  const deno = path.join(os.homedir(), '.deno', 'bin', 'deno');
-  const args: string[] = [];
-  if (await exists(deno)) args.push('--js-runtimes', `deno:${deno}`);
-  return [command, ...args];
+function ytDlpPrefix(): Promise<string[]> {
+  return ytDlpCommand(process.cwd());
 }
 
 export function cleanTitle(value: string): string {
