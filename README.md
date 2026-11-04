@@ -62,9 +62,10 @@ mic latency, octave shift, and the vocal-range test.
 
 ## How an imported song becomes playable
 
-Every imported song starts with no level files and cannot be sung until a person maps it.
-The old automatic chart is only a translucent suggestion. The six generated warm-ups are
-the exception: they ship with a finished level file and are playable immediately.
+Every imported song starts with no level files and cannot be sung until a person maps it,
+or until **Auto-map** charts it from the detected melody (below). The old automatic chart
+is only a translucent suggestion. The six generated warm-ups are the exception: they ship
+with a finished level file and are playable immediately.
 
 Levels and drafts are separate JSON files in `assets/songs/<song-id>/maps/`. The editor
 always asks which map file to open; you can also create a new file there.
@@ -79,6 +80,17 @@ always asks which map file to open; you can also create a new file there.
 Drafts can be played as previews, but only a submitted level can be exported or shared.
 When a song has exactly one map file, pressing it plays that map. With zero or multiple
 map files, choose one from the map selector before pressing **PLAY**.
+
+**Auto-map** skips the drawing. The import pipeline already traces the vocal melody and
+aligns the lyric words to it; **AUTO-MAP** in the editor's inspector turns those
+suggestions into notes, connectors and placed words in one step, and the upload form's
+**Make it playable right away** box does the same automatically, saves the result as
+`maps/Auto-map.json` and opens the song on the stage. **AUTO-MAP** replaces whatever is
+already drawn in the open map file (it asks first, and `Ctrl+Z` undoes it), and the upload
+box leaves a song alone if it already has any map file. The library lists the level as
+"auto-mapped" while it keeps that file name; it stays fully editable and is only as good as
+the suggestions, so expect to fix a few notes on songs with busy vocals. The status line
+says how many words had no detected melody.
 
 ## Level editor
 
@@ -146,12 +158,14 @@ Everything fetched remains editable: title, artist, album, release date, cover a
 artist/album bios, and lyrics. Artist and album dropdowns have their own search boxes.
 Click the large cover tile to paste an image link, choose a local file, or paste an image
 from the clipboard; a preview is shown before import. You can also copy metadata from an
-existing artist/album or create new values. Then **Download & Open Editor** downloads the
-audio, separates the backing and guide vocals, and opens the manual mapper.
+existing artist/album or create new values. Then **IMPORT & OPEN EDITOR** downloads the
+audio, separates the backing and guide vocals, and asks which map file to edit. With
+**Make it playable right away** ticked the button reads **IMPORT & AUTO-MAP**, and the
+song opens on the stage with its new `maps/Auto-map.json` level instead.
 
 Lyrics are fetched from LRCLIB, lyrics.ovh, or Genius, with manual editing always
-available. The automatic chart is stored only as an editor suggestion; the imported song
-is still UNMAPPED.
+available. The automatic chart is stored as an editor suggestion; without Auto-map the
+imported song has no level file yet.
 
 ## Run it
 

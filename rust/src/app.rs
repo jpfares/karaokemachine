@@ -912,7 +912,8 @@ impl eframe::App for KaraokeMachineApp {
                 }
             });
         match editor_event {
-            EditorEvent::None => {}
+            // AutoMap is handled inside the editor and never reaches here.
+            EditorEvent::None | EditorEvent::AutoMap => {}
             EditorEvent::Back => {
                 let mut leaving = true;
                 if let Some(mut editor) = self.editor.take() {

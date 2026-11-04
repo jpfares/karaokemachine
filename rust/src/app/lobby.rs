@@ -2,6 +2,7 @@
 
 use super::stage::add_ribbon_mesh;
 use super::{ctx_pointer, pitch_col, Action, DrawerView, KaraokeMachineApp};
+use crate::automap;
 use crate::library::{build_albums, load_songs, read_songlist};
 use crate::model::{format_time, note_name};
 use crate::theme::{alpha, BG, GOLD, INK, MINT, MUTED, MUTED2, PINK};
@@ -526,6 +527,8 @@ impl KaraokeMachineApp {
                 format!("{map_count} MAPS · choose one to play")
             } else if song.maps[0].draft {
                 "DRAFT · playable preview".to_string()
+            } else if automap::is_auto_mapped(song) {
+                "auto-mapped level".to_string()
             } else if song.lyrics_synced.unwrap_or(false) {
                 "synced lyrics".to_string()
             } else if !song.lines.is_empty() {

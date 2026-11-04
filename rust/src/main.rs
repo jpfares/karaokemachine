@@ -2,6 +2,7 @@
 
 mod app;
 mod audio;
+mod automap;
 mod editor;
 mod jobs;
 mod library;

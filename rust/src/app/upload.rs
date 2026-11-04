@@ -3,7 +3,9 @@
 use super::cover::CoverPicker;
 use super::maps::install_package_as_map;
 use super::KaraokeMachineApp;
+use crate::automap;
 use crate::jobs::{Job, StreamJob};
+use crate::library::{maps_dir, save_map_file};
 use crate::map_package::MapPackage;
 use crate::model::{format_time, Song};
 use crate::theme::{alpha, GOLD, MINT, MUTED, MUTED2, PINK};
@@ -72,6 +74,8 @@ pub(super) struct UploadState {
     pub(super) artist_search: String,
     pub(super) album_search: String,
     pub(super) pending_map: Option<MapPackage>,
+    /// Make the imported song playable from its suggestions instead of opening the editor.
+    pub(super) auto_map: bool,
     pub(super) fetch: Option<Job<TrackInfo>>,
     pub(super) import: Option<StreamJob<ImportMessage>>,
 }
@@ -278,8 +282,20 @@ impl KaraokeMachineApp {
                     } else {
                         self.reload_library(ctx, now);
                         if let Some(index) = self.songs.iter().position(|song| song.id == id) {
-                            self.open_map_picker(index, super::MapPickerMode::Edit, now);
-                            self.toast("Song prepared. Choose a map file to edit.", now);
+                            // An editor opened during the import keeps its
+                            // unsaved draft: the song waits in the library.
+                            let editing = self.editor.is_some();
+                            if self.upload.auto_map {
+                                self.auto_map_imported(index, editing, now);
+                            } else if editing {
+                                self.toast(
+                                    "Song prepared. Find it in the library when you finish editing.",
+                                    now,
+                                );
+                            } else {
+                                self.open_map_picker(index, super::MapPickerMode::Edit, now);
+                                self.toast("Song prepared. Choose a map file to edit.", now);
+                            }
                         } else {
                             self.toast("Song imported, but it was not found after reload.", now);
                         }
@@ -291,6 +307,48 @@ impl KaraokeMachineApp {
                 None => {
                     self.upload.message = "The import ended without reporting a result.".into();
                 }
+            }
+        }
+    }
+
+    /// Map a freshly imported song from its suggestions into a finished level
+    /// file and open it on the stage; fall back to the map picker when there
+    /// is nothing to map from. While another song is being edited, only the
+    /// file is written and the song waits in the library.
+    fn auto_map_imported(&mut self, index: usize, editing: bool, now: f64) {
+        let Some(song) = self.songs.get(index).cloned() else {
+            return;
+        };
+        let result = automap::auto_mapped_level(&song).and_then(|(level, summary)| {
+            let path = maps_dir(&self.root, &song.id)
+                .join(format!("{}.json", automap::AUTO_MAP_FILE_STEM));
+            save_map_file(&path, &level).map(|()| summary)
+        });
+        match result {
+            Ok(summary) => {
+                self.refresh_song_maps(index);
+                if editing {
+                    self.toast(
+                        format!("{summary} Find it in the library when you finish editing."),
+                        now,
+                    );
+                } else {
+                    self.open_song(index, now);
+                    self.toast(
+                        format!("{summary} Open EDIT in the library to fix anything."),
+                        now,
+                    );
+                }
+            }
+            Err(error) if editing => {
+                self.toast(
+                    format!("Not auto-mapped: {error} The song is in the library."),
+                    now,
+                );
+            }
+            Err(error) => {
+                self.open_map_picker(index, super::MapPickerMode::Edit, now);
+                self.toast(format!("Not auto-mapped: {error}"), now);
             }
         }
     }
@@ -792,8 +850,17 @@ impl KaraokeMachineApp {
                                 .color(MUTED),
                         );
                     } else {
-                        let button = egui::Button::new("DOWNLOAD, SPLIT & OPEN EDITOR")
-                            .min_size(Vec2::new(ui.available_width(), 36.0));
+                        ui.checkbox(
+                            &mut upload.auto_map,
+                            "Make it playable right away (auto-map from the detected melody)",
+                        );
+                        let label = if upload.auto_map {
+                            "DOWNLOAD, SPLIT & AUTO-MAP"
+                        } else {
+                            "DOWNLOAD, SPLIT & OPEN EDITOR"
+                        };
+                        let button =
+                            egui::Button::new(label).min_size(Vec2::new(ui.available_width(), 36.0));
                         if ui
                             .add_enabled(!upload.url.trim().is_empty(), button)
                             .clicked()

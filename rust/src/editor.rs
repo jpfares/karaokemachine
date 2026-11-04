@@ -1,8 +1,9 @@
 use crate::audio::AudioEngine;
+use crate::automap;
 use crate::jobs::Job;
 use crate::model::{
-    format_time, note_name, pitch_color, CustomWord, LyricLine, MapFile, Note, PlacedWord,
-    RibbonLink, RibbonSide, Song, MAP_FILE_FORMAT, MAP_FILE_VERSION,
+    format_time, lane_range, note_name, pitch_color, split_line_words, CustomWord, LyricLine,
+    MapFile, Note, PlacedWord, RibbonLink, RibbonSide, Song, MAP_FILE_FORMAT, MAP_FILE_VERSION,
 };
 use crate::theme::{alpha, BG, GOLD, INK, MINT, MUTED, MUTED2, PANEL, PANEL2, PINK};
 use crate::widgets::{button, toggle};
@@ -15,6 +16,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 pub const VOCAL_BINS_PER_SECOND: f32 = 80.0;
+/// How long a first AUTO-MAP click over an existing chart stays armed.
+const AUTO_MAP_CONFIRM_SECONDS: f64 = 6.0;
 pub const RAW_PITCH_SAMPLE_RATE: f32 = 8000.0;
 
 /// Keep a dragged note long enough to remain selectable without changing the
@@ -68,6 +71,7 @@ enum EditorIcon {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EditorEvent {
     None,
+    AutoMap,
     Back,
     SaveDraft,
     ExportMap,
@@ -178,6 +182,8 @@ pub struct Editor {
     custom_word_focus: bool,
     status: String,
     last_seek: f64,
+    /// When AUTO-MAP was clicked over an existing chart, awaiting a second click.
+    auto_map_armed: Option<f64>,
 }
 
 impl Editor {
@@ -223,8 +229,6 @@ impl Editor {
         }
         let next_custom_id = custom_words.iter().map(|word| word.id).max().unwrap_or(0) + 1;
         let word_bank = build_word_bank(&song.lines, &custom_words, &words);
-        let mut low = song.low.max(0);
-        let mut high = song.high.min(127);
         let mut source: Vec<i32> = suggestions
             .iter()
             .chain(initial_notes.iter())
@@ -233,17 +237,7 @@ impl Editor {
         if source.is_empty() {
             source = song.notes.iter().map(|n| n.midi).collect();
         }
-        if let (Some(lo), Some(hi)) = (source.iter().min(), source.iter().max()) {
-            low = *lo - 2;
-            high = *hi + 3;
-        }
-        if high - low < 24 {
-            let center = (high + low) as f32 / 2.0;
-            low = (center - 12.0).floor() as i32;
-            high = (center + 12.0).ceil() as i32;
-        }
-        low = low.clamp(0, 108);
-        high = high.clamp(low + 18, 127);
+        let (low, high) = lane_range(&source, (song.low, song.high));
         let zoom = 90.0;
         let first_note = suggestions
             .iter()
@@ -305,6 +299,7 @@ impl Editor {
             custom_word_focus: false,
             status: status.to_string(),
             last_seek: 0.0,
+            auto_map_armed: None,
         }
     }
 
@@ -435,6 +430,52 @@ impl Editor {
         song
     }
 
+    /// Replace the current notes, connectors and words with a mapping built
+    /// from the suggestions. Undoable like any other edit.
+    pub fn auto_map(&mut self) -> Result<(), String> {
+        let lane = Some((self.low, self.high));
+        let mapping = automap::auto_map(&self.song, &self.suggestions, lane, &self.words)?;
+        self.auto_map_armed = None;
+        self.push_history();
+        self.status = mapping.summary() + " Check them, then submit.";
+        let mut notes = mapping.notes;
+        self.ribbon_links = links_from_legacy_notes(&notes);
+        for note in &mut notes {
+            note.ribbon = None;
+        }
+        self.notes = notes;
+        self.words = mapping.words;
+        self.selected.clear();
+        self.selected_word = None;
+        self.selected_ribbon = None;
+        self.drag = None;
+        self.rebuild_word_bank();
+        self.sort_notes();
+        Ok(())
+    }
+
+    /// AUTO-MAP over an empty chart runs at once; over existing notes or
+    /// words it asks for a second click within a few seconds first.
+    fn request_auto_map(&mut self, now: f64) {
+        let chart_is_empty =
+            self.notes.is_empty() && self.words.iter().all(|word| word.custom_id.is_some());
+        let armed = self
+            .auto_map_armed
+            .is_some_and(|at| now - at < AUTO_MAP_CONFIRM_SECONDS);
+        if !chart_is_empty && !armed {
+            self.auto_map_armed = Some(now);
+            self.status = format!(
+                "AUTO-MAP replaces the {} notes and {} words already drawn. Click it again to confirm; Ctrl+Z undoes it.",
+                self.notes.len(),
+                self.words.len()
+            );
+            return;
+        }
+        if let Err(error) = self.auto_map() {
+            self.status = error;
+        }
+    }
+
     fn validate(&self) -> Result<(), String> {
         if self.notes.is_empty() {
             return Err("Place at least one vocal note before submitting.".into());
@@ -517,6 +558,10 @@ impl Editor {
         self.draw_transport(ui, &p, &layout, audio);
         self.draw_word_bank(ui, &p, &layout, audio);
         self.draw_inspector(ui, &p, &layout, &mut event);
+        if matches!(event, EditorEvent::AutoMap) {
+            event = EditorEvent::None;
+            self.request_auto_map(ui.input(|i| i.time));
+        }
         self.draw_custom_word_dialog(&ctx);
 
         if self.playing || self.drag.is_some() || self.word_drag.is_some() {
@@ -2525,6 +2570,25 @@ impl Editor {
             MUTED,
         );
         y += 24.0;
+        if !self.suggestions.is_empty() {
+            let now = ui.input(|i| i.time);
+            if self
+                .auto_map_armed
+                .is_some_and(|at| now - at >= AUTO_MAP_CONFIRM_SECONDS)
+            {
+                self.auto_map_armed = None;
+            }
+            let auto = Rect::from_min_size(Pos2::new(x, y), Vec2::new(r.width() - 28.0, 28.0));
+            let label = if self.auto_map_armed.is_some() {
+                format!("REPLACE {} NOTES?", self.notes.len())
+            } else {
+                "AUTO-MAP".to_string()
+            };
+            if button(ui, auto, &label, self.auto_map_armed.is_some(), true) {
+                *event = EditorEvent::AutoMap;
+            }
+            y += 36.0;
+        }
         p.line_segment(
             [Pos2::new(x, y), Pos2::new(r.right() - 14.0, y)],
             Stroke::new(1.0f32, Color32::from_white_alpha(18)),
@@ -3365,7 +3429,9 @@ fn word_y_for_midi(song: &Song, midi: i32) -> f32 {
     (1.0 - (midi - low) as f32 / (high - low).max(1) as f32).clamp(0.04, 0.96)
 }
 
-fn links_from_legacy_notes(notes: &[Note]) -> Vec<RibbonLink> {
+/// Connectors implied by legacy `Note.ribbon` groups: consecutive notes of
+/// one group close enough in time become one link.
+pub(crate) fn links_from_legacy_notes(notes: &[Note]) -> Vec<RibbonLink> {
     let mut order: Vec<usize> = (0..notes.len()).collect();
     order.sort_by(|&a, &b| note_order(&notes[a], &notes[b]));
     let mut links = Vec::new();
@@ -3547,55 +3613,6 @@ fn build_word_bank(
         bank.push(token);
     }
     bank
-}
-
-fn split_line_words(line: &LyricLine) -> Vec<(String, f64, f64)> {
-    let mut source: Vec<(String, f64, f64)> = Vec::new();
-    if line.words.is_empty() {
-        source.push((
-            line.text.clone(),
-            line.start,
-            line.end.max(line.start + 0.3),
-        ));
-    } else {
-        for word in &line.words {
-            source.push((
-                word.text.clone(),
-                word.start,
-                word.end.max(word.start + 0.12),
-            ));
-        }
-    }
-    let mut result = Vec::new();
-    for (text, start, end) in source {
-        let parts: Vec<&str> = text.split_whitespace().collect();
-        if parts.len() <= 1 {
-            if let Some(part) = parts.first() {
-                result.push((part.to_string(), start, end));
-            }
-            continue;
-        }
-        let weights: Vec<f64> = parts
-            .iter()
-            .map(|part| (part.chars().count() as f64 + 1.0).max(2.0))
-            .collect();
-        let total: f64 = weights.iter().sum();
-        let span = (end - start).max(0.2);
-        let mut cursor = start;
-        for (part, weight) in parts.iter().zip(weights.iter()) {
-            let duration = span * weight / total;
-            result.push((part.to_string(), cursor, cursor + duration));
-            cursor += duration;
-        }
-    }
-    if result.is_empty() {
-        result.push((
-            line.text.clone(),
-            line.start,
-            line.end.max(line.start + 0.3),
-        ));
-    }
-    result
 }
 
 fn paint_icon_button(
@@ -4115,5 +4132,158 @@ mod tests {
         assert!(editor
             .note_edge_at_inside(Pos2::new(x1 + 1.0, y), &layout)
             .is_none());
+    }
+
+    /// A private folder per test: tests run in parallel and must not share one.
+    fn automap_scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "karaokemachine-automap-{}-{name}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("scratch dir");
+        dir
+    }
+
+    fn unmapped_song() -> Song {
+        serde_json::from_value(serde_json::json!({
+            "id": "automap",
+            "title": "Automap",
+            "duration": 10.0,
+            "mapped": false,
+            "tags": ["Imported", "UNMAPPED"],
+            "lines": [{ "start": 1.0, "end": 2.0, "text": "la la", "words": [
+                { "text": "la", "start": 1.0, "end": 1.5 },
+                { "text": "la", "start": 1.5, "end": 2.0 }
+            ]}],
+            "suggestedNotes": [
+                { "start": 1.0, "dur": 0.4, "midi": 60, "word": "la", "line": 0, "wordIndex": 0 },
+                { "start": 1.5, "dur": 0.4, "midi": 62, "word": "la", "line": 0, "wordIndex": 1 }
+            ]
+        }))
+        .expect("song")
+    }
+
+    /// An editor on a fresh draft file in `dir`, with the song's suggestions.
+    fn automap_editor(song: Song, initial: Vec<Note>, dir: &std::path::Path) -> Editor {
+        let suggestions = song.suggested_notes.clone();
+        Editor::new(
+            song,
+            suggestions,
+            initial,
+            10.0,
+            dir.join("Level.json"),
+            true,
+        )
+    }
+
+    #[test]
+    fn auto_map_fills_the_editor_and_submits_a_level() {
+        let dir = automap_scratch("submit");
+        let mut editor = automap_editor(unmapped_song(), Vec::new(), &dir);
+        assert!(editor.validate().is_err(), "an empty editor cannot submit");
+
+        editor.auto_map().expect("auto-map");
+        assert_eq!(editor.notes.len(), 2);
+        assert!(editor.notes.iter().all(|note| note.ribbon.is_none()));
+        assert!(editor.word_bank.iter().all(|token| token.placed));
+        assert!(editor.is_dirty());
+        assert!(editor.validate().is_ok());
+
+        editor.submit().expect("submit");
+        assert!(!editor.is_draft());
+        let saved = crate::library::load_map_file(&dir.join("Level.json")).expect("level");
+        assert!(!saved.draft);
+        assert_eq!(saved.notes.len(), 2);
+        assert_eq!(saved.placed_words.len(), 2);
+
+        // Undo restores the empty chart the editor started with.
+        editor.undo();
+        assert!(editor.notes.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn auto_map_turns_a_word_held_over_two_notes_into_a_connector() {
+        let dir = automap_scratch("links");
+        let mut song = unmapped_song();
+        song.suggested_notes[1].word_index = Some(0);
+        let mut editor = automap_editor(song, Vec::new(), &dir);
+        editor.auto_map().expect("auto-map");
+        assert_eq!(editor.notes.len(), 2);
+        assert_eq!(editor.ribbon_links.len(), 1);
+        assert_eq!(
+            (editor.ribbon_links[0].from, editor.ribbon_links[0].to),
+            (0, 1)
+        );
+        assert_eq!(
+            editor.words.len(),
+            2,
+            "the second lyric word sits at its own time"
+        );
+        editor.undo();
+        assert!(editor.ribbon_links.is_empty());
+    }
+
+    #[test]
+    fn auto_map_keeps_placed_custom_words_and_is_idempotent() {
+        let dir = automap_scratch("custom");
+        let mut song = unmapped_song();
+        song.custom_words = vec![CustomWord {
+            id: 1,
+            text: "whoa".into(),
+        }];
+        song.placed_words = vec![PlacedWord {
+            text: "whoa".into(),
+            start: 3.0,
+            y: 0.2,
+            line: None,
+            word_index: None,
+            custom_id: Some(1),
+        }];
+        let mut editor = automap_editor(song, Vec::new(), &dir);
+        editor.auto_map().expect("auto-map");
+        assert!(editor.words.iter().any(|word| word.custom_id == Some(1)));
+        assert!(editor.validate().is_ok());
+        let first: Vec<_> = editor
+            .notes
+            .iter()
+            .map(|note| (note.start, note.midi))
+            .collect();
+        let first_links = editor.ribbon_links.clone();
+        editor.auto_map().expect("auto-map twice");
+        let second: Vec<_> = editor
+            .notes
+            .iter()
+            .map(|note| (note.start, note.midi))
+            .collect();
+        assert_eq!(first, second);
+        assert_eq!(first_links, editor.ribbon_links);
+        assert_eq!(editor.words.len(), 3);
+    }
+
+    #[test]
+    fn auto_map_over_a_draft_asks_first_then_replaces_and_undoes() {
+        let dir = automap_scratch("confirm");
+        let song = unmapped_song();
+        let hand = vec![song.suggested_notes[0].clone()];
+        let mut editor = automap_editor(song, hand, &dir);
+        editor.request_auto_map(10.0);
+        assert_eq!(editor.notes.len(), 1, "first click only arms");
+        assert!(editor.auto_map_armed.is_some());
+        editor.request_auto_map(11.0);
+        assert_eq!(editor.notes.len(), 2);
+        editor.undo();
+        assert_eq!(editor.notes.len(), 1);
+    }
+
+    #[test]
+    fn auto_map_without_suggestions_reports_why() {
+        let dir = automap_scratch("empty");
+        let mut song = unmapped_song();
+        song.suggested_notes.clear();
+        let mut editor = automap_editor(song, Vec::new(), &dir);
+        assert!(editor.auto_map().is_err());
+        assert!(editor.notes.is_empty());
     }
 }

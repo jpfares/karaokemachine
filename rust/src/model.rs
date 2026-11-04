@@ -457,3 +457,85 @@ pub struct Album {
     pub warmup: bool,
     pub songs: Vec<usize>,
 }
+
+/// The pitch lane the editor shows and the stage lays words out against: a
+/// little around `midis`, at least two octaves tall and centred, `fallback`
+/// when there are no notes. Word labels are placed as a fraction of this
+/// lane, so everything that paints them must use the same formula.
+pub fn lane_range(midis: &[i32], fallback: (i32, i32)) -> (i32, i32) {
+    let mut low = fallback.0.max(0);
+    let mut high = fallback.1.min(127);
+    if let (Some(lo), Some(hi)) = (midis.iter().min(), midis.iter().max()) {
+        low = *lo - 2;
+        high = *hi + 3;
+    }
+    if high - low < 24 {
+        let center = (high + low) as f32 / 2.0;
+        low = (center - 12.0).floor() as i32;
+        high = (center + 12.0).ceil() as i32;
+    }
+    let low = low.clamp(0, 108);
+    (low, high.clamp(low + 18, 127))
+}
+
+/// The lane range a chart needs: a little below and above its notes, and at
+/// least an octave tall.
+pub fn pitch_range(notes: &[Note]) -> Option<(i32, i32)> {
+    let midis = notes.iter().map(|note| note.midi);
+    let (lo, hi) = (midis.clone().min()?, midis.max()?);
+    let low = (lo - 2).clamp(0, 108);
+    let high = (hi + 2).clamp(low + 12, 127);
+    Some((low, high))
+}
+
+/// Split a lyric line into placeable words with timings: one per `LyricWord`
+/// when the line has them, each multi-word entry divided by character weight,
+/// otherwise the whole line as one word.
+pub fn split_line_words(line: &LyricLine) -> Vec<(String, f64, f64)> {
+    let mut source: Vec<(String, f64, f64)> = Vec::new();
+    if line.words.is_empty() {
+        source.push((
+            line.text.clone(),
+            line.start,
+            line.end.max(line.start + 0.3),
+        ));
+    } else {
+        for word in &line.words {
+            source.push((
+                word.text.clone(),
+                word.start,
+                word.end.max(word.start + 0.12),
+            ));
+        }
+    }
+    let mut result = Vec::new();
+    for (text, start, end) in source {
+        let parts: Vec<&str> = text.split_whitespace().collect();
+        if parts.len() <= 1 {
+            if let Some(part) = parts.first() {
+                result.push((part.to_string(), start, end));
+            }
+            continue;
+        }
+        let weights: Vec<f64> = parts
+            .iter()
+            .map(|part| (part.chars().count() as f64 + 1.0).max(2.0))
+            .collect();
+        let total: f64 = weights.iter().sum();
+        let span = (end - start).max(0.2);
+        let mut cursor = start;
+        for (part, weight) in parts.iter().zip(weights.iter()) {
+            let duration = span * weight / total;
+            result.push((part.to_string(), cursor, cursor + duration));
+            cursor += duration;
+        }
+    }
+    if result.is_empty() {
+        result.push((
+            line.text.clone(),
+            line.start,
+            line.end.max(line.start + 0.3),
+        ));
+    }
+    result
+}
