@@ -5,12 +5,12 @@ use crate::library::{backup_song_file, song_audio_path, write_json_atomic};
 use crate::map_package::{MapIndex, MapIndexEntry, MapPackage};
 use crate::model::{format_time, Song};
 use crate::theme::{INK, MUTED};
-use crate::tools::http_get_text;
+use crate::tools::{http_get_bytes, http_get_text};
 use crate::widgets::{click, pill_button, pill_toggle};
 use super::{Action, KaraokeMachineApp};
 use super::lobby::paint_cover_fallback;
 use base64::Engine;
-use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Stroke, TextureHandle, TextureOptions, Vec2};
+use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Stroke, TextureOptions, Vec2};
 use std::path::{Path, PathBuf};
 
 pub(super) const MAPS_BASE_URL: &str = "https://rgbeans.github.io/karaokemachine/maps/";
@@ -18,6 +18,20 @@ pub(super) const MAPS_BASE_URL: &str = "https://rgbeans.github.io/karaokemachine
 const MAP_INDEX_LIMIT: u64 = 8 * 1024 * 1024;
 /// One map package, cover included.
 const MAP_FILE_LIMIT: u64 = 16 * 1024 * 1024;
+/// One cover image from the index.
+const MAP_COVER_LIMIT: u64 = 4 * 1024 * 1024;
+
+fn maps_base_url() -> String {
+    std::env::var("KARAOKEMACHINE_MAPS_BASE_URL").unwrap_or_else(|_| MAPS_BASE_URL.to_string())
+}
+
+/// Decode cover bytes into a texture-ready image, shrunk to thumbnail size:
+/// the browser draws covers at 54 px, so full-size art would only cost memory.
+fn decode_cover(bytes: &[u8]) -> Option<egui::ColorImage> {
+    let image = image::load_from_memory(bytes).ok()?.thumbnail(256, 256).to_rgba8();
+    let size = [image.width() as usize, image.height() as usize];
+    Some(egui::ColorImage::from_rgba_unmultiplied(size, &image.into_raw()))
+}
 
 pub(super) fn encode_path_segment(value: &str) -> String {
     let mut output = String::new();
@@ -29,26 +43,6 @@ pub(super) fn encode_path_segment(value: &str) -> String {
         }
     }
     output
-}
-
-pub(super) fn load_data_uri_texture(
-    ctx: &egui::Context,
-    key: &str,
-    data_uri: &str,
-) -> Option<TextureHandle> {
-    let (_, payload) = data_uri.split_once(";base64,")?;
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(payload)
-        .ok()?;
-    let image = image::load_from_memory(&bytes).ok()?.to_rgba8();
-    let size = [image.width() as usize, image.height() as usize];
-    let pixels = image.into_raw();
-    let color = egui::ColorImage::from_rgba_unmultiplied(size, &pixels);
-    Some(ctx.load_texture(
-        format!("map-cover-{key}"),
-        color,
-        TextureOptions::LINEAR,
-    ))
 }
 
 pub(super) fn write_song_file(dir: &Path, song: &Song) -> Result<(), String> {
@@ -182,8 +176,7 @@ impl KaraokeMachineApp {
             return;
         }
         self.map_index_job = Some(Job::run("The map browser", &self.ctx, || {
-            let base = std::env::var("KARAOKEMACHINE_MAPS_BASE_URL")
-                .unwrap_or_else(|_| MAPS_BASE_URL.to_string());
+            let base = maps_base_url();
             http_get_text(&format!("{base}index.json"), MAP_INDEX_LIMIT)
                 .and_then(|raw| serde_json::from_str::<MapIndex>(&raw).map_err(|error| format!("Could not parse map index: {error}")))
         }));
@@ -193,9 +186,7 @@ impl KaraokeMachineApp {
         if self.map_download.is_some() || entry.file.is_empty() {
             return;
         }
-        let base = std::env::var("KARAOKEMACHINE_MAPS_BASE_URL")
-            .unwrap_or_else(|_| MAPS_BASE_URL.to_string());
-        let url = format!("{base}{}", encode_path_segment(&entry.file));
+        let url = format!("{}{}", maps_base_url(), encode_path_segment(&entry.file));
         let job = Job::run("The map download", &self.ctx, move || {
             http_get_text(&url, MAP_FILE_LIMIT).and_then(|raw| MapPackage::from_json(&raw))
         });
@@ -210,15 +201,29 @@ impl KaraokeMachineApp {
             match result {
                 Ok(index) => {
                     self.map_index = index.maps;
+                    let base = maps_base_url();
                     for entry in &self.map_index {
-                        if !entry.cover.trim().is_empty()
-                            && !self.map_covers.contains_key(&entry.id)
-                        {
-                            if let Some(texture) =
-                                load_data_uri_texture(ctx, &entry.id, &entry.cover)
-                            {
+                        let cover = entry.cover.trim();
+                        if cover.is_empty() || self.map_covers.contains_key(&entry.id) {
+                            continue;
+                        }
+                        if let Some((_, payload)) = cover.strip_prefix("data:").and_then(|rest| rest.split_once(";base64,")) {
+                            // Older indexes inline the cover.
+                            let image = base64::engine::general_purpose::STANDARD
+                                .decode(payload)
+                                .ok()
+                                .and_then(|bytes| decode_cover(&bytes));
+                            if let Some(image) = image {
+                                let texture = ctx.load_texture(format!("map-cover-{}", entry.id), image, TextureOptions::LINEAR);
                                 self.map_covers.insert(entry.id.clone(), texture);
                             }
+                        } else {
+                            let url = format!("{base}{cover}");
+                            let job = Job::run("The cover download", &self.ctx, move || {
+                                let bytes = http_get_bytes(&url, MAP_COVER_LIMIT)?;
+                                decode_cover(&bytes).ok_or_else(|| format!("{url} is not an image"))
+                            });
+                            self.map_cover_jobs.push((entry.id.clone(), job));
                         }
                     }
                 }
@@ -228,6 +233,19 @@ impl KaraokeMachineApp {
                 }
             }
         }
+
+        let mut pending = Vec::new();
+        for (id, mut job) in self.map_cover_jobs.drain(..) {
+            match job.poll() {
+                None => pending.push((id, job)),
+                Some(Ok(image)) => {
+                    let texture = ctx.load_texture(format!("map-cover-{id}"), image, TextureOptions::LINEAR);
+                    self.map_covers.insert(id, texture);
+                }
+                Some(Err(error)) => eprintln!("map cover: {error}"),
+            }
+        }
+        self.map_cover_jobs = pending;
 
         let download_result = self.map_download.as_mut().and_then(|(_, job)| job.poll());
         if let Some(result) = download_result {

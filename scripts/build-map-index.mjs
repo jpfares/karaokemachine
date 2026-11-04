@@ -4,10 +4,26 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.dirname(fileURLToPath(new URL('.', import.meta.url)));
 const mapsDir = path.join(root, 'site', 'maps');
+const coversDir = path.join(mapsDir, 'covers');
 const format = 'karaokemachine-map';
 
 function fail(file, message) {
   throw new Error(`${path.basename(file)}: ${message}`);
+}
+
+const EXTENSIONS = { 'image/png': 'png', 'image/webp': 'webp', 'image/svg+xml': 'svg' };
+
+// Map packages embed their cover as a data URI. The index used to copy it
+// inline, so every listed map cost a few hundred kilobytes before the
+// browser or the app had drawn anything. Write it out as a file instead and
+// list the path, relative to the maps directory.
+async function writeCover(map, id) {
+  const match = /^data:(image\/[\w.+-]+);base64,(.+)$/s.exec(map.cover || '');
+  if (!match) return '';
+  const name = `${id.replace(/[^\w.-]/g, '_')}.${EXTENSIONS[match[1]] ?? 'jpg'}`;
+  await fs.mkdir(coversDir, { recursive: true });
+  await fs.writeFile(path.join(coversDir, name), Buffer.from(match[2], 'base64'));
+  return `covers/${name}`;
 }
 
 async function main() {
@@ -45,7 +61,7 @@ async function main() {
       duration: Number(map.duration) || 0,
       sourceUrl: map.sourceUrl,
       file,
-      cover: map.cover || '',
+      cover: await writeCover(map, map.id),
       notes: map.notes.length,
       lyrics: Array.isArray(map.lines) ? map.lines.length : 0,
       contributor: map.contributor || '',
@@ -56,7 +72,7 @@ async function main() {
   entries.sort((a, b) => a.title.localeCompare(b.title));
   await fs.writeFile(
     path.join(mapsDir, 'index.json'),
-    `${JSON.stringify({ generatedAt: new Date().toISOString(), maps: entries }, null, 2)}\n`
+    `${JSON.stringify({ maps: entries }, null, 2)}\n`
   );
   console.log(`Map index: ${entries.length} map${entries.length === 1 ? '' : 's'}`);
 }

@@ -106,6 +106,8 @@ pub struct KaraokeMachineApp {
     map_index_job: Option<Job<MapIndex>>,
     map_index_loaded: bool,
     map_covers: HashMap<String, TextureHandle>,
+    /// Cover downloads in flight, by map id.
+    map_cover_jobs: Vec<(String, Job<egui::ColorImage>)>,
     /// The id of the map being downloaded, and the download itself.
     map_download: Option<(String, Job<MapPackage>)>,
     stage: Option<Stage>,
@@ -204,6 +206,7 @@ impl KaraokeMachineApp {
             map_index_job: None,
             map_index_loaded: false,
             map_covers: HashMap::new(),
+            map_cover_jobs: Vec::new(),
             map_download: None,
             stage: None,
             editor: None,

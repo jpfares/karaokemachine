@@ -40,10 +40,16 @@ pub fn hide_console(command: &mut Command) {
     }
 }
 
-/// Fetch `url` as text. Fails after 10 seconds without a connection, 30
-/// seconds without a byte, or when the body exceeds `max_bytes`, so a
-/// stalled or oversized download cannot hang a job or exhaust memory.
+/// Fetch `url` as UTF-8 text; see [`http_get_bytes`] for the limits.
 pub fn http_get_text(url: &str, max_bytes: u64) -> Result<String, String> {
+    let bytes = http_get_bytes(url, max_bytes)?;
+    String::from_utf8(bytes).map_err(|_| format!("{url} is not UTF-8 text"))
+}
+
+/// Fetch `url`. Fails after 10 seconds without a connection, 30 seconds
+/// without a byte, or when the body exceeds `max_bytes`, so a stalled or
+/// oversized download cannot hang a job or exhaust memory.
+pub fn http_get_bytes(url: &str, max_bytes: u64) -> Result<Vec<u8>, String> {
     let agent = ureq::AgentBuilder::new()
         .timeout_connect(Duration::from_secs(10))
         .timeout_read(Duration::from_secs(30))
@@ -53,19 +59,19 @@ pub fn http_get_text(url: &str, max_bytes: u64) -> Result<String, String> {
         ureq::Error::Status(code, _) => format!("HTTP {code} from {url}"),
         ureq::Error::Transport(transport) => format!("Could not download {url}: {transport}"),
     })?;
-    let mut text = String::new();
+    let mut bytes = Vec::new();
     response
         .into_reader()
         .take(max_bytes + 1)
-        .read_to_string(&mut text)
+        .read_to_end(&mut bytes)
         .map_err(|error| format!("Could not read {url}: {error}"))?;
-    if text.len() as u64 > max_bytes {
+    if bytes.len() as u64 > max_bytes {
         return Err(format!(
             "{url} is larger than the {} MB limit",
             max_bytes / (1024 * 1024)
         ));
     }
-    Ok(text)
+    Ok(bytes)
 }
 
 #[cfg(test)]

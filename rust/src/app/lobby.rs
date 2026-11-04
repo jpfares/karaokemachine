@@ -17,7 +17,8 @@ pub(super) fn paint_cover_fallback(p: &egui::Painter, rect: Rect, title: &str) {
 }
 
 pub(super) fn load_texture(ctx: &egui::Context, path: &Path) -> Option<TextureHandle> {
-    let image = image::open(path).ok()?.to_rgba8();
+    // Library tiles are at most a few hundred pixels; full-size art only costs memory.
+    let image = image::open(path).ok()?.thumbnail(512, 512).to_rgba8();
     let size = [image.width() as usize, image.height() as usize];
     let pixels = image.into_raw();
     let color = egui::ColorImage::from_rgba_unmultiplied(size, &pixels);
