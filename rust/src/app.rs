@@ -29,7 +29,7 @@ fn pitch_col(t: f32) -> Color32 {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum DrawerViewRust {
+enum DrawerView {
     Albums,
     Imports,
     Maps,
@@ -91,7 +91,7 @@ pub struct KaraokeMachineApp {
     tracker: PitchTracker,
     reading: Option<PitchReading>,
     drawer_open: bool,
-    drawer_view: DrawerViewRust,
+    drawer_view: DrawerView,
     selected_album: Option<usize>,
     drawer_scroll: f32,
     settings_open: bool,
@@ -189,7 +189,7 @@ impl KaraokeMachineApp {
             tracker: PitchTracker::default(),
             reading: None,
             drawer_open: true,
-            drawer_view: DrawerViewRust::Albums,
+            drawer_view: DrawerView::Albums,
             selected_album: None,
             drawer_scroll: 0.0,
             settings_open: false,
@@ -231,7 +231,7 @@ impl KaraokeMachineApp {
         if setting_env("UPLOAD").is_some() {
             app.upload.open = true;
             app.drawer_open = true;
-            app.drawer_view = DrawerViewRust::Imports;
+            app.drawer_view = DrawerView::Imports;
             app.selected_album = None;
         }
         if let Some(url) = setting_env("UPLOAD_URL") {
@@ -246,11 +246,11 @@ impl KaraokeMachineApp {
         }
         match setting_env("DRAWER").as_deref() {
             Some("imports") => {
-                app.drawer_view = DrawerViewRust::Imports;
+                app.drawer_view = DrawerView::Imports;
                 app.drawer_open = true;
             }
             Some("maps") => {
-                app.drawer_view = DrawerViewRust::Maps;
+                app.drawer_view = DrawerView::Maps;
                 app.drawer_open = true;
                 app.start_map_index_fetch();
             }
@@ -455,7 +455,7 @@ impl KaraokeMachineApp {
                 stage.playing = false;
             }
         }
-        self.drawer_view = DrawerViewRust::Albums;
+        self.drawer_view = DrawerView::Albums;
         self.selected_album = None;
         self.drawer_open = true;
     }
@@ -486,12 +486,12 @@ impl KaraokeMachineApp {
             }
             Action::PlaySong(index) => self.open_song(index, now),
             Action::ShowImports => {
-                self.drawer_view = DrawerViewRust::Imports;
+                self.drawer_view = DrawerView::Imports;
                 self.selected_album = None;
                 self.drawer_scroll = 0.0;
             }
             Action::ShowAlbums => {
-                self.drawer_view = DrawerViewRust::Albums;
+                self.drawer_view = DrawerView::Albums;
                 self.selected_album = None;
                 self.drawer_scroll = 0.0;
             }
@@ -515,11 +515,11 @@ impl KaraokeMachineApp {
                 self.upload.open = true;
                 self.upload.message.clear();
                 self.drawer_open = true;
-                self.drawer_view = DrawerViewRust::Imports;
+                self.drawer_view = DrawerView::Imports;
                 self.selected_album = None;
             }
             Action::ShowMaps => {
-                self.drawer_view = DrawerViewRust::Maps;
+                self.drawer_view = DrawerView::Maps;
                 self.selected_album = None;
                 self.drawer_scroll = 0.0;
                 self.start_map_index_fetch();
@@ -833,9 +833,7 @@ impl eframe::App for KaraokeMachineApp {
 }
 
 fn setting_env(name: &str) -> Option<String> {
-    std::env::var(format!("KARAOKEMACHINE_{name}"))
-        .or_else(|_| std::env::var(format!("KEYLINE_{name}")))
-        .ok()
+    std::env::var(format!("KARAOKEMACHINE_{name}")).ok()
 }
 
 fn ctx_pointer(ui: &egui::Ui) -> Option<Pos2> {

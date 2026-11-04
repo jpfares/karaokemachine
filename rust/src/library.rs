@@ -56,7 +56,7 @@ pub fn backup_song_file(dir: &Path) -> Result<bool, String> {
 }
 
 pub fn find_root() -> PathBuf {
-    if let Ok(root) = std::env::var("KARAOKEMACHINE_ROOT").or_else(|_| std::env::var("KEYLINE_ROOT")) {
+    if let Ok(root) = std::env::var("KARAOKEMACHINE_ROOT") {
         let path = PathBuf::from(root);
         if path.join("assets/songs").is_dir() {
             return path;
@@ -198,7 +198,7 @@ fn home_dir() -> PathBuf {
 }
 
 fn config_dir() -> PathBuf {
-    if let Ok(dir) = std::env::var("KARAOKEMACHINE_CONFIG_DIR").or_else(|_| std::env::var("KEYLINE_CONFIG_DIR")) {
+    if let Ok(dir) = std::env::var("KARAOKEMACHINE_CONFIG_DIR") {
         if !dir.is_empty() {
             return PathBuf::from(dir);
         }

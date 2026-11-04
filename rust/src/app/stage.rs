@@ -1030,7 +1030,10 @@ impl KaraokeMachineApp {
         let chart_time = stage.time - self.settings.sync_ms as f64 / 1000.0;
         if stage.playing {
             let mic_ok = self.mic.is_some() || self.fake_pitch.is_some();
-            stage.score_tick(chart_time, self.reading, mic_ok);
+            // A reading arriving now was sung `latency_ms` ago, so judge it
+            // against the note that was playing then.
+            let heard_at = chart_time - self.settings.latency_ms as f64 / 1000.0;
+            stage.score_tick(heard_at, self.reading, mic_ok);
         } else {
             stage.active = stage.active_note_at(chart_time);
         }
@@ -1055,7 +1058,14 @@ impl KaraokeMachineApp {
             return;
         }
         if let Some(mic) = &self.mic {
-            let samples = mic.latest(2048);
+            let mut samples = mic.latest(2048);
+            // Input gain lifts a quiet microphone over the detector's level gate.
+            let gain = self.settings.input_gain;
+            if (gain - 1.0).abs() > 0.001 {
+                for sample in &mut samples {
+                    *sample *= gain;
+                }
+            }
             if samples.len() >= 1024 {
                 let raw = detect_pitch(&samples, mic.sample_rate as f32);
                 if let Some(reading) = raw {

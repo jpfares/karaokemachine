@@ -239,8 +239,6 @@ pub struct Settings {
     pub vocals_volume: f32,
     #[serde(default = "default_true")]
     pub show_lyrics: bool,
-    #[serde(default = "default_true")]
-    pub show_note_words: bool,
     #[serde(default)]
     pub mic_device: Option<String>,
     #[serde(default)]
@@ -279,7 +277,6 @@ impl Default for Settings {
             backing_enabled: true,
             vocals_volume: 0.0,
             show_lyrics: true,
-            show_note_words: true,
             mic_device: None,
             vocal_low: None,
             vocal_high: None,

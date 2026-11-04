@@ -4,7 +4,7 @@ use crate::library::{build_albums, load_songs, read_songlist};
 use crate::model::{format_time, note_name};
 use crate::theme::{alpha, BG, GOLD, INK, MINT, MUTED, MUTED2, PINK};
 use crate::widgets::{click, glyph_button, pill_button, pill_toggle};
-use super::{Action, ctx_pointer, DrawerViewRust, KaraokeMachineApp, pitch_col};
+use super::{Action, ctx_pointer, DrawerView, KaraokeMachineApp, pitch_col};
 use super::stage::add_ribbon_mesh;
 use eframe::egui::{self, Align2, Color32, FontId, Id, Mesh, Pos2, Rect, Shape, Stroke, StrokeKind, TextureHandle, TextureOptions, Vec2};
 use std::path::Path;
@@ -130,9 +130,9 @@ impl KaraokeMachineApp {
         p.line_segment([panel.left_top(), panel.left_bottom()], Stroke::new(1.0f32, Color32::from_white_alpha(28)));
         // header
         p.text(panel.left_top() + Vec2::new(20.0, 22.0), Align2::LEFT_TOP, "KARAOKEMACHINE · LIBRARY", FontId::monospace(8.0), MUTED2);
-        let drawer_title = if self.drawer_view == DrawerViewRust::Imports {
+        let drawer_title = if self.drawer_view == DrawerView::Imports {
             "Imports"
-        } else if self.drawer_view == DrawerViewRust::Maps {
+        } else if self.drawer_view == DrawerView::Maps {
             "Map Browser"
         } else if self.selected_album.is_some() {
             "Album"
@@ -159,9 +159,9 @@ impl KaraokeMachineApp {
             }
         }
         p.text(body.left_top(), Align2::LEFT_TOP, " ", FontId::proportional(1.0), Color32::TRANSPARENT);
-        if self.drawer_view == DrawerViewRust::Imports {
+        if self.drawer_view == DrawerView::Imports {
             self.draw_drawer_imports(ui, &p, body, actions);
-        } else if self.drawer_view == DrawerViewRust::Maps {
+        } else if self.drawer_view == DrawerView::Maps {
             self.draw_drawer_maps(ui, &p, body, actions);
         } else if let Some(index) = self.selected_album {
             self.draw_album_detail(ui, &p, body, index, actions);
@@ -188,10 +188,10 @@ impl KaraokeMachineApp {
                 br,
                 label,
                 (*view == 0
-                    && self.drawer_view == DrawerViewRust::Albums
+                    && self.drawer_view == DrawerView::Albums
                     && self.selected_album.is_none())
-                    || (*view == 1 && self.drawer_view == DrawerViewRust::Imports)
-                    || (*view == 2 && self.drawer_view == DrawerViewRust::Maps),
+                    || (*view == 1 && self.drawer_view == DrawerView::Imports)
+                    || (*view == 2 && self.drawer_view == DrawerView::Maps),
             ) {
                 match view {
                     0 => actions.push(Action::ShowAlbums),
