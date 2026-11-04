@@ -507,18 +507,37 @@ async function main() {
     const duration = built.totalBeats * built.beat + 2.4;
     const low = Math.min(...built.notes.map((n) => n.midi)) - 2;
     const high = Math.max(...built.notes.map((n) => n.midi)) + 2;
+    await fs.mkdir(path.join(dir, 'maps'), { recursive: true });
+    await fs.writeFile(
+      path.join(dir, 'maps', 'Level.json'),
+      JSON.stringify(
+        {
+          format: 'karaokemachine-level',
+          version: 1,
+          draft: false,
+          notes: built.notes,
+          lines: built.lines,
+          placedWords: [],
+          customWords: [],
+          ribbonLinks: [],
+          low,
+          high
+        },
+        null,
+        2
+      )
+    );
     const song: Song = {
       id: spec.id,
       title: spec.title,
       artist: 'KaraokeMachine warm-up',
       source: 'scale',
-      mapped: true,
       duration: Number(duration.toFixed(2)),
       bpm: spec.bpm,
       tags: spec.tags,
       album: 'Warm-ups',
       cover: 'cover.svg',
-      notes: built.notes,
+      notes: [],
       lines: built.lines,
       low,
       high,

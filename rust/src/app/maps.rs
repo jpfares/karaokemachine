@@ -1,11 +1,13 @@
 //! The community map browser: fetching the index, downloading and installing maps.
 
 use super::lobby::paint_cover_fallback;
-use super::{Action, KaraokeMachineApp};
+use super::{Action, KaraokeMachineApp, MapPickerMode};
 use crate::jobs::Job;
-use crate::library::{backup_song_file, song_audio_path, write_json_atomic};
+use crate::library::{
+    backup_song_file, maps_dir, save_map_file, song_audio_path, write_json_atomic,
+};
 use crate::map_package::{MapIndex, MapIndexEntry, MapPackage};
-use crate::model::{format_time, Song};
+use crate::model::{format_time, MapFile, Song};
 use crate::theme::{INK, MUTED};
 use crate::tools::{http_get_bytes, http_get_text};
 use crate::widgets::{click, pill_button, pill_toggle};
@@ -55,9 +57,46 @@ pub(super) fn write_song_file(dir: &Path, song: &Song) -> Result<(), String> {
     write_json_atomic(&dir.join("song.json"), song)
 }
 
-/// Whether a song folder holds work a map install would destroy.
-pub(super) fn has_hand_mapping(song: &Song) -> bool {
-    song.mapped || !song.draft_notes.is_empty()
+/// Store a shared map package as a separate local map file and update the
+/// song's metadata/lyrics without touching any existing map file.
+pub(super) fn install_package_as_map(
+    root: &Path,
+    song: &mut Song,
+    map: &MapPackage,
+) -> Result<PathBuf, String> {
+    let dir = root.join("assets/songs").join(&song.id);
+    std::fs::create_dir_all(&dir)
+        .map_err(|error| format!("Could not create {}: {error}", dir.display()))?;
+    backup_song_file(&dir)?;
+    if let Some(legacy) = MapFile::from_legacy_song(song) {
+        let legacy_path = maps_dir(root, &song.id).join("Legacy.json");
+        if !legacy_path.exists() {
+            save_map_file(&legacy_path, &legacy)?;
+        }
+    }
+    if let Some(cover) = map.save_cover(&dir)? {
+        song.cover = Some(cover);
+    }
+    song.title = map.title.clone();
+    song.artist = map.artist.clone();
+    song.album = map.album.clone();
+    song.release_date = map.release_date.clone();
+    song.lines = map.lines.clone();
+    song.youtube_url = Some(map.source_url.clone());
+    song.notes.clear();
+    song.draft_notes.clear();
+    song.placed_words.clear();
+    song.custom_words.clear();
+    song.ribbon_links.clear();
+    let path = maps_dir(root, &song.id).join(map.file_name());
+    if path.exists() {
+        let backup = path.with_extension("json.bak");
+        std::fs::copy(&path, &backup)
+            .map_err(|error| format!("Could not back up {}: {error}", path.display()))?;
+    }
+    save_map_file(&path, &map.to_map_file())?;
+    write_song_file(&dir, song)?;
+    Ok(path)
 }
 
 impl KaraokeMachineApp {
@@ -305,54 +344,23 @@ impl KaraokeMachineApp {
             })
             .cloned()
         {
-            let dir = self.root.join("assets/songs").join(&existing.id);
             let backing = song_audio_path(&self.root, &existing, "backing");
             if backing.exists() {
                 let mut song = existing.clone();
-                let backed_up = if has_hand_mapping(&song) {
-                    match backup_song_file(&dir) {
-                        Ok(backed_up) => backed_up,
-                        Err(error) => {
-                            self.toast(error, now);
-                            return;
+                match install_package_as_map(&self.root, &mut song, &map) {
+                    Ok(path) => {
+                        self.reload_library(ctx, now);
+                        if let Some(index) =
+                            self.songs.iter().position(|song| song.id == existing.id)
+                        {
+                            self.drawer_open = false;
+                            self.open_map_picker(index, MapPickerMode::Play, now);
+                            self.toast(format!("Map installed as {}.", path.display()), now);
+                        } else {
+                            self.toast("Map saved. Reload the library to see it.", now);
                         }
                     }
-                } else {
-                    false
-                };
-                match map.save_cover(&dir) {
-                    Ok(cover) => {
-                        if cover.is_some() {
-                            song.cover = cover;
-                        }
-                    }
-                    Err(error) => {
-                        self.toast(error, now);
-                        return;
-                    }
-                }
-                if let Err(error) = map.apply_to_song(&mut song) {
-                    self.toast(error, now);
-                    return;
-                }
-                if let Err(error) = write_song_file(&dir, &song) {
-                    self.toast(error, now);
-                    return;
-                }
-                self.reload_library(ctx, now);
-                if let Some(index) = self.songs.iter().position(|song| song.id == existing.id) {
-                    self.drawer_open = false;
-                    self.open_song(index, now);
-                    if backed_up {
-                        self.toast(
-                            "Map installed. Your previous mapping was kept as song.json.bak.",
-                            now,
-                        );
-                    } else {
-                        self.toast("Map installed on the existing local audio.", now);
-                    }
-                } else {
-                    self.toast("Map saved. Reload the library to see it.", now);
+                    Err(error) => self.toast(error, now),
                 }
                 return;
             }
@@ -410,10 +418,10 @@ impl KaraokeMachineApp {
 
     pub(super) fn export_editor_map(&mut self, now: f64) {
         let result: Result<Option<PathBuf>, String> = if let Some(editor) = &self.editor {
-            if !editor.song.mapped {
+            if editor.is_draft() {
                 Err("Submit the mapping before exporting it.".into())
             } else {
-                MapPackage::from_song(&self.root, &editor.song, None).and_then(|map| {
+                MapPackage::from_song(&self.root, &editor.export_song(), None).and_then(|map| {
                     let default_name = map.file_name();
                     let Some(path) = rfd::FileDialog::new()
                         .set_file_name(default_name)

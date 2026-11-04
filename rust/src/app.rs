@@ -13,11 +13,11 @@ use crate::editor::{
 };
 use crate::jobs::Job;
 use crate::library::{
-    build_albums, find_root, load_scores, load_settings, load_songs, read_songlist,
-    read_songlist_path, song_audio_path,
+    build_albums, find_root, load_map_file, load_map_files, load_scores, load_settings, load_songs,
+    maps_dir, read_songlist, read_songlist_path, save_map_file, song_audio_path,
 };
 use crate::map_package::{MapIndex, MapIndexEntry, MapPackage};
-use crate::model::{pitch_color, Album, Scores, Settings, Song};
+use crate::model::{pitch_color, Album, MapFile, MapInfo, Scores, Settings, Song};
 use crate::pitch::{PitchReading, PitchTracker};
 use crate::theme::{alpha, BG, INK, MINT};
 use eframe::egui::{self, Color32, Id, Pos2, RichText, Stroke, TextureHandle, Vec2};
@@ -38,6 +38,20 @@ enum DrawerView {
     Albums,
     Imports,
     Maps,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MapPickerMode {
+    Edit,
+    Play,
+}
+
+struct MapPicker {
+    song_index: usize,
+    mode: MapPickerMode,
+    selected: Option<usize>,
+    new_name: String,
+    message: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -115,6 +129,7 @@ pub struct KaraokeMachineApp {
     map_cover_jobs: Vec<(String, Job<egui::ColorImage>)>,
     /// The id of the map being downloaded, and the download itself.
     map_download: Option<(String, Job<MapPackage>)>,
+    map_picker: Option<MapPicker>,
     stage: Option<Stage>,
     editor: Option<Editor>,
     songlist: Vec<String>,
@@ -215,6 +230,7 @@ impl KaraokeMachineApp {
             map_covers: HashMap::new(),
             map_cover_jobs: Vec::new(),
             map_download: None,
+            map_picker: None,
             stage: None,
             editor: None,
             songlist,
@@ -307,10 +323,63 @@ impl KaraokeMachineApp {
         });
     }
 
-    fn open_editor(&mut self, index: usize, now: f64) {
-        let Some(song) = self.songs.get(index).cloned() else {
+    fn refresh_song_maps(&mut self, index: usize) {
+        let Some(song) = self.songs.get_mut(index) else {
             return;
         };
+        song.maps = load_map_files(&self.root, &song.id);
+        song.mapped = song.maps.iter().any(|map| !map.draft);
+    }
+
+    fn open_map_picker(&mut self, index: usize, mode: MapPickerMode, now: f64) {
+        if self.songs.get(index).is_none() {
+            return;
+        }
+        self.refresh_song_maps(index);
+        let song = &self.songs[index];
+        let finals: Vec<&MapInfo> = song.maps.iter().filter(|map| !map.draft).collect();
+        if mode == MapPickerMode::Play {
+            if finals.len() == 1 {
+                let path = finals[0].path.clone();
+                self.open_song_with_map(index, &path, now);
+                return;
+            }
+            if finals.is_empty() {
+                self.toast(
+                    "No finished level for this song. Choose a map file to edit.",
+                    now,
+                );
+                self.open_map_picker(index, MapPickerMode::Edit, now);
+                return;
+            }
+        }
+        let selected = None;
+        let new_name = if song.maps.iter().any(|map| map.name == "Level") {
+            "New level".into()
+        } else {
+            "Level".into()
+        };
+        self.map_picker = Some(MapPicker {
+            song_index: index,
+            mode,
+            selected,
+            new_name,
+            message: None,
+        });
+    }
+
+    fn open_editor_for_map(&mut self, index: usize, path: &std::path::Path, now: f64) {
+        let map = match load_map_file(path) {
+            Ok(map) => map,
+            Err(error) => {
+                self.toast(error, now);
+                return;
+            }
+        };
+        let Some(mut song) = self.songs.get(index).cloned() else {
+            return;
+        };
+        map.apply_to_song(&mut song);
         if let Some(audio) = &self.audio {
             audio.stop();
         }
@@ -319,35 +388,62 @@ impl KaraokeMachineApp {
         self.settings_open = false;
         self.range_test_open = false;
         self.range_testing = false;
-        let suggestions = if !song.suggested_notes.is_empty() {
-            song.suggested_notes.clone()
-        } else if !song.mapped {
-            song.notes.clone()
-        } else {
-            Vec::new()
-        };
-        let initial = if !song.mapped {
-            if !song.draft_notes.is_empty() {
-                song.draft_notes.clone()
-            } else {
-                Vec::new()
-            }
-        } else {
-            song.notes.clone()
-        };
+        let suggestions = song.suggested_notes.clone();
         let duration = song.duration().max(1.0);
         let backing = song_audio_path(&self.root, &song, "backing");
         let vocals = song_audio_path(&self.root, &song, "vocals");
-        let editor = Editor::new(song, suggestions, initial, duration);
+        let editor = Editor::new(
+            song,
+            suggestions,
+            map.notes.clone(),
+            duration,
+            path.to_path_buf(),
+            map.draft,
+        );
         if let Some(audio) = &self.audio {
             audio.set_volumes(0.9, 0.85);
             audio.set_rate(1.0);
         }
         self.editor = Some(editor);
+        self.map_picker = None;
         self.start_audio_load(backing, Some(vocals), true);
         self.started_at = now;
         self.tracker.reset();
         self.reading = None;
+    }
+
+    fn create_map_file(&mut self, index: usize, name: &str, now: f64) -> Result<(), String> {
+        let Some(song) = self.songs.get(index).cloned() else {
+            return Err("Song not found.".into());
+        };
+        let mut stem = name.trim().trim_end_matches(".json").trim().to_string();
+        if stem.is_empty() {
+            return Err("Type a file name.".into());
+        }
+        stem = stem
+            .chars()
+            .map(|ch| {
+                if ch.is_alphanumeric() || matches!(ch, '-' | '_' | ' ') {
+                    ch
+                } else {
+                    '-'
+                }
+            })
+            .collect();
+        let stem = stem.trim();
+        if stem.is_empty() || stem == "." || stem == ".." {
+            return Err("That file name is not usable.".into());
+        }
+        let dir = maps_dir(&self.root, &song.id);
+        let path = dir.join(format!("{stem}.json"));
+        if path.exists() {
+            return Err(format!("{} already exists.", path.display()));
+        }
+        let map = MapFile::new_for_song(&song);
+        save_map_file(&path, &map)?;
+        self.refresh_song_maps(index);
+        self.open_editor_for_map(index, &path, now);
+        Ok(())
     }
 
     /// Decode a song on a worker thread. `poll_audio_load` installs it into
@@ -545,14 +641,149 @@ impl KaraokeMachineApp {
                 }
             }
             Action::EditSong(index) => {
-                self.drawer_open = false;
-                self.open_editor(index, now);
+                self.open_map_picker(index, MapPickerMode::Edit, now);
             }
+        }
+    }
+
+    fn draw_map_picker(&mut self, ctx: &egui::Context, now: f64) {
+        let Some(mut picker) = self.map_picker.take() else {
+            return;
+        };
+        let Some(song) = self.songs.get(picker.song_index).cloned() else {
+            return;
+        };
+        let maps = song.maps.clone();
+        let mut close = false;
+        let mut window_open = true;
+        let mut edit_path: Option<PathBuf> = None;
+        let mut play_path: Option<PathBuf> = None;
+        let mut create = false;
+        egui::Window::new(match picker.mode {
+            MapPickerMode::Edit => "Choose a map file",
+            MapPickerMode::Play => "Choose a level",
+        })
+        .open(&mut window_open)
+        .collapsible(false)
+        .resizable(false)
+        .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
+        .show(ctx, |ui| {
+            ui.set_min_width(480.0);
+            if let Some(message) = &picker.message {
+                ui.colored_label(Color32::from_rgb(255, 93, 158), message);
+            }
+            match picker.mode {
+                MapPickerMode::Edit => {
+                    ui.label(format!(
+                        "{} · {}.json files in the song's maps folder.",
+                        song.title,
+                        maps.len()
+                    ));
+                    egui::ScrollArea::vertical()
+                        .max_height(260.0)
+                        .show(ui, |ui| {
+                            if maps.is_empty() {
+                                ui.label("No map files yet. Create one below.");
+                            }
+                            for (index, map) in maps.iter().enumerate() {
+                                ui.horizontal(|ui| {
+                                    if ui
+                                        .selectable_label(
+                                            picker.selected == Some(index),
+                                            map.display_name(),
+                                        )
+                                        .clicked()
+                                    {
+                                        picker.selected = Some(index);
+                                    }
+                                    if ui.button("EDIT").clicked() {
+                                        edit_path = Some(map.path.clone());
+                                    }
+                                });
+                            }
+                        });
+                    ui.separator();
+                    ui.label("NEW MAP FILE");
+                    ui.horizontal(|ui| {
+                        ui.text_edit_singleline(&mut picker.new_name);
+                        if ui.button("CREATE & EDIT").clicked() {
+                            create = true;
+                        }
+                    });
+                }
+                MapPickerMode::Play => {
+                    ui.label(format!("{} — choose a level.", song.title));
+                    let selected_label = picker
+                        .selected
+                        .and_then(|index| maps.get(index))
+                        .filter(|map| !map.draft)
+                        .map(MapInfo::display_name)
+                        .unwrap_or_else(|| "Select a level".into());
+                    egui::ComboBox::from_id_salt("play_map_select")
+                        .selected_text(selected_label)
+                        .show_ui(ui, |ui| {
+                            for (index, map) in maps.iter().enumerate() {
+                                if map.draft {
+                                    continue;
+                                }
+                                ui.selectable_value(
+                                    &mut picker.selected,
+                                    Some(index),
+                                    map.display_name(),
+                                );
+                            }
+                        });
+                    ui.add_space(10.0);
+                    let can_play = picker
+                        .selected
+                        .and_then(|index| maps.get(index))
+                        .is_some_and(|map| !map.draft);
+                    if ui
+                        .add_enabled(can_play, egui::Button::new("PLAY"))
+                        .clicked()
+                    {
+                        play_path = picker
+                            .selected
+                            .and_then(|index| maps.get(index))
+                            .map(|map| map.path.clone());
+                    }
+                }
+            }
+            ui.add_space(8.0);
+            if ui.button("CANCEL").clicked() {
+                close = true;
+            }
+        });
+        if !window_open {
+            close = true;
+        }
+        if let Some(path) = edit_path {
+            self.open_editor_for_map(picker.song_index, &path, now);
+            return;
+        }
+        if let Some(path) = play_path {
+            self.open_song_with_map(picker.song_index, &path, now);
+            return;
+        }
+        if create {
+            match self.create_map_file(picker.song_index, &picker.new_name, now) {
+                Ok(()) => return,
+                Err(error) => picker.message = Some(error),
+            }
+        }
+        if !close {
+            self.map_picker = Some(picker);
         }
     }
 
     fn handle_keys(&mut self, ctx: &egui::Context, now: f64) {
         if self.editor.is_some() {
+            return;
+        }
+        if self.map_picker.is_some() {
+            if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.map_picker = None;
+            }
             return;
         }
         if self.upload.open {
@@ -696,20 +927,22 @@ impl eframe::App for KaraokeMachineApp {
             EditorEvent::Back => {
                 let mut leaving = true;
                 if let Some(mut editor) = self.editor.take() {
-                    if !editor.song.mapped {
-                        match editor.save_draft(&self.root) {
-                            Ok(()) => self.toast("Draft saved. The song remains UNMAPPED.", now),
+                    if editor.is_draft() {
+                        match editor.save_draft() {
+                            Ok(()) => {
+                                editor.mark_draft_saved();
+                                self.toast("Draft saved.", now);
+                            }
                             Err(error) => {
                                 leaving = false;
                                 self.toast(format!("Could not save the draft: {error}"), now);
                             }
                         }
                     } else if editor.is_dirty() {
-                        // A mapped song only persists through Submit. Save the
-                        // edits that way, or stay in the editor if they cannot
-                        // be submitted yet; never discard them.
-                        match editor.submit(&self.root) {
-                            Ok(()) => self.toast("Mapping updated.", now),
+                        // A finished level only persists through Submit. Keep
+                        // the editor open if the edits cannot be submitted.
+                        match editor.submit() {
+                            Ok(()) => self.toast("Level updated.", now),
                             Err(error) => {
                                 leaving = false;
                                 self.toast(
@@ -737,29 +970,27 @@ impl eframe::App for KaraokeMachineApp {
             EditorEvent::ExportMap => self.export_editor_map(now),
             EditorEvent::SaveDraft => {
                 let result = if let Some(editor) = &mut self.editor {
-                    if editor.song.mapped {
-                        Err("This song is already mapped. Use Submit Mapping to save edits.".into())
+                    if !editor.is_draft() {
+                        Err("This file is a finished level. Submit Mapping to save changes.".into())
                     } else {
-                        editor
-                            .save_draft(&self.root)
-                            .map(|()| editor.mark_draft_saved())
+                        editor.save_draft().map(|()| editor.mark_draft_saved())
                     }
                 } else {
                     Ok(())
                 };
                 match result {
-                    Ok(()) => self.toast("Draft saved. The song remains UNMAPPED.", now),
+                    Ok(()) => self.toast("Draft saved.", now),
                     Err(error) => self.toast(error, now),
                 }
             }
             EditorEvent::Submit => {
                 if let Some(mut editor) = self.editor.take() {
                     editor.pause_audio(&self.audio);
-                    match editor.submit(&self.root) {
+                    match editor.submit() {
                         Ok(()) => {
                             self.reload_library(ctx, now);
                             self.drawer_open = true;
-                            self.toast("Mapping submitted. This song is now playable.", now);
+                            self.toast("Level submitted. This song is now playable.", now);
                         }
                         Err(error) => {
                             self.editor = Some(editor);
@@ -777,6 +1008,10 @@ impl eframe::App for KaraokeMachineApp {
         }
         if self.upload.open {
             self.draw_upload(ctx, now);
+        }
+        self.draw_map_picker(ctx, now);
+        if self.map_picker.is_some() {
+            actions.clear();
         }
         if let Some(toast) = &self.toast {
             let message = toast.message.clone();

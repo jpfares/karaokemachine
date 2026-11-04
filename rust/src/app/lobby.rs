@@ -523,21 +523,27 @@ impl KaraokeMachineApp {
                 FontId::proportional(12.5),
                 INK,
             );
-            let sub = if !song.mapped {
-                "UNMAPPED · manual word and note mapping required"
+            let finals = song.maps.iter().filter(|map| !map.draft).count();
+            let drafts = song.maps.len().saturating_sub(finals);
+            let sub = if finals == 0 && drafts > 0 {
+                "DRAFT ONLY · submit a level to play".to_string()
+            } else if finals == 0 {
+                "NO LEVEL · choose a map file to edit".to_string()
+            } else if finals > 1 {
+                format!("{finals} LEVELS · choose one to play")
             } else if song.lyrics_synced.unwrap_or(false) {
-                "synced lyrics"
+                "synced lyrics".to_string()
             } else if !song.lines.is_empty() {
-                "lyrics"
+                "lyrics".to_string()
             } else {
-                "instrumental"
+                "instrumental".to_string()
             };
             p.text(
                 row.left_center() + Vec2::new(30.0, 9.0),
                 Align2::LEFT_CENTER,
                 sub,
                 FontId::monospace(7.0),
-                if song.mapped { MUTED2 } else { PINK },
+                if finals == 0 { PINK } else { MUTED2 },
             );
             let meta = format!(
                 "{} · {}",

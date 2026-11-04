@@ -1,4 +1,4 @@
-use crate::model::{Album, ScoreRecord, Scores, Settings, Song};
+use crate::model::{Album, MapFile, MapInfo, ScoreRecord, Scores, Settings, Song};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -80,6 +80,101 @@ pub fn find_root() -> PathBuf {
     cwd
 }
 
+pub fn maps_dir(root: &Path, song_id: &str) -> PathBuf {
+    root.join("assets/songs").join(song_id).join("maps")
+}
+
+pub fn load_map_file(path: &Path) -> Result<MapFile, String> {
+    let raw = fs::read_to_string(path)
+        .map_err(|error| format!("Could not read {}: {error}", path.display()))?;
+    let map: MapFile = serde_json::from_str(&raw)
+        .map_err(|error| format!("Could not parse {}: {error}", path.display()))?;
+    if map.format != crate::model::MAP_FILE_FORMAT {
+        return Err(format!("{} is not a map file.", path.display()));
+    }
+    Ok(map)
+}
+
+pub fn save_map_file(path: &Path, map: &MapFile) -> Result<(), String> {
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir)
+            .map_err(|error| format!("Could not create {}: {error}", dir.display()))?;
+    }
+    write_json_atomic(path, map)
+}
+
+pub fn load_map_files(root: &Path, song_id: &str) -> Vec<MapInfo> {
+    let dir = maps_dir(root, song_id);
+    let Ok(entries) = fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    let mut maps = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
+            continue;
+        }
+        let name = path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .unwrap_or("map")
+            .to_string();
+        match load_map_file(&path) {
+            Ok(map) => maps.push(MapInfo {
+                path,
+                name,
+                draft: map.draft,
+                notes: map.notes.len(),
+            }),
+            Err(error) => eprintln!("bad map file: {error}"),
+        }
+    }
+    maps.sort_by(|a, b| {
+        a.draft
+            .cmp(&b.draft)
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+    maps
+}
+
+fn prepare_song_maps(root: &Path, song: &mut Song) {
+    let mut maps = load_map_files(root, &song.id);
+    let had_inline = !song.notes.is_empty()
+        || !song.draft_notes.is_empty()
+        || !song.placed_words.is_empty()
+        || !song.custom_words.is_empty()
+        || !song.ribbon_links.is_empty();
+    let legacy_path = maps_dir(root, &song.id).join("Legacy.json");
+    if had_inline && !legacy_path.exists() {
+        if let Some(map) = MapFile::from_legacy_song(song) {
+            match save_map_file(&legacy_path, &map) {
+                Ok(()) => {
+                    eprintln!("migrated {} into {}", song.id, legacy_path.display());
+                    maps = load_map_files(root, &song.id);
+                }
+                Err(error) => eprintln!("could not migrate {}: {error}", song.id),
+            }
+        }
+    }
+    if !maps.is_empty() && (!had_inline || legacy_path.exists()) {
+        song.notes.clear();
+        song.draft_notes.clear();
+        song.placed_words.clear();
+        song.custom_words.clear();
+        song.ribbon_links.clear();
+        song.mapped = maps.iter().any(|map| !map.draft);
+        if had_inline {
+            let song_file = root.join("assets/songs").join(&song.id).join("song.json");
+            if let Err(error) = write_json_atomic(&song_file, song) {
+                eprintln!("could not clean {}: {error}", song_file.display());
+            }
+        }
+    } else if maps.is_empty() {
+        song.mapped = false;
+    }
+    song.maps = maps;
+}
+
 pub fn load_songs(root: &Path) -> Vec<Song> {
     let dir = root.join("assets/songs");
     let mut songs = Vec::new();
@@ -99,6 +194,7 @@ pub fn load_songs(root: &Path) -> Vec<Song> {
                 if song.id.is_empty() {
                     song.id = entry.file_name().to_string_lossy().to_string();
                 }
+                prepare_song_maps(root, &mut song);
                 songs.push(song);
             }
             Err(error) => eprintln!("bad song {}: {error}", file.display()),
@@ -344,5 +440,81 @@ mod tests {
             "{}"
         );
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn legacy_inline_mapping_migrates_to_a_map_file() {
+        let root = scratch("legacy-map");
+        let song_dir = root.join("assets/songs/test-song");
+        fs::create_dir_all(&song_dir).expect("song dir");
+        fs::write(
+            song_dir.join("song.json"),
+            serde_json::json!({
+                "id": "test-song",
+                "title": "Test Song",
+                "audio": {"backing": "backing.mp3"},
+                "mapped": true,
+                "low": 48,
+                "high": 72,
+                "notes": [
+                    {"start": 1.0, "dur": 0.5, "midi": 60},
+                    {"start": 2.0, "dur": 0.5, "midi": 62}
+                ]
+            })
+            .to_string(),
+        )
+        .expect("song json");
+
+        let songs = load_songs(&root);
+        assert_eq!(songs.len(), 1);
+        let song = &songs[0];
+        assert!(song.mapped);
+        assert_eq!(song.maps.len(), 1);
+        assert!(!song.maps[0].draft);
+        assert!(song.notes.is_empty());
+        let map = load_map_file(&song.maps[0].path).expect("migrated map");
+        assert_eq!(map.notes.len(), 2);
+        assert!(song.maps[0].path.ends_with("Legacy.json"));
+
+        let again = load_songs(&root);
+        assert_eq!(again[0].maps.len(), 1);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn map_files_are_listed_without_relying_on_song_notes() {
+        let root = scratch("map-files");
+        let song_dir = root.join("assets/songs/test-song");
+        let maps = song_dir.join("maps");
+        fs::create_dir_all(&maps).expect("maps dir");
+        fs::write(
+            song_dir.join("song.json"),
+            serde_json::json!({
+                "id": "test-song",
+                "title": "Test Song",
+                "audio": {"backing": "backing.mp3"}
+            })
+            .to_string(),
+        )
+        .expect("song json");
+        let map = serde_json::json!({
+            "format": "karaokemachine-level",
+            "version": 1,
+            "draft": false,
+            "notes": [{"start": 1.0, "dur": 0.5, "midi": 60}],
+            "lines": [],
+            "low": 48,
+            "high": 72
+        });
+        fs::write(maps.join("Level.json"), map.to_string()).expect("level");
+        let mut draft = map.clone();
+        draft["draft"] = serde_json::json!(true);
+        fs::write(maps.join("Draft.json"), draft.to_string()).expect("draft");
+
+        let songs = load_songs(&root);
+        assert_eq!(songs[0].maps.len(), 2);
+        assert!(songs[0].mapped);
+        assert_eq!(songs[0].maps.iter().filter(|map| map.draft).count(), 1);
+        let _ = fs::remove_dir_all(&root);
     }
 }

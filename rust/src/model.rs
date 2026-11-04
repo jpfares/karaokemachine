@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 pub const GRADIENT: [(f32, [u8; 3]); 6] = [
     (0.0, [255, 77, 141]),
@@ -232,6 +233,9 @@ pub struct Song {
     /// Words the mapper added with the word-bank + button.
     #[serde(rename = "customWords", default, skip_serializing_if = "Vec::is_empty")]
     pub custom_words: Vec<CustomWord>,
+    /// Map files found in the song folder. Populated by the library loader.
+    #[serde(skip)]
+    pub maps: Vec<MapInfo>,
 }
 
 impl Song {
@@ -253,6 +257,120 @@ impl Song {
 
     pub fn album_display(&self) -> &str {
         self.album.as_deref().unwrap_or(self.artist_display())
+    }
+}
+
+pub const MAP_FILE_FORMAT: &str = "karaokemachine-level";
+pub const MAP_FILE_VERSION: u32 = 1;
+
+/// One selectable mapping file for a song. Both drafts and finished levels
+/// use this format; `draft` decides whether the level can be played.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct MapFile {
+    #[serde(default = "default_map_format")]
+    pub format: String,
+    #[serde(default = "default_map_version")]
+    pub version: u32,
+    #[serde(default)]
+    pub draft: bool,
+    #[serde(default)]
+    pub notes: Vec<Note>,
+    #[serde(default)]
+    pub lines: Vec<LyricLine>,
+    #[serde(rename = "placedWords", default, skip_serializing_if = "Vec::is_empty")]
+    pub placed_words: Vec<PlacedWord>,
+    #[serde(rename = "customWords", default, skip_serializing_if = "Vec::is_empty")]
+    pub custom_words: Vec<CustomWord>,
+    #[serde(rename = "ribbonLinks", default, skip_serializing_if = "Vec::is_empty")]
+    pub ribbon_links: Vec<RibbonLink>,
+    #[serde(default)]
+    pub low: i32,
+    #[serde(default)]
+    pub high: i32,
+}
+
+fn default_map_format() -> String {
+    MAP_FILE_FORMAT.into()
+}
+
+fn default_map_version() -> u32 {
+    MAP_FILE_VERSION
+}
+
+impl MapFile {
+    pub fn new_for_song(song: &Song) -> Self {
+        Self {
+            format: MAP_FILE_FORMAT.into(),
+            version: MAP_FILE_VERSION,
+            draft: true,
+            notes: Vec::new(),
+            lines: song.lines.clone(),
+            placed_words: Vec::new(),
+            custom_words: Vec::new(),
+            ribbon_links: Vec::new(),
+            low: song.low,
+            high: song.high,
+        }
+    }
+
+    pub fn from_legacy_song(song: &Song) -> Option<Self> {
+        let notes = if !song.mapped && !song.draft_notes.is_empty() {
+            song.draft_notes.clone()
+        } else {
+            song.notes.clone()
+        };
+        if notes.is_empty()
+            && song.placed_words.is_empty()
+            && song.custom_words.is_empty()
+            && song.ribbon_links.is_empty()
+        {
+            return None;
+        }
+        Some(Self {
+            format: MAP_FILE_FORMAT.into(),
+            version: MAP_FILE_VERSION,
+            draft: !song.mapped,
+            notes,
+            lines: song.lines.clone(),
+            placed_words: song.placed_words.clone(),
+            custom_words: song.custom_words.clone(),
+            ribbon_links: song.ribbon_links.clone(),
+            low: song.low,
+            high: song.high,
+        })
+    }
+
+    pub fn apply_to_song(&self, song: &mut Song) {
+        song.notes = self.notes.clone();
+        song.lines = self.lines.clone();
+        song.placed_words = self.placed_words.clone();
+        song.custom_words = self.custom_words.clone();
+        song.ribbon_links = self.ribbon_links.clone();
+        song.low = self.low;
+        song.high = self.high;
+        song.mapped = !self.draft;
+        song.draft_notes.clear();
+    }
+}
+
+/// A map file on disk, as shown in the editor and play selectors.
+#[derive(Clone, Debug)]
+pub struct MapInfo {
+    pub path: PathBuf,
+    pub name: String,
+    pub draft: bool,
+    pub notes: usize,
+}
+
+impl MapInfo {
+    pub fn display_name(&self) -> String {
+        format!(
+            "{}  [{} · {} note{}]",
+            self.name,
+            if self.draft { "draft" } else { "level" },
+            self.notes,
+            if self.notes == 1 { "" } else { "s" }
+        )
     }
 }
 

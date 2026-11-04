@@ -1,10 +1,9 @@
 //! The upload dialog: metadata fetch, cover picker and the import job.
 
 use super::cover::CoverPicker;
-use super::maps::{has_hand_mapping, write_song_file};
+use super::maps::install_package_as_map;
 use super::KaraokeMachineApp;
 use crate::jobs::{Job, StreamJob};
-use crate::library::backup_song_file;
 use crate::map_package::MapPackage;
 use crate::model::{format_time, Song};
 use crate::theme::{alpha, GOLD, MINT, MUTED, MUTED2, PINK};
@@ -243,37 +242,28 @@ impl KaraokeMachineApp {
                     self.upload.open = false;
                     if let Some(map) = pending_map {
                         let dir = self.root.join("assets/songs").join(&id);
-                        let result: Result<bool, String> = (|| {
-                            let path = dir.join("song.json");
-                            let raw = std::fs::read_to_string(&path).map_err(|error| {
-                                format!("Could not read the imported song: {error}")
-                            })?;
-                            let mut song: Song = serde_json::from_str(&raw).map_err(|error| {
-                                format!("Could not parse the imported song: {error}")
-                            })?;
-                            // The importer returns an existing folder untouched, so
-                            // a song mapped by hand can reach this point.
-                            let backed_up = has_hand_mapping(&song) && backup_song_file(&dir)?;
-                            if let Some(cover) = map.save_cover(&dir)? {
-                                song.cover = Some(cover);
+                        let mut song: Song = match std::fs::read_to_string(dir.join("song.json"))
+                            .map_err(|error| format!("Could not read the imported song: {error}"))
+                            .and_then(|raw| {
+                                serde_json::from_str(&raw).map_err(|error| {
+                                    format!("Could not parse the imported song: {error}")
+                                })
+                            }) {
+                            Ok(song) => song,
+                            Err(error) => {
+                                self.toast(error, now);
+                                return;
                             }
-                            map.apply_to_song(&mut song)?;
-                            write_song_file(&dir, &song)?;
-                            Ok(backed_up)
-                        })();
-                        match result {
-                            Ok(backed_up) => {
+                        };
+                        match install_package_as_map(&self.root, &mut song, &map) {
+                            Ok(_path) => {
                                 self.reload_library(ctx, now);
                                 if let Some(index) =
                                     self.songs.iter().position(|song| song.id == id)
                                 {
-                                    self.open_song(index, now);
+                                    self.open_map_picker(index, super::MapPickerMode::Play, now);
                                     self.toast(
-                                        if backed_up {
-                                            "Map installed. Your previous mapping was kept as song.json.bak."
-                                        } else {
-                                            "Map installed. Audio was downloaded from its source link."
-                                        },
+                                        "Map installed. Audio was downloaded from its source link.",
                                         now,
                                     );
                                 } else {
@@ -288,8 +278,8 @@ impl KaraokeMachineApp {
                     } else {
                         self.reload_library(ctx, now);
                         if let Some(index) = self.songs.iter().position(|song| song.id == id) {
-                            self.open_editor(index, now);
-                            self.toast("Song prepared. The manual editor is ready.", now);
+                            self.open_map_picker(index, super::MapPickerMode::Edit, now);
+                            self.toast("Song prepared. Choose a map file to edit.", now);
                         } else {
                             self.toast("Song imported, but it was not found after reload.", now);
                         }

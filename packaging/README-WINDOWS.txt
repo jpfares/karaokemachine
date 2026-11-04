@@ -18,20 +18,23 @@ IMPORTANT: NO COMMERCIAL AUDIO IS BUNDLED
 - Use Library -> Maps to browse the public map list, then use Import Map File
   for a downloaded package. The app downloads the audio from the map's source
   link and applies the mapping locally.
-- The six generated warm-ups ship pre-mapped and playable. They are listed in
-  Library -> Maps alongside community maps.
-- Every imported song starts as UNMAPPED. Click it in the library to open the
-  manual level editor. The old automatic chart is shown translucently as a
-  guide only; it is not playable until you draw the notes and place every
-  lyric word yourself.
+- The six generated warm-ups ship with a finished level file and are playable.
+- Every imported song starts with no level file. Click it in the library and
+  choose a map file in the editor, or create a new one. The old automatic
+  chart is shown translucently as a guide only; it is not playable until you
+  draw the notes and place every lyric word yourself.
 - Press SUBMIT MAPPING only when the editor says the mapping is complete.
-  After that the imported song becomes playable in the normal singing stage.
+  After that the map file becomes a finished level and the song is playable.
+- Drafts and finished levels are separate JSON files in the song's
+  "maps" folder. If a song has multiple finished levels, choose one from the
+  level dropdown before pressing PLAY.
 
 MAPS AND AUDIO
 - A map package contains notes, lyrics, cover art, and the original source
   link. It never contains audio.
-- Library -> Maps -> Import Map File applies a downloaded JSON map. If the
-  audio is not local, the app fetches it from the source link and separates it.
+- Library -> Maps -> Import Map File installs a downloaded JSON map as a
+  separate level file. If the audio is not local, the app fetches it from the
+  source link and separates it.
 - Uploading a brand new song, or installing a map whose audio is not already
   local, also needs Node.js 22+, ffmpeg, yt-dlp, and Python 3 with Demucs and
   numpy. They are not bundled with this portable build; the import scripts

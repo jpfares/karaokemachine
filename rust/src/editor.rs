@@ -1,8 +1,8 @@
 use crate::audio::AudioEngine;
 use crate::jobs::Job;
 use crate::model::{
-    format_time, note_name, pitch_color, CustomWord, LyricLine, Note, PlacedWord, RibbonLink,
-    RibbonSide, Song,
+    format_time, note_name, pitch_color, CustomWord, LyricLine, MapFile, Note, PlacedWord,
+    RibbonLink, RibbonSide, Song, MAP_FILE_FORMAT, MAP_FILE_VERSION,
 };
 use crate::theme::{alpha, BG, GOLD, INK, MINT, MUTED, MUTED2, PANEL, PANEL2, PINK};
 use crate::widgets::{button, toggle};
@@ -11,7 +11,7 @@ use eframe::egui::{
     RichText, Sense, Stroke, StrokeKind, Ui, Vec2,
 };
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::path::PathBuf;
 use std::time::Duration;
 
 pub const VOCAL_BINS_PER_SECOND: f32 = 80.0;
@@ -135,6 +135,9 @@ struct Layout {
 
 pub struct Editor {
     pub song: Song,
+    map_path: PathBuf,
+    map_name: String,
+    map_draft: bool,
     suggestions: Vec<Note>,
     notes: Vec<Note>,
     vocal_peaks: Vec<f32>,
@@ -183,8 +186,15 @@ impl Editor {
         suggestions: Vec<Note>,
         mut initial_notes: Vec<Note>,
         duration: f64,
+        map_path: PathBuf,
+        map_draft: bool,
     ) -> Self {
         song.notes.clear();
+        let map_name = map_path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .unwrap_or("map")
+            .to_string();
         let duration = duration.max(song.duration()).max(1.0);
         let mut words = song.placed_words.clone();
         let custom_words = song.custom_words.clone();
@@ -252,6 +262,9 @@ impl Editor {
         };
         Self {
             song,
+            map_path,
+            map_name,
+            map_draft,
             suggestions,
             notes: initial_notes,
             vocal_peaks: Vec::new(),
@@ -345,7 +358,7 @@ impl Editor {
     }
 
     pub fn mark_draft_saved(&mut self) {
-        self.status = "Draft saved. The song remains UNMAPPED.".into();
+        self.status = format!("Draft saved to {}.", self.map_name);
     }
 
     /// Unsaved edits since the last draft save or submission.
@@ -353,52 +366,73 @@ impl Editor {
         self.dirty
     }
 
-    pub fn save_draft(&mut self, root: &Path) -> Result<(), String> {
-        if self.song.mapped {
-            return Err("This song is already mapped. Use Submit Mapping to save edits.".into());
+    pub fn is_draft(&self) -> bool {
+        self.map_draft
+    }
+
+    pub fn save_draft(&mut self) -> Result<(), String> {
+        if !self.map_draft {
+            return Err("This file is a finished level. Submit Mapping to save changes.".into());
         }
         self.sort_notes();
-        self.sync_words_to_song();
-        self.song.notes.clear();
-        self.song.ribbon_links = self.ribbon_links.clone();
-        self.song.draft_notes = self.notes.clone();
-        self.song.suggested_notes = self.suggestions.clone();
-        self.song.mapped = false;
-        write_song(root, &self.song)?;
+        let map = self.to_map_file(true);
+        crate::library::save_map_file(&self.map_path, &map)?;
         self.dirty = false;
+        self.status = format!("Draft saved to {}.", self.map_name);
         Ok(())
     }
 
-    pub fn submit(&mut self, root: &Path) -> Result<(), String> {
+    pub fn submit(&mut self) -> Result<(), String> {
         self.validate()?;
         self.sort_notes();
-        let midis: Vec<i32> = self.notes.iter().map(|n| n.midi).collect();
-        if let (Some(lo), Some(hi)) = (midis.iter().min(), midis.iter().max()) {
-            self.song.low = (*lo - 2).clamp(0, 108);
-            self.song.high = (*hi + 2).clamp(self.song.low + 12, 127);
-        }
         for note in &mut self.notes {
             note.word = None;
             note.word_index = None;
             note.line = None;
         }
-        self.sync_words_to_song();
-        self.song.notes = self.notes.clone();
-        self.song.ribbon_links = self.ribbon_links.clone();
-        self.song.draft_notes.clear();
-        self.song.suggested_notes = self.suggestions.clone();
-        self.song.mapped = true;
-        self.song.tags.retain(|tag| tag != "UNMAPPED");
-        if !self.song.tags.iter().any(|tag| tag == "Mapped") {
-            self.song.tags.push("Mapped".into());
-        }
+        let map = self.to_map_file(false);
+        crate::library::save_map_file(&self.map_path, &map)?;
+        self.map_draft = false;
         self.dirty = false;
-        write_song(root, &self.song)
+        self.status = format!("Level saved to {}.", self.map_name);
+        Ok(())
     }
 
-    fn sync_words_to_song(&mut self) {
-        self.song.placed_words = self.words.clone();
-        self.song.custom_words = self.custom_words.clone();
+    fn to_map_file(&self, draft: bool) -> MapFile {
+        let mut low = self.low;
+        let mut high = self.high;
+        if let (Some(lo), Some(hi)) = (
+            self.notes.iter().map(|note| note.midi).min(),
+            self.notes.iter().map(|note| note.midi).max(),
+        ) {
+            low = (lo - 2).clamp(0, 108);
+            high = (hi + 2).clamp(low + 12, 127);
+        }
+        MapFile {
+            format: MAP_FILE_FORMAT.into(),
+            version: MAP_FILE_VERSION,
+            draft,
+            notes: self.notes.clone(),
+            lines: self.song.lines.clone(),
+            placed_words: self.words.clone(),
+            custom_words: self.custom_words.clone(),
+            ribbon_links: self.ribbon_links.clone(),
+            low,
+            high,
+        }
+    }
+
+    /// A song carrying this editor's current mapping, for map export.
+    pub fn export_song(&self) -> Song {
+        let map = self.to_map_file(false);
+        let mut song = self.song.clone();
+        map.apply_to_song(&mut song);
+        song.mapped = true;
+        song.tags.retain(|tag| tag != "UNMAPPED");
+        if !song.tags.iter().any(|tag| tag == "Mapped") {
+            song.tags.push("Mapped".into());
+        }
+        song
     }
 
     fn validate(&self) -> Result<(), String> {
@@ -1198,37 +1232,42 @@ impl Editor {
             Pos2::new(70.0, 48.0),
             Align2::LEFT_TOP,
             format!(
-                "{}   ·   {}   ·   {} notes",
+                "{}   ·   {}   ·   {} notes   ·   {}",
                 self.song.artist_display(),
                 self.song.album_display(),
-                self.notes.len()
+                self.notes.len(),
+                self.map_name
             ),
             FontId::monospace(7.0),
             MUTED,
         );
         let badge =
             Rect::from_min_size(Pos2::new(rect.right() - 390.0, 17.0), Vec2::new(96.0, 26.0));
-        p.rect_filled(
-            badge,
-            13.0,
-            Color32::from_rgba_unmultiplied(255, 93, 158, 22),
-        );
+        let badge_color = if self.map_draft {
+            Color32::from_rgba_unmultiplied(255, 209, 102, 22)
+        } else {
+            Color32::from_rgba_unmultiplied(124, 247, 196, 22)
+        };
+        p.rect_filled(badge, 13.0, badge_color);
         p.rect_stroke(
             badge,
             13.0,
-            Stroke::new(1.0f32, Color32::from_rgba_unmultiplied(255, 93, 158, 90)),
+            Stroke::new(
+                1.0f32,
+                if self.map_draft {
+                    alpha(GOLD, 90)
+                } else {
+                    alpha(MINT, 90)
+                },
+            ),
             StrokeKind::Inside,
         );
         p.text(
             badge.center(),
             Align2::CENTER_CENTER,
-            if self.song.mapped {
-                "MAPPED"
-            } else {
-                "UNMAPPED"
-            },
+            if self.map_draft { "DRAFT" } else { "LEVEL" },
             FontId::monospace(8.0),
-            if self.song.mapped { MINT } else { PINK },
+            if self.map_draft { GOLD } else { MINT },
         );
         let progress = self.word_progress();
         let progress_rect = Rect::from_min_size(
@@ -2750,10 +2789,10 @@ impl Editor {
             Pos2::new(x, r.bottom() - 52.0),
             Vec2::new(r.width() - 28.0, 38.0),
         );
-        let top_action = if self.song.mapped {
-            export.top()
-        } else {
+        let top_action = if self.map_draft {
             save.top()
+        } else {
+            export.top()
         };
         let ok = self.validate().is_ok();
         if let Err(reason) = self.validate() {
@@ -2769,10 +2808,10 @@ impl Editor {
                 MINT,
             );
         }
-        if self.song.mapped && button(ui, export, "EXPORT MAP", false, true) {
+        if !self.map_draft && button(ui, export, "EXPORT MAP", false, true) {
             *event = EditorEvent::ExportMap;
         }
-        if button(ui, save, "SAVE AS DRAFT", false, true) {
+        if button(ui, save, "SAVE AS DRAFT", false, self.map_draft) {
             *event = EditorEvent::SaveDraft;
         }
         if button(ui, submit, "SUBMIT MAPPING", ok, ok) && ok {
@@ -3559,11 +3598,6 @@ fn split_line_words(line: &LyricLine) -> Vec<(String, f64, f64)> {
     result
 }
 
-fn write_song(root: &Path, song: &Song) -> Result<(), String> {
-    let path = root.join("assets/songs").join(&song.id).join("song.json");
-    crate::library::write_json_atomic(&path, song)
-}
-
 fn paint_icon_button(
     ui: &mut Ui,
     rect: Rect,
@@ -3882,7 +3916,14 @@ mod tests {
             "audio": {"backing": "backing.mp3"}
         }))
         .expect("test song");
-        Editor::new(song, Vec::new(), Vec::new(), 30.0)
+        Editor::new(
+            song,
+            Vec::new(),
+            Vec::new(),
+            30.0,
+            PathBuf::from("test-level.json"),
+            true,
+        )
     }
 
     fn note(start: f64) -> Note {
@@ -3896,6 +3937,35 @@ mod tests {
             vel: None,
             ribbon: None,
         }
+    }
+
+    #[test]
+    fn drafts_and_levels_save_to_the_selected_map_file() {
+        let dir =
+            std::env::temp_dir().join(format!("karaokemachine-editor-map-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("scratch dir");
+        let path = dir.join("Level.json");
+        let song: Song = serde_json::from_value(serde_json::json!({
+            "id": "test",
+            "title": "Test",
+            "low": 48,
+            "high": 72,
+            "audio": {"backing": "backing.mp3"}
+        }))
+        .expect("test song");
+        let mut editor = Editor::new(song, Vec::new(), Vec::new(), 20.0, path.clone(), true);
+        editor.notes.push(note(1.0));
+        editor.save_draft().expect("save draft");
+        let draft = crate::library::load_map_file(&path).expect("draft file");
+        assert!(draft.draft);
+        assert_eq!(draft.notes.len(), 1);
+
+        editor.submit().expect("submit level");
+        let level = crate::library::load_map_file(&path).expect("level file");
+        assert!(!level.draft);
+        assert_eq!(level.notes.len(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -3944,7 +4014,14 @@ mod tests {
         }))
         .expect("legacy song");
         let initial = song.notes.clone();
-        let editor = Editor::new(song, Vec::new(), initial, 20.0);
+        let editor = Editor::new(
+            song,
+            Vec::new(),
+            initial,
+            20.0,
+            PathBuf::from("legacy-level.json"),
+            false,
+        );
         assert_eq!(editor.ribbon_links.len(), 1);
         assert_eq!(editor.ribbon_links[0].from, 0);
         assert_eq!(editor.ribbon_links[0].to, 1);

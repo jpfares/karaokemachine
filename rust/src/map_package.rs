@@ -1,4 +1,7 @@
-use crate::model::{CustomWord, LyricLine, Note, PlacedWord, RibbonLink, Song};
+use crate::model::{
+    CustomWord, LyricLine, MapFile, Note, PlacedWord, RibbonLink, Song, MAP_FILE_FORMAT,
+    MAP_FILE_VERSION,
+};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
@@ -148,6 +151,7 @@ impl MapPackage {
         })
     }
 
+    #[allow(dead_code)]
     pub fn apply_to_song(&self, song: &mut Song) -> Result<(), String> {
         if self.notes.is_empty() {
             return Err("This map has no notes.".into());
@@ -215,6 +219,21 @@ impl MapPackage {
         song.tags.push("Mapped".into());
         song.tags.push("Community map".into());
         Ok(())
+    }
+
+    pub fn to_map_file(&self) -> MapFile {
+        MapFile {
+            format: MAP_FILE_FORMAT.into(),
+            version: MAP_FILE_VERSION,
+            draft: false,
+            notes: self.notes.clone(),
+            lines: self.lines.clone(),
+            placed_words: self.placed_words.clone(),
+            custom_words: self.custom_words.clone(),
+            ribbon_links: self.ribbon_links.clone(),
+            low: self.low,
+            high: self.high,
+        }
     }
 
     pub fn save_cover(&self, dir: &Path) -> Result<Option<String>, String> {
@@ -420,6 +439,16 @@ mod tests {
         assert_eq!(target.ribbon_links.len(), 1);
         assert_eq!(target.ribbon_links[0].from, 0);
         assert_eq!(target.ribbon_links[0].to, 1);
+    }
+
+    #[test]
+    fn map_package_converts_to_a_finished_map_file() {
+        let package = MapPackage::from_song(Path::new("."), &song(), None).expect("export map");
+        let map = package.to_map_file();
+        assert!(!map.draft);
+        assert_eq!(map.notes.len(), 1);
+        assert_eq!(map.lines.len(), 1);
+        assert_eq!(map.placed_words.len(), 1);
     }
 
     #[test]

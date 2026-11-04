@@ -15,9 +15,9 @@ sing. The level editor exists for one reason: to turn a song into a playable kar
 
 The public map browser shares mappings only: notes, ribbons, lyrics, cover art, and the
 original source link. It hosts **no audio**. The app's **Library → Maps** tab loads the
-public map list automatically. Use **Import Map File** for a downloaded package; if the
-audio is not already local, KaraokeMachine fetches it from the map's source link and
-applies the mapping.
+public map list automatically. Use **Import Map File** for a downloaded package; it is
+installed as a separate level file under the song's `maps/` folder. If the audio is not
+already local, KaraokeMachine fetches it from the map's source link.
 
 To share a map, submit a mapping made in the editor. See
 [CONTRIBUTING.md](CONTRIBUTING.md). Exported map packages contain no audio files.
@@ -62,19 +62,23 @@ mic latency, octave shift, and the vocal-range test.
 
 ## How an imported song becomes playable
 
-Every imported song starts **UNMAPPED** and cannot be sung until a person maps it. The old
-automatic chart is only a translucent suggestion. The six generated warm-ups are the
-exception: they ship pre-mapped, playable, and listed in **Library → Maps**.
+Every imported song starts with no level files and cannot be sung until a person maps it.
+The old automatic chart is only a translucent suggestion. The six generated warm-ups are
+the exception: they ship with a finished level file and are playable immediately.
 
-1. Click an UNMAPPED imported song in the library.
-2. Draw or correct the vocal notes over the suggestion.
-3. With the Ribbon tool, drag from a dot on one note to a dot on another to connect them.
-4. Drag lyric words anywhere onto the level as decorations.
-5. Place every word, then press **SUBMIT MAPPING**.
-6. The song becomes playable in the normal singing stage.
+Levels and drafts are separate JSON files in `assets/songs/<song-id>/maps/`. The editor
+always asks which map file to open; you can also create a new file there.
 
-Unfinished work is saved as a draft and remains UNMAPPED. Submitted maps are stored in
-the song's `song.json`.
+1. Select a song in the library and press **EDIT**.
+2. Choose an existing map file, or create a new map file.
+3. Draw or correct the vocal notes over the suggestion.
+4. With the Ribbon tool, drag from a dot on one note to a dot on another to connect them.
+5. Drag lyric words anywhere onto the level as decorations.
+6. Press **SAVE AS DRAFT** to keep working, or **SUBMIT MAPPING** to finish the level.
+
+A draft cannot be played. When a song has exactly one finished level, pressing it plays
+that level. With zero or multiple finished levels, choose the file from the level
+selector before pressing **PLAY**.
 
 ## Level editor
 
@@ -112,11 +116,11 @@ or contract it. Hold right-click and drag to move the yellow now-playing line co
 | Play / pause | `Space` |
 | Seek | Arrow keys, or click/drag the time ruler |
 | Save draft | **SAVE AS DRAFT** in the inspector, or `Ctrl+S` |
-| Export a shared map | Open a mapped song → **EDIT** → **EXPORT MAP** |
+| Export a shared map | **EDIT** → choose a finished level file → **EXPORT MAP** |
 | Undo / redo | `Ctrl+Z` / `Ctrl+Shift+Z` or `Ctrl+Y` |
 | Select tool | Keys `1`–`5` |
 | Delete selection | `Delete` / `Backspace` |
-| Leave editor | `Esc` or the back arrow (saves a draft for unmapped songs) |
+| Leave editor | `Esc` or the back arrow (drafts save; edited levels submit) |
 
 Word decorations are completely independent of notes. Dropping a word on a note snaps it
 there for convenience, but it can then be dragged anywhere horizontally or vertically.
@@ -207,9 +211,8 @@ commands on `PATH` (`python3` on Linux and macOS, `python` on Windows).
 5. Trace the vocal melody for the translucent editor suggestions.
 6. Fetch lyrics from LRCLIB, lyrics.ovh, or Genius; the mapper can edit them.
 7. Fetch album metadata/artwork from iTunes, or accept a custom cover URL/file.
-8. Write the song as `mapped: false` with empty `notes` and the automatic chart in
-   `suggestedNotes`.
-9. Open the level editor.
+8. Write the song metadata with the automatic chart in `suggestedNotes`.
+9. Ask which map file to edit, or let the mapper create a new one.
 
 ## Windows package
 
@@ -234,9 +237,12 @@ the bundled library does not.
 ## Repository and media
 
 The public repository contains the app, tools, documentation, and the six generated
-warm-up tracks. It does **not** contain the commercial recordings used during
-development. Commercial tracks under `assets/songs/*` are gitignored; use the upload flow
-or place licensed audio in your local library.
+warm-up tracks with their level files. It does **not** contain the commercial recordings
+used during development. Commercial tracks under `assets/songs/*` are gitignored; use the
+upload flow or place licensed audio in your local library.
+
+Each song folder keeps its metadata and audio in `song.json`; its mappings live in
+`maps/*.json`. Drafts and finished levels use the same file format, with a `draft` flag.
 
 ## Project layout
 
@@ -267,6 +273,7 @@ scripts/               tooling, map index, warm-up generation, Windows packaging
 site/                  GitHub Pages map browser and JSON map packages
 packaging/             Windows README copied into the portable zip
 docs/                  screenshots
+assets/songs/<song>/maps/  draft and finished level JSON files
 ```
 
 ## Known limits

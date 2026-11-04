@@ -1,8 +1,8 @@
 //! The singing stage: scoring, the pitch-lane layout and its painting.
 
-use super::{ctx_pointer, pitch_col, Action, KaraokeMachineApp};
+use super::{ctx_pointer, pitch_col, Action, KaraokeMachineApp, MapPickerMode};
 use crate::audio::Microphone;
-use crate::library::{save_score, save_settings, song_audio_path};
+use crate::library::{load_map_file, save_score, save_settings, song_audio_path};
 use crate::model::{format_time, note_name, Note, RibbonSide, ScoreRecord, Scores, Settings, Song};
 use crate::pitch::{detect_pitch, PitchReading};
 use crate::theme::{alpha, BG, GOLD, INK, LINE, MINT, MUTED, MUTED2, OCTAVE_BLUE, PINK};
@@ -966,14 +966,32 @@ impl KaraokeMachineApp {
     }
 
     pub(super) fn open_song(&mut self, index: usize, now: f64) {
-        let Some(song) = self.songs.get(index).cloned() else {
+        self.open_map_picker(index, MapPickerMode::Play, now);
+    }
+
+    pub(super) fn open_song_with_map(
+        &mut self,
+        index: usize,
+        map_path: &std::path::Path,
+        now: f64,
+    ) {
+        let Some(mut song) = self.songs.get(index).cloned() else {
             return;
         };
-        if !song.mapped {
-            self.open_editor(index, now);
+        let map = match load_map_file(map_path) {
+            Ok(map) => map,
+            Err(error) => {
+                self.toast(error, now);
+                return;
+            }
+        };
+        if map.draft {
+            self.toast("That map file is still a draft.", now);
             return;
         }
+        map.apply_to_song(&mut song);
         self.editor = None;
+        self.map_picker = None;
         if let Some(audio) = &self.audio {
             audio.stop();
         }
