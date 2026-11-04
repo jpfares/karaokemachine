@@ -15,9 +15,6 @@ await build({
   entryPoints: [
     path.join(root, 'scripts/generate-scales.ts'),
     path.join(root, 'scripts/prepare-songs.ts'),
-    path.join(root, 'scripts/test-pitch.ts'),
-    path.join(root, 'scripts/enrich-covers.ts'),
-    path.join(root, 'scripts/realign-lyrics.ts'),
     path.join(root, 'scripts/song-info.ts'),
     path.join(root, 'scripts/import-song.ts'),
     path.join(root, 'scripts/fetch-cover.ts')

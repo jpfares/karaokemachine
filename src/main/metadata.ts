@@ -164,5 +164,3 @@ export async function enrichCover(
 export function fallbackCoverFor(title: string, artist: string, notes: MelodyNote[]): string {
   return fallbackCover(title, artist, notes);
 }
-
-export { noteName };
