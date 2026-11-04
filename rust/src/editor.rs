@@ -276,6 +276,26 @@ impl Editor {
         self.audio_ready = ready;
     }
 
+    /// Bring a freshly installed engine in line with the editor's transport.
+    /// The decode can finish while the chart preview is already playing, or
+    /// the engine may have been rebuilt after a device change.
+    pub fn sync_audio(&self, audio: &AudioEngine) {
+        let (backing, vocals) = self.mix_levels();
+        audio.set_volumes(backing, vocals);
+        audio.set_rate(self.speed);
+        audio.seek(self.playhead);
+        if self.playing {
+            audio.play();
+        }
+    }
+
+    fn mix_levels(&self) -> (f32, f32) {
+        (
+            if self.backing_on { 0.9 } else { 0.0 },
+            if self.vocals_on { 0.85 } else { 0.0 },
+        )
+    }
+
     pub fn set_vocal_peaks(&mut self, peaks: Vec<f32>) {
         self.vocal_peaks = peaks;
     }
@@ -2491,10 +2511,8 @@ impl Editor {
 
     fn apply_editor_volumes(&self, audio: &Option<AudioEngine>) {
         if let Some(audio) = audio {
-            audio.set_volumes(
-                if self.backing_on { 0.9 } else { 0.0 },
-                if self.vocals_on { 0.85 } else { 0.0 },
-            );
+            let (backing, vocals) = self.mix_levels();
+            audio.set_volumes(backing, vocals);
         }
     }
 

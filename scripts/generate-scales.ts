@@ -426,9 +426,10 @@ function renderBacking(spec: ScaleSpec, built: Built): Mix {
   return mix;
 }
 
-function renderGuide(built: Built): Mix {
+// The guide is rendered to the backing's exact length: the app pairs the two
+// stems frame for frame, and a shorter guide used to be dropped entirely.
+function renderGuide(built: Built, seconds: number): Mix {
   const { notes, beat } = built;
-  const seconds = Math.max(...notes.map((n) => n.start + n.dur)) + 2;
   const mix = new Mix(seconds);
   notes.forEach((note, i) => {
     const freq = 440 * Math.pow(2, (note.midi - 69) / 12);
@@ -491,10 +492,11 @@ async function main() {
     const dir = path.join(OUT, spec.id);
     await fs.mkdir(dir, { recursive: true });
 
-    const backing = renderBacking(spec, built).finish();
+    const backingMix = renderBacking(spec, built);
+    const backing = backingMix.finish();
     await fs.writeFile(path.join(dir, 'backing.wav'), wav([backing.left, backing.right]));
 
-    const guide = renderGuide(built).finish();
+    const guide = renderGuide(built, backingMix.seconds).finish();
     await fs.writeFile(path.join(dir, 'guide.wav'), wav([guide.left, guide.right]));
 
     encodeOpus(path.join(dir, 'backing.wav'), path.join(dir, 'backing.ogg'), '160k');

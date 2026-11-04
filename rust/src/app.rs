@@ -5,7 +5,7 @@ mod settings;
 mod stage;
 mod upload;
 
-use crate::audio::{AudioEngine, input_device_names, Microphone};
+use crate::audio::{AudioEngine, input_device_names, LoadedAudio, Microphone};
 use crate::editor::{Editor, EditorEvent, RAW_PITCH_SAMPLE_RATE, spawn_raw_pitch_track, VOCAL_BINS_PER_SECOND};
 use crate::jobs::Job;
 use crate::library::{build_albums, find_root, load_scores, load_settings, load_songs, read_songlist, read_songlist_path, song_audio_path};
@@ -61,6 +61,12 @@ enum Action {
     EditSong(usize),
 }
 
+/// Vocal-stem analysis the editor needs, computed by the decode job.
+struct EditorAudio {
+    peaks: Vec<f32>,
+    mono: Vec<f32>,
+}
+
 struct Toast {
     message: String,
     until: f64,
@@ -77,6 +83,8 @@ pub struct KaraokeMachineApp {
     covers: HashMap<String, TextureHandle>,
     cover_paths: HashMap<String, PathBuf>,
     audio: Option<AudioEngine>,
+    /// The song being decoded for the stage or the editor.
+    audio_load: Option<Job<(LoadedAudio, Option<EditorAudio>)>>,
     mic: Option<Microphone>,
     mic_error: Option<String>,
     mic_devices: Vec<String>,
@@ -174,6 +182,7 @@ impl KaraokeMachineApp {
                     None
                 }
             },
+            audio_load: None,
             mic: None,
             mic_error: None,
             mic_devices: input_device_names(),
@@ -313,32 +322,126 @@ impl KaraokeMachineApp {
         let duration = song.duration().max(1.0);
         let backing = song_audio_path(&self.root, &song, "backing");
         let vocals = song_audio_path(&self.root, &song, "vocals");
-        let mut editor = Editor::new(song, suggestions, initial, duration);
+        let editor = Editor::new(song, suggestions, initial, duration);
         if let Some(audio) = &self.audio {
             audio.set_volumes(0.9, 0.85);
             audio.set_rate(1.0);
-            match audio.load(&backing, Some(&vocals)) {
-                Ok(duration) => {
-                    editor.set_audio_ready(duration > 0.0);
-                    editor.set_vocal_peaks(audio.vocal_peaks(VOCAL_BINS_PER_SECOND));
-                    let mono = audio.vocal_mono(RAW_PITCH_SAMPLE_RATE);
-                    if !mono.is_empty() {
-                        editor.set_pitch_job(spawn_raw_pitch_track(
-                            &self.ctx,
-                            mono,
-                            VOCAL_BINS_PER_SECOND,
-                        ));
-                    }
-                }
-                Err(error) => {
-                    self.toast(format!("Audio preview unavailable: {error}"), now);
-                }
-            }
         }
         self.editor = Some(editor);
+        self.start_audio_load(backing, Some(vocals), true);
         self.started_at = now;
         self.tracker.reset();
         self.reading = None;
+    }
+
+    /// Decode a song on a worker thread. `poll_audio_load` installs it into
+    /// the engine when it is ready; a load started later replaces this one.
+    fn start_audio_load(&mut self, backing: PathBuf, vocals: Option<PathBuf>, for_editor: bool) {
+        let Some(audio) = &self.audio else {
+            return;
+        };
+        let rate = audio.sample_rate();
+        self.audio_load = Some(Job::run("Audio loading", &self.ctx, move || {
+            let audio = LoadedAudio::decode(&backing, vocals.as_deref(), rate)
+                .map_err(|error| format!("{error:#}"))?;
+            let analysis = for_editor.then(|| EditorAudio {
+                peaks: audio.vocal_peaks(VOCAL_BINS_PER_SECOND),
+                mono: audio.vocal_mono(RAW_PITCH_SAMPLE_RATE),
+            });
+            Ok((audio, analysis))
+        }));
+    }
+
+    fn poll_audio_load(&mut self, now: f64) {
+        let Some(result) = self.audio_load.as_mut().and_then(Job::poll) else {
+            return;
+        };
+        self.audio_load = None;
+        let (loaded, analysis) = match result {
+            Ok(loaded) => loaded,
+            Err(error) => {
+                if let Some(stage) = &mut self.stage {
+                    stage.audio_loading = false;
+                    stage.play_when_loaded = false;
+                }
+                self.toast(format!("Could not load audio: {error}"), now);
+                return;
+            }
+        };
+        let Some(audio) = &self.audio else {
+            return;
+        };
+        let duration = audio.install(loaded);
+        if let Some(editor) = &mut self.editor {
+            editor.set_audio_ready(duration > 0.0);
+            if duration > 0.0 {
+                editor.sync_audio(audio);
+            }
+            if let Some(analysis) = analysis {
+                editor.set_vocal_peaks(analysis.peaks);
+                if !analysis.mono.is_empty() {
+                    editor.set_pitch_job(spawn_raw_pitch_track(
+                        &self.ctx,
+                        analysis.mono,
+                        VOCAL_BINS_PER_SECOND,
+                    ));
+                }
+            }
+        } else if let Some(stage) = &mut self.stage {
+            stage.duration = duration.max(stage.duration);
+            stage.audio_loaded = duration > 0.0;
+            stage.audio_loading = false;
+            audio.seek(stage.time);
+            if stage.play_when_loaded {
+                stage.play_when_loaded = false;
+                if stage.audio_loaded {
+                    audio.play();
+                }
+                stage.playing = true;
+                stage.started = true;
+            }
+        }
+    }
+
+    /// Rebuild a stream that cpal reported dead (device unplugged or the
+    /// default device changed), then reload whatever was open.
+    fn recover_audio_devices(&mut self, now: f64) {
+        if self.audio.as_ref().is_some_and(AudioEngine::failed) {
+            self.audio = None;
+            match AudioEngine::new(self.backing_level(), self.settings.vocals_volume) {
+                Ok(audio) => {
+                    self.audio = Some(audio);
+                    self.toast("Audio output restarted after a device change.", now);
+                    self.reload_current_audio();
+                }
+                Err(error) => self.toast(format!("Audio output stopped: {error:#}"), now),
+            }
+        }
+        if self.mic.as_ref().is_some_and(Microphone::failed) {
+            self.mic = None;
+            self.toast("Microphone stopped; reconnecting.", now);
+            self.start_mic();
+        }
+    }
+
+    fn reload_current_audio(&mut self) {
+        if let Some(editor) = &mut self.editor {
+            let backing = song_audio_path(&self.root, &editor.song, "backing");
+            let vocals = song_audio_path(&self.root, &editor.song, "vocals");
+            editor.set_audio_ready(false);
+            if let Some(audio) = &self.audio {
+                audio.set_volumes(0.9, 0.85);
+            }
+            self.start_audio_load(backing, Some(vocals), true);
+        } else if let Some(stage) = &mut self.stage {
+            let backing = song_audio_path(&self.root, &stage.song, "backing");
+            let vocals = song_audio_path(&self.root, &stage.song, "vocals");
+            stage.play_when_loaded = stage.playing;
+            stage.playing = false;
+            stage.audio_loaded = false;
+            stage.audio_loading = true;
+            self.start_audio_load(backing, Some(vocals), false);
+        }
     }
 
     fn open_menu(&mut self) {
@@ -526,17 +629,23 @@ impl eframe::App for KaraokeMachineApp {
                 }
             }
             if self.auto_play {
-                if let Some(audio) = &self.audio {
-                    audio.play();
-                }
                 if let Some(stage) = &mut self.stage {
-                    stage.playing = true;
-                    stage.started = true;
+                    if stage.audio_loading {
+                        stage.play_when_loaded = true;
+                    } else {
+                        if let Some(audio) = &self.audio {
+                            audio.play();
+                        }
+                        stage.playing = true;
+                        stage.started = true;
+                    }
                 }
             }
         }
         self.started_at = if self.started_at == 0.0 { now } else { self.started_at };
         self.handle_keys(ctx, now);
+        self.recover_audio_devices(now);
+        self.poll_audio_load(now);
         self.tick_stage(ctx, now);
         self.update_pitch();
         self.update_range_test();

@@ -96,6 +96,12 @@ pub(super) struct Stage {
     pub(super) judgment: Option<Judgment>,
     pub(super) result: Option<ResultData>,
     pub(super) audio_loaded: bool,
+    /// A decode job is running for this song; playback waits for it.
+    pub(super) audio_loading: bool,
+    /// Start playing as soon as the decode job finishes.
+    pub(super) play_when_loaded: bool,
+    /// Wall-clock time of the previous tick, for the no-audio fallback clock.
+    pub(super) last_tick: f64,
     pub(super) octave_shift: i32,
 }
 
@@ -129,6 +135,9 @@ impl Stage {
             judgment: None,
             result: None,
             audio_loaded: false,
+            audio_loading: false,
+            play_when_loaded: false,
+            last_tick: 0.0,
             octave_shift: shift,
         }
     }
@@ -874,17 +883,10 @@ impl KaraokeMachineApp {
         let mut stage = Stage::new(song, &self.settings);
         if let Some(audio) = &self.audio {
             audio.set_volumes(self.backing_level(), self.settings.vocals_volume);
-            match audio.load(&backing, Some(&vocals)) {
-                Ok(duration) => {
-                    stage.duration = duration.max(stage.duration);
-                    stage.audio_loaded = true;
-                }
-                Err(error) => {
-                    self.toast(format!("Could not load audio: {error}"), now);
-                }
-            }
+            stage.audio_loading = true;
         }
         self.stage = Some(stage);
+        self.start_audio_load(backing, Some(vocals), false);
         self.drawer_open = false;
         self.settings_open = false;
         self.started_at = now;
@@ -917,6 +919,11 @@ impl KaraokeMachineApp {
         if !stage.started && self.settings.count_in {
             stage.count_in_until = Some(now + 3.2);
             stage.playing = false;
+            return;
+        }
+        if stage.audio_loading {
+            stage.play_when_loaded = true;
+            self.toast("Audio is still loading; playback starts when it is ready.", now);
             return;
         }
         if stage.audio_loaded {
@@ -984,25 +991,29 @@ impl KaraokeMachineApp {
         if let Some(until) = stage.count_in_until {
             if now >= until {
                 stage.count_in_until = None;
-                if let Some(audio) = &self.audio {
-                    if stage.audio_loaded {
-                        audio.play();
-                    }
-                }
-                stage.playing = true;
-                stage.started = true;
                 stage.time = 0.0;
+                if stage.audio_loading {
+                    // The count-in ended before the song decoded; start as
+                    // soon as it has.
+                    stage.play_when_loaded = true;
+                } else {
+                    if let Some(audio) = &self.audio {
+                        if stage.audio_loaded {
+                            audio.play();
+                        }
+                    }
+                    stage.playing = true;
+                    stage.started = true;
+                }
             }
         }
+        let elapsed = if stage.last_tick > 0.0 { (now - stage.last_tick).clamp(0.0, 0.1) } else { 0.0 };
+        stage.last_tick = now;
         if stage.playing {
-            if let Some(audio) = &self.audio {
-                if stage.audio_loaded {
-                    stage.time = audio.position();
-                } else {
-                    stage.time += 1.0 / 60.0;
-                }
-            } else {
-                stage.time += 1.0 / 60.0;
+            match &self.audio {
+                Some(audio) if stage.audio_loaded => stage.time = audio.position(),
+                // No audio: run the chart on the wall clock, not once per repaint.
+                _ => stage.time += elapsed,
             }
             if stage.time >= stage.duration - 0.04 {
                 stage.finish(&mut self.scores);
@@ -1338,7 +1349,14 @@ impl KaraokeMachineApp {
         p.rect_filled(tray, 24.0, Color32::from_rgba_unmultiplied(9, 13, 23, 235));
         p.rect_stroke(tray, 24.0, Stroke::new(1.0f32, Color32::from_white_alpha(26)), StrokeKind::Inside);
         let play_rect = Rect::from_center_size(Pos2::new(rect.width() * 0.5, tray.center().y), Vec2::new(58.0, 58.0));
-        if round_button(ui, play_rect, if stage.playing { "PAUSE" } else { "PLAY" }, true) {
+        let transport_label = if stage.audio_loading {
+            "LOADING"
+        } else if stage.playing {
+            "PAUSE"
+        } else {
+            "PLAY"
+        };
+        if round_button(ui, play_rect, transport_label, true) {
             actions.push(Action::TogglePlay);
         }
         let restart = Rect::from_center_size(Pos2::new(play_rect.left() - 46.0, tray.center().y), Vec2::new(38.0, 38.0));
