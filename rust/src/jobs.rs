@@ -45,7 +45,10 @@ fn spawn<M: Send + 'static>(
     work: impl FnOnce(JobSender<M>) + Send + 'static,
 ) -> Receiver<M> {
     let (tx, rx) = mpsc::channel();
-    let sender = JobSender { tx, ctx: ctx.clone() };
+    let sender = JobSender {
+        tx,
+        ctx: ctx.clone(),
+    };
     thread::spawn(move || work(sender));
     rx
 }
@@ -103,7 +106,10 @@ impl<M: Send + 'static> StreamJob<M> {
         ctx: &egui::Context,
         work: impl FnOnce(JobSender<M>) + Send + 'static,
     ) -> Self {
-        Self { name, rx: spawn(ctx, work) }
+        Self {
+            name,
+            rx: spawn(ctx, work),
+        }
     }
 
     /// Non-blocking. Returns every queued message and whether the worker has

@@ -108,11 +108,16 @@ pub fn load_songs(root: &Path) -> Vec<Song> {
         let a_scale = a.source == "scale";
         let b_scale = b.source == "scale";
         if a_scale != b_scale {
-            return if a_scale { std::cmp::Ordering::Less } else { std::cmp::Ordering::Greater };
+            return if a_scale {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Greater
+            };
         }
         let ao = a.order.unwrap_or(999);
         let bo = b.order.unwrap_or(999);
-        ao.cmp(&bo).then_with(|| a.title.to_lowercase().cmp(&b.title.to_lowercase()))
+        ao.cmp(&bo)
+            .then_with(|| a.title.to_lowercase().cmp(&b.title.to_lowercase()))
     });
     songs
 }
@@ -150,9 +155,10 @@ pub fn build_albums(songs: &[Song]) -> Vec<Album> {
         let album = groups.entry(key).or_insert_with(|| Album {
             title: title.clone(),
             artist: artist.clone(),
-            cover_path: song.cover.as_ref().map(|cover| {
-                PathBuf::from("assets/songs").join(&song.id).join(cover)
-            }),
+            cover_path: song
+                .cover
+                .as_ref()
+                .map(|cover| PathBuf::from("assets/songs").join(&song.id).join(cover)),
             warmup: false,
             songs: Vec::new(),
         });
@@ -276,7 +282,8 @@ mod tests {
     use super::*;
 
     fn scratch(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("karaokemachine-{}-{name}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("karaokemachine-{}-{name}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).expect("scratch dir");
         dir
@@ -287,7 +294,14 @@ mod tests {
         let dir = scratch("atomic");
         let path = dir.join("scores.json");
         let mut scores = Scores::new();
-        scores.insert("song".into(), ScoreRecord { score: 7, accuracy: 1.0, combo: 2 });
+        scores.insert(
+            "song".into(),
+            ScoreRecord {
+                score: 7,
+                accuracy: 1.0,
+                combo: 2,
+            },
+        );
         write_json_atomic(&path, &scores).expect("write");
         assert!(path.exists());
         assert!(!dir.join("scores.json.tmp").exists());
@@ -312,7 +326,10 @@ mod tests {
         let scores: Scores = load_json_or_default(&path);
         assert!(scores.is_empty());
         assert!(!path.exists());
-        assert_eq!(fs::read_to_string(dir.join("scores.json.bak")).expect("backup"), "{");
+        assert_eq!(
+            fs::read_to_string(dir.join("scores.json.bak")).expect("backup"),
+            "{"
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -322,7 +339,10 @@ mod tests {
         assert_eq!(backup_song_file(&dir), Ok(false));
         fs::write(dir.join("song.json"), "{}").expect("song file");
         assert_eq!(backup_song_file(&dir), Ok(true));
-        assert_eq!(fs::read_to_string(dir.join("song.json.bak")).expect("backup"), "{}");
+        assert_eq!(
+            fs::read_to_string(dir.join("song.json.bak")).expect("backup"),
+            "{}"
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 }

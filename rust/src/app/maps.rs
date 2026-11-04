@@ -1,5 +1,7 @@
 //! The community map browser: fetching the index, downloading and installing maps.
 
+use super::lobby::paint_cover_fallback;
+use super::{Action, KaraokeMachineApp};
 use crate::jobs::Job;
 use crate::library::{backup_song_file, song_audio_path, write_json_atomic};
 use crate::map_package::{MapIndex, MapIndexEntry, MapPackage};
@@ -7,8 +9,6 @@ use crate::model::{format_time, Song};
 use crate::theme::{INK, MUTED};
 use crate::tools::{http_get_bytes, http_get_text};
 use crate::widgets::{click, pill_button, pill_toggle};
-use super::{Action, KaraokeMachineApp};
-use super::lobby::paint_cover_fallback;
 use base64::Engine;
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Stroke, TextureOptions, Vec2};
 use std::path::{Path, PathBuf};
@@ -28,9 +28,15 @@ fn maps_base_url() -> String {
 /// Decode cover bytes into a texture-ready image, shrunk to thumbnail size:
 /// the browser draws covers at 54 px, so full-size art would only cost memory.
 fn decode_cover(bytes: &[u8]) -> Option<egui::ColorImage> {
-    let image = image::load_from_memory(bytes).ok()?.thumbnail(256, 256).to_rgba8();
+    let image = image::load_from_memory(bytes)
+        .ok()?
+        .thumbnail(256, 256)
+        .to_rgba8();
     let size = [image.width() as usize, image.height() as usize];
-    Some(egui::ColorImage::from_rgba_unmultiplied(size, &image.into_raw()))
+    Some(egui::ColorImage::from_rgba_unmultiplied(
+        size,
+        &image.into_raw(),
+    ))
 }
 
 pub(super) fn encode_path_segment(value: &str) -> String {
@@ -55,7 +61,13 @@ pub(super) fn has_hand_mapping(song: &Song) -> bool {
 }
 
 impl KaraokeMachineApp {
-    pub(super) fn draw_drawer_maps(&self, ui: &mut egui::Ui, p: &egui::Painter, body: Rect, actions: &mut Vec<Action>) {
+    pub(super) fn draw_drawer_maps(
+        &self,
+        ui: &mut egui::Ui,
+        p: &egui::Painter,
+        body: Rect,
+        actions: &mut Vec<Action>,
+    ) {
         let import = Rect::from_min_size(body.left_top(), Vec2::new(body.width(), 38.0));
         if pill_button(ui, import, "IMPORT MAP FILE", false) {
             actions.push(Action::InstallMap);
@@ -119,10 +131,7 @@ impl KaraokeMachineApp {
             .enumerate()
             .filter(|(_, song)| song.source == "scale")
         {
-            let row = Rect::from_min_size(
-                Pos2::new(body.left(), y),
-                Vec2::new(body.width(), 62.0),
-            );
+            let row = Rect::from_min_size(Pos2::new(body.left(), y), Vec2::new(body.width(), 62.0));
             y += 68.0;
             if row.bottom() < body.top() || row.top() > body.bottom() {
                 continue;
@@ -177,8 +186,10 @@ impl KaraokeMachineApp {
         }
         self.map_index_job = Some(Job::run("The map browser", &self.ctx, || {
             let base = maps_base_url();
-            http_get_text(&format!("{base}index.json"), MAP_INDEX_LIMIT)
-                .and_then(|raw| serde_json::from_str::<MapIndex>(&raw).map_err(|error| format!("Could not parse map index: {error}")))
+            http_get_text(&format!("{base}index.json"), MAP_INDEX_LIMIT).and_then(|raw| {
+                serde_json::from_str::<MapIndex>(&raw)
+                    .map_err(|error| format!("Could not parse map index: {error}"))
+            })
         }));
     }
 
@@ -207,14 +218,21 @@ impl KaraokeMachineApp {
                         if cover.is_empty() || self.map_covers.contains_key(&entry.id) {
                             continue;
                         }
-                        if let Some((_, payload)) = cover.strip_prefix("data:").and_then(|rest| rest.split_once(";base64,")) {
+                        if let Some((_, payload)) = cover
+                            .strip_prefix("data:")
+                            .and_then(|rest| rest.split_once(";base64,"))
+                        {
                             // Older indexes inline the cover.
                             let image = base64::engine::general_purpose::STANDARD
                                 .decode(payload)
                                 .ok()
                                 .and_then(|bytes| decode_cover(&bytes));
                             if let Some(image) = image {
-                                let texture = ctx.load_texture(format!("map-cover-{}", entry.id), image, TextureOptions::LINEAR);
+                                let texture = ctx.load_texture(
+                                    format!("map-cover-{}", entry.id),
+                                    image,
+                                    TextureOptions::LINEAR,
+                                );
                                 self.map_covers.insert(entry.id.clone(), texture);
                             }
                         } else {
@@ -239,7 +257,8 @@ impl KaraokeMachineApp {
             match job.poll() {
                 None => pending.push((id, job)),
                 Some(Ok(image)) => {
-                    let texture = ctx.load_texture(format!("map-cover-{id}"), image, TextureOptions::LINEAR);
+                    let texture =
+                        ctx.load_texture(format!("map-cover-{id}"), image, TextureOptions::LINEAR);
                     self.map_covers.insert(id, texture);
                 }
                 Some(Err(error)) => eprintln!("map cover: {error}"),
@@ -325,7 +344,10 @@ impl KaraokeMachineApp {
                     self.drawer_open = false;
                     self.open_song(index, now);
                     if backed_up {
-                        self.toast("Map installed. Your previous mapping was kept as song.json.bak.", now);
+                        self.toast(
+                            "Map installed. Your previous mapping was kept as song.json.bak.",
+                            now,
+                        );
                     } else {
                         self.toast("Map installed on the existing local audio.", now);
                     }
@@ -369,7 +391,10 @@ impl KaraokeMachineApp {
         self.upload.release_date = map.release_date.clone().unwrap_or_default();
         self.upload.lyrics = lyrics;
         match cover {
-            Some(path) => self.upload.cover.set_from_path(path, "Cover art from the map."),
+            Some(path) => self
+                .upload
+                .cover
+                .set_from_path(path, "Cover art from the map."),
             None => self.upload.cover.reset(),
         }
         self.upload.info_loaded = true;
@@ -405,10 +430,7 @@ impl KaraokeMachineApp {
             Ok(None)
         };
         match result {
-            Ok(Some(path)) => self.toast(
-                format!("Map exported to {}", path.display()),
-                now,
-            ),
+            Ok(Some(path)) => self.toast(format!("Map exported to {}", path.display()), now),
             Ok(None) => {}
             Err(error) => self.toast(error, now),
         }

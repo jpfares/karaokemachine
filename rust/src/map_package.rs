@@ -101,7 +101,11 @@ fn default_version() -> u32 {
 }
 
 impl MapPackage {
-    pub fn from_song(root: &Path, song: &Song, contributor: Option<String>) -> Result<Self, String> {
+    pub fn from_song(
+        root: &Path,
+        song: &Song,
+        contributor: Option<String>,
+    ) -> Result<Self, String> {
         if !song.mapped {
             return Err("Only a submitted mapping can be exported.".into());
         }
@@ -272,10 +276,7 @@ fn read_cover_data_uri(root: &Path, song: &Song) -> Option<String> {
         "svg" => "image/svg+xml",
         _ => "image/jpeg",
     };
-    Some(format!(
-        "data:{mime};base64,{}",
-        STANDARD.encode(bytes)
-    ))
+    Some(format!("data:{mime};base64,{}", STANDARD.encode(bytes)))
 }
 
 #[cfg(test)]
@@ -323,8 +324,7 @@ mod tests {
         assert!(value.get("audio").is_none());
         assert!(value.get("audioFiles").is_none());
 
-        let detached: MapPackage =
-            serde_json::from_value(value).expect("deserialize map package");
+        let detached: MapPackage = serde_json::from_value(value).expect("deserialize map package");
         let mut target = song;
         target.mapped = false;
         target.notes.clear();
@@ -332,7 +332,14 @@ mod tests {
         assert!(target.mapped);
         assert_eq!(target.notes.len(), 1);
         assert_eq!(target.placed_words.len(), 1);
-        assert_eq!(target.tags.iter().filter(|tag| *tag == "Community map").count(), 1);
+        assert_eq!(
+            target
+                .tags
+                .iter()
+                .filter(|tag| *tag == "Community map")
+                .count(),
+            1
+        );
     }
 
     #[test]

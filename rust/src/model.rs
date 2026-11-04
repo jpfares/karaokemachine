@@ -31,7 +31,9 @@ pub fn pitch_color(t: f32) -> [u8; 3] {
 }
 
 pub fn note_name(midi: i32) -> String {
-    const NAMES: [&str; 12] = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+    const NAMES: [&str; 12] = [
+        "C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B",
+    ];
     let n = midi.rem_euclid(12);
     format!("{}{}", NAMES[n as usize], midi / 12 - 1)
 }
@@ -184,7 +186,11 @@ pub struct Song {
     #[serde(rename = "albumBio", default)]
     pub album_bio: Option<String>,
     /// The old automatic chart, kept only as a translucent guide in the editor.
-    #[serde(rename = "suggestedNotes", default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        rename = "suggestedNotes",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
     pub suggested_notes: Vec<Note>,
     /// Work in progress for an unmapped song.
     #[serde(rename = "draftNotes", default, skip_serializing_if = "Vec::is_empty")]

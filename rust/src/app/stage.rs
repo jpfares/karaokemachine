@@ -1,13 +1,15 @@
 //! The singing stage: scoring, the pitch-lane layout and its painting.
 
+use super::{ctx_pointer, pitch_col, Action, KaraokeMachineApp};
 use crate::audio::Microphone;
 use crate::library::{save_score, save_settings, song_audio_path};
-use crate::model::{format_time, Note, note_name, ScoreRecord, Scores, Settings, Song};
+use crate::model::{format_time, note_name, Note, ScoreRecord, Scores, Settings, Song};
 use crate::pitch::{detect_pitch, PitchReading};
 use crate::theme::{alpha, BG, GOLD, INK, LINE, MINT, MUTED, MUTED2, OCTAVE_BLUE, PINK};
 use crate::widgets::{click, glyph_button, pill_button, pill_toggle, round_button};
-use super::{Action, ctx_pointer, KaraokeMachineApp, pitch_col};
-use eframe::egui::{self, Align2, Color32, FontId, Mesh, Pos2, Rect, Shape, Stroke, StrokeKind, Vec2};
+use eframe::egui::{
+    self, Align2, Color32, FontId, Mesh, Pos2, Rect, Shape, Stroke, StrokeKind, Vec2,
+};
 use std::time::Duration;
 
 pub(super) const OCTAVE_TOLERANCE_CENTS: f32 = 50.0;
@@ -353,7 +355,12 @@ impl Stage {
         self.best_combo = self.best_combo.max(self.combo);
     }
 
-    pub(super) fn score_tick(&mut self, chart_time: f64, reading: Option<PitchReading>, mic_ok: bool) {
+    pub(super) fn score_tick(
+        &mut self,
+        chart_time: f64,
+        reading: Option<PitchReading>,
+        mic_ok: bool,
+    ) {
         if !mic_ok {
             return;
         }
@@ -422,7 +429,8 @@ impl Layout {
         // The extra lanes above the top note leave room for its lyric label.
         let mut midis: Vec<i32> = song.notes.iter().map(|n| n.midi).collect();
         midis.sort_unstable();
-        let (lowest, highest) = if let (Some(lowest), Some(highest)) = (midis.first(), midis.last()) {
+        let (lowest, highest) = if let (Some(lowest), Some(highest)) = (midis.first(), midis.last())
+        {
             (*lowest, *highest)
         } else {
             (song.low, song.high)
@@ -476,7 +484,10 @@ impl Layout {
 }
 
 pub(super) fn stage_needs_input(stage: &Option<Stage>) -> bool {
-    stage.as_ref().map(|s| s.playing || s.result.is_none()).unwrap_or(false)
+    stage
+        .as_ref()
+        .map(|s| s.playing || s.result.is_none())
+        .unwrap_or(false)
 }
 
 pub(super) fn draw_melody(
@@ -513,11 +524,14 @@ pub(super) fn draw_melody(
             let limit = if note.ribbon.is_some() { 3.0 } else { 0.85 };
             gap <= limit && prev.shares_ribbon(note)
         };
-        let group_next = notes.get(i + 1).map(|next| {
-            let gap = next.start - (note.start + note.dur);
-            let limit = if note.ribbon.is_some() { 3.0 } else { 0.85 };
-            gap <= limit && note.shares_ribbon(next)
-        }).unwrap_or(false);
+        let group_next = notes
+            .get(i + 1)
+            .map(|next| {
+                let gap = next.start - (note.start + note.dur);
+                let limit = if note.ribbon.is_some() { 3.0 } else { 0.85 };
+                gap <= limit && note.shares_ribbon(next)
+            })
+            .unwrap_or(false);
         // Each note keeps its own rounded body. A thin neck connects it to the
         // next note of the same word/phrase, so the word remains one ribbon but
         // every note is visible.
@@ -571,7 +585,12 @@ pub(super) fn draw_melody(
                 Pos2::new(x0.max(layout.hit_x), y - h / 2.0),
                 Pos2::new(x1.max(layout.hit_x + 8.0), y + h / 2.0),
             );
-            p.rect_stroke(r, h / 2.0, Stroke::new(1.4f32, Color32::WHITE), StrokeKind::Inside);
+            p.rect_stroke(
+                r,
+                h / 2.0,
+                Stroke::new(1.4f32, Color32::WHITE),
+                StrokeKind::Inside,
+            );
         }
     }
 }
@@ -594,7 +613,11 @@ pub(super) fn add_ribbon_mesh(
     }
     let mut clean: Vec<Pos2> = Vec::with_capacity(points.len());
     for &point in points {
-        if clean.last().map(|last| (point.x - last.x).abs() > 0.01 || (point.y - last.y).abs() > 0.01).unwrap_or(true) {
+        if clean
+            .last()
+            .map(|last| (point.x - last.x).abs() > 0.01 || (point.y - last.y).abs() > 0.01)
+            .unwrap_or(true)
+        {
             clean.push(point);
         }
     }
@@ -644,7 +667,13 @@ pub(super) fn add_ribbon_mesh(
     let _ = (low, high);
 }
 
-pub(super) fn draw_placed_words(p: &egui::Painter, stage: &Stage, layout: &Layout, time: f64, width: f32) {
+pub(super) fn draw_placed_words(
+    p: &egui::Painter,
+    stage: &Stage,
+    layout: &Layout,
+    time: f64,
+    width: f32,
+) {
     for word in &stage.song.placed_words {
         if word.start < time - 1.5 || word.start > time + 11.0 {
             continue;
@@ -700,7 +729,11 @@ pub(super) fn draw_placed_words(p: &egui::Painter, stage: &Stage, layout: &Layou
             Align2::CENTER_CENTER,
             display,
             font,
-            if active { Color32::WHITE } else { alpha(INK, 175) },
+            if active {
+                Color32::WHITE
+            } else {
+                alpha(INK, 175)
+            },
         );
     }
 }
@@ -750,7 +783,11 @@ pub(super) fn draw_words(p: &egui::Painter, stage: &Stage, layout: &Layout, time
         }
         let anchor = group
             .iter()
-            .max_by(|a, b| a.dur.partial_cmp(&b.dur).unwrap_or(std::cmp::Ordering::Equal))
+            .max_by(|a, b| {
+                a.dur
+                    .partial_cmp(&b.dur)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .unwrap_or(&group[0]);
         let centre = if has_rest {
             group[0].start + group[0].dur * 0.5
@@ -766,7 +803,11 @@ pub(super) fn draw_words(p: &egui::Painter, stage: &Stage, layout: &Layout, time
             continue;
         }
         let active = time >= start - 0.02 && time <= end + 0.02;
-        let fg = if active { Color32::WHITE } else { alpha(INK, 170) };
+        let fg = if active {
+            Color32::WHITE
+        } else {
+            alpha(INK, 170)
+        };
         let font = FontId::proportional(if active { 15.0 } else { 13.5 });
         let width_est = text.chars().count() as f32 * 7.4 + 12.0;
         let pill_w = width_est.min(170.0);
@@ -780,7 +821,12 @@ pub(super) fn draw_words(p: &egui::Painter, stage: &Stage, layout: &Layout, time
             Color32::from_rgba_unmultiplied(5, 8, 15, if active { 200 } else { 115 }),
         );
         if active {
-            p.rect_stroke(pill, 5.0, Stroke::new(1.0f32, alpha(GOLD, 90)), StrokeKind::Inside);
+            p.rect_stroke(
+                pill,
+                5.0,
+                Stroke::new(1.0f32, alpha(GOLD, 90)),
+                StrokeKind::Inside,
+            );
             p.line_segment(
                 [
                     Pos2::new(pill.left() + 5.0, pill.bottom() + 2.0),
@@ -797,7 +843,6 @@ pub(super) fn draw_words(p: &egui::Painter, stage: &Stage, layout: &Layout, time
         p.text(pill.center(), Align2::CENTER_CENTER, display, font, fg);
     }
 }
-
 
 impl KaraokeMachineApp {
     pub(super) fn start_mic(&mut self) {
@@ -834,8 +879,20 @@ impl KaraokeMachineApp {
             return;
         }
         let shift_now = 12 * stage.octave_shift;
-        let low = stage.song.notes.iter().map(|note| note.midi - shift_now).min().unwrap_or(60);
-        let high = stage.song.notes.iter().map(|note| note.midi - shift_now).max().unwrap_or(60);
+        let low = stage
+            .song
+            .notes
+            .iter()
+            .map(|note| note.midi - shift_now)
+            .min()
+            .unwrap_or(60);
+        let high = stage
+            .song
+            .notes
+            .iter()
+            .map(|note| note.midi - shift_now)
+            .max()
+            .unwrap_or(60);
         let mut best = 0i32;
         let mut best_penalty = i32::MAX;
         for shift in -2..=2 {
@@ -928,7 +985,10 @@ impl KaraokeMachineApp {
         }
         if stage.audio_loading {
             stage.play_when_loaded = true;
-            self.toast("Audio is still loading; playback starts when it is ready.", now);
+            self.toast(
+                "Audio is still loading; playback starts when it is ready.",
+                now,
+            );
             return;
         }
         if stage.audio_loaded {
@@ -1012,7 +1072,11 @@ impl KaraokeMachineApp {
                 }
             }
         }
-        let elapsed = if stage.last_tick > 0.0 { (now - stage.last_tick).clamp(0.0, 0.1) } else { 0.0 };
+        let elapsed = if stage.last_tick > 0.0 {
+            (now - stage.last_tick).clamp(0.0, 0.1)
+        } else {
+            0.0
+        };
         stage.last_tick = now;
         if stage.playing {
             match &self.audio {
@@ -1098,17 +1162,36 @@ impl KaraokeMachineApp {
         // header
         let header = Rect::from_min_size(rect.min, Vec2::new(rect.width(), layout.header_h));
         p.rect_filled(header, 0.0, Color32::from_rgba_unmultiplied(5, 8, 15, 242));
-        p.line_segment([header.left_bottom(), header.right_bottom()], Stroke::new(1.0f32, LINE));
+        p.line_segment(
+            [header.left_bottom(), header.right_bottom()],
+            Stroke::new(1.0f32, LINE),
+        );
         let back = Rect::from_min_size(Pos2::new(16.0, 15.0), Vec2::new(36.0, 34.0));
         if glyph_button(ui, back, "BACK") {
             actions.push(Action::OpenMenu);
         }
-        p.text(Pos2::new(66.0, 17.0), Align2::LEFT_TOP, "NOW SINGING", FontId::monospace(8.0), MUTED2);
-        p.text(Pos2::new(66.0, 30.0), Align2::LEFT_TOP, &stage.song.title, FontId::proportional(20.0), INK);
+        p.text(
+            Pos2::new(66.0, 17.0),
+            Align2::LEFT_TOP,
+            "NOW SINGING",
+            FontId::monospace(8.0),
+            MUTED2,
+        );
+        p.text(
+            Pos2::new(66.0, 30.0),
+            Align2::LEFT_TOP,
+            &stage.song.title,
+            FontId::proportional(20.0),
+            INK,
+        );
         p.text(
             Pos2::new(66.0, 50.0),
             Align2::LEFT_TOP,
-            format!("{}   ·   {}", stage.song.artist_display(), stage.song.tags.join(" · ")),
+            format!(
+                "{}   ·   {}",
+                stage.song.artist_display(),
+                stage.song.tags.join(" · ")
+            ),
             FontId::proportional(10.0),
             MUTED,
         );
@@ -1121,16 +1204,37 @@ impl KaraokeMachineApp {
         for (i, (label, value, color)) in [
             ("SCORE", stage.score.to_string(), INK),
             ("COMBO", format!("{}×", stage.combo), GOLD),
-            ("ACCURACY", if stage.total_probe > 0 { format!("{accuracy}%") } else { "—".into() }, MINT),
+            (
+                "ACCURACY",
+                if stage.total_probe > 0 {
+                    format!("{accuracy}%")
+                } else {
+                    "—".into()
+                },
+                MINT,
+            ),
         ]
         .iter()
         .enumerate()
         {
             let x = stats_x + i as f32 * 78.0;
-            p.text(Pos2::new(x, 15.0), Align2::LEFT_TOP, *label, FontId::monospace(7.0), MUTED2);
-            p.text(Pos2::new(x, 28.0), Align2::LEFT_TOP, value, FontId::monospace(16.0), *color);
+            p.text(
+                Pos2::new(x, 15.0),
+                Align2::LEFT_TOP,
+                *label,
+                FontId::monospace(7.0),
+                MUTED2,
+            );
+            p.text(
+                Pos2::new(x, 28.0),
+                Align2::LEFT_TOP,
+                value,
+                FontId::monospace(16.0),
+                *color,
+            );
         }
-        let settings_btn = Rect::from_min_size(Pos2::new(rect.width() - 50.0, 14.0), Vec2::new(34.0, 34.0));
+        let settings_btn =
+            Rect::from_min_size(Pos2::new(rect.width() - 50.0, 14.0), Vec2::new(34.0, 34.0));
         if glyph_button(ui, settings_btn, "SET") {
             actions.push(Action::OpenSettings);
         }
@@ -1147,7 +1251,10 @@ impl KaraokeMachineApp {
             let black = [1, 3, 6, 8, 10].contains(&(((midi % 12) + 12) % 12));
             if black {
                 painter.rect_filled(
-                    Rect::from_min_size(Pos2::new(layout.hit_x, top), Vec2::new(rect.width() - layout.hit_x, layout.lane_h)),
+                    Rect::from_min_size(
+                        Pos2::new(layout.hit_x, top),
+                        Vec2::new(rect.width() - layout.hit_x, layout.lane_h),
+                    ),
                     0.0,
                     Color32::from_white_alpha(9),
                 );
@@ -1155,26 +1262,40 @@ impl KaraokeMachineApp {
             let is_c = midi % 12 == 0;
             painter.line_segment(
                 [Pos2::new(layout.hit_x, y), Pos2::new(rect.width(), y)],
-                Stroke::new(if is_c { 1.2f32 } else { 0.7f32 }, Color32::from_white_alpha(if is_c { 44 } else { 17 })),
+                Stroke::new(
+                    if is_c { 1.2f32 } else { 0.7f32 },
+                    Color32::from_white_alpha(if is_c { 44 } else { 17 }),
+                ),
             );
         }
         // grid
         let interval = stage.song.bpm.map(|bpm| 60.0 / bpm).unwrap_or(1.0);
         let first = (chart_time / interval).floor() as i64 - 1;
-        let last = ((chart_time + self.settings.lead_time as f64 + 2.0) / interval).ceil() as i64 + 1;
+        let last =
+            ((chart_time + self.settings.lead_time as f64 + 2.0) / interval).ceil() as i64 + 1;
         for tick in first..=last {
             let t = tick as f64 * interval;
             let x = layout.hit_x + (t - chart_time) as f32 * layout.pps;
             if x < layout.hit_x || x > rect.width() {
                 continue;
             }
-            let bar = stage.song.bpm.map(|_| tick % 4 == 0).unwrap_or((t.round() as i64) % 5 == 0);
+            let bar = stage
+                .song
+                .bpm
+                .map(|_| tick % 4 == 0)
+                .unwrap_or((t.round() as i64) % 5 == 0);
             if stage.song.bpm.is_none() && !bar {
                 continue;
             }
             painter.line_segment(
-                [Pos2::new(x, layout.lane_top), Pos2::new(x, layout.lane_bottom)],
-                Stroke::new(if bar { 1.2f32 } else { 0.7f32 }, Color32::from_white_alpha(if bar { 30 } else { 13 })),
+                [
+                    Pos2::new(x, layout.lane_top),
+                    Pos2::new(x, layout.lane_bottom),
+                ],
+                Stroke::new(
+                    if bar { 1.2f32 } else { 0.7f32 },
+                    Color32::from_white_alpha(if bar { 30 } else { 13 }),
+                ),
             );
         }
         let active = stage.active_note_at(chart_time);
@@ -1205,19 +1326,37 @@ impl KaraokeMachineApp {
         }
 
         // left rail labels
-        let rail = Rect::from_min_size(Pos2::new(0.0, layout.header_h), Vec2::new(layout.left_w, rect.height() - layout.tray_h - layout.header_h));
+        let rail = Rect::from_min_size(
+            Pos2::new(0.0, layout.header_h),
+            Vec2::new(
+                layout.left_w,
+                rect.height() - layout.tray_h - layout.header_h,
+            ),
+        );
         p.rect_filled(rail, 0.0, Color32::from_rgba_unmultiplied(5, 8, 15, 242));
         p.line_segment(
-            [Pos2::new(layout.left_w, layout.lane_top), Pos2::new(layout.left_w, layout.lane_bottom)],
+            [
+                Pos2::new(layout.left_w, layout.lane_top),
+                Pos2::new(layout.left_w, layout.lane_bottom),
+            ],
             Stroke::new(1.0f32, alpha(MINT, 70)),
         );
         for midi in layout.low..=layout.high {
             let y = layout.lane_y(midi);
             let is_target = active >= 0 && stage.song.notes[active as usize].midi == midi;
-            let color = if is_target { INK } else if midi % 12 == 0 { alpha(INK, 120) } else { alpha(INK, 55) };
+            let color = if is_target {
+                INK
+            } else if midi % 12 == 0 {
+                alpha(INK, 120)
+            } else {
+                alpha(INK, 55)
+            };
             if is_target {
                 p.rect_filled(
-                    Rect::from_min_size(Pos2::new(0.0, y - layout.lane_h / 2.0), Vec2::new(layout.left_w, layout.lane_h)),
+                    Rect::from_min_size(
+                        Pos2::new(0.0, y - layout.lane_h / 2.0),
+                        Vec2::new(layout.left_w, layout.lane_h),
+                    ),
                     0.0,
                     Color32::from_white_alpha(17),
                 );
@@ -1236,7 +1375,12 @@ impl KaraokeMachineApp {
             let y = layout.lane_y(note.midi);
             let h = layout.note_height() + 14.0;
             let bracket = Rect::from_center_size(Pos2::new(layout.hit_x, y), Vec2::new(28.0, h));
-            p.rect_stroke(bracket, 6.0, Stroke::new(1.0f32, Color32::from_white_alpha(60)), StrokeKind::Inside);
+            p.rect_stroke(
+                bracket,
+                6.0,
+                Stroke::new(1.0f32, Color32::from_white_alpha(60)),
+                StrokeKind::Inside,
+            );
         }
         if let Some(reading) = self.reading {
             let target = if active >= 0 {
@@ -1296,15 +1440,40 @@ impl KaraokeMachineApp {
                     )
                 }
             } else {
-                format!("{}   {:+.0}¢", note_name(reading.midi.round() as i32), reading.cents)
+                format!(
+                    "{}   {:+.0}¢",
+                    note_name(reading.midi.round() as i32),
+                    reading.cents
+                )
             };
-            let label_rect = Rect::from_min_size(Pos2::new(layout.hit_x + 34.0, y - 12.0), Vec2::new(98.0, 24.0));
-            p.rect_filled(label_rect, 6.0, Color32::from_rgba_unmultiplied(5, 8, 15, 220));
-            p.rect_stroke(label_rect, 6.0, Stroke::new(1.0f32, alpha(color, 70)), StrokeKind::Inside);
-            p.text(label_rect.center(), Align2::CENTER_CENTER, label, FontId::monospace(9.0), color);
+            let label_rect = Rect::from_min_size(
+                Pos2::new(layout.hit_x + 34.0, y - 12.0),
+                Vec2::new(98.0, 24.0),
+            );
+            p.rect_filled(
+                label_rect,
+                6.0,
+                Color32::from_rgba_unmultiplied(5, 8, 15, 220),
+            );
+            p.rect_stroke(
+                label_rect,
+                6.0,
+                Stroke::new(1.0f32, alpha(color, 70)),
+                StrokeKind::Inside,
+            );
+            p.text(
+                label_rect.center(),
+                Align2::CENTER_CENTER,
+                label,
+                FontId::monospace(9.0),
+                color,
+            );
         } else if self.mic.is_some() {
             p.text(
-                Pos2::new(layout.hit_x + 18.0, layout.lane_y((layout.low + layout.high) / 2)),
+                Pos2::new(
+                    layout.hit_x + 18.0,
+                    layout.lane_y((layout.low + layout.high) / 2),
+                ),
                 Align2::LEFT_CENTER,
                 "LISTENING",
                 FontId::monospace(8.0),
@@ -1312,7 +1481,10 @@ impl KaraokeMachineApp {
             );
         } else if let Some(error) = &self.mic_error {
             p.text(
-                Pos2::new(layout.hit_x + 18.0, layout.lane_y((layout.low + layout.high) / 2)),
+                Pos2::new(
+                    layout.hit_x + 18.0,
+                    layout.lane_y((layout.low + layout.high) / 2),
+                ),
                 Align2::LEFT_CENTER,
                 format!("MIC OFF · {error}"),
                 FontId::proportional(11.0),
@@ -1323,9 +1495,25 @@ impl KaraokeMachineApp {
         // count-in
         if let Some(until) = stage.count_in_until {
             let left = (until - now).max(0.0).ceil();
-            let text = if left <= 0.3 { "SING".to_string() } else { format!("{left:.0}") };
-            p.text(rect.center(), Align2::CENTER_CENTER, text, FontId::proportional(150.0), alpha(MINT, 220));
-            p.text(rect.center() + Vec2::new(0.0, 110.0), Align2::CENTER_CENTER, "GET READY", FontId::monospace(10.0), MUTED);
+            let text = if left <= 0.3 {
+                "SING".to_string()
+            } else {
+                format!("{left:.0}")
+            };
+            p.text(
+                rect.center(),
+                Align2::CENTER_CENTER,
+                text,
+                FontId::proportional(150.0),
+                alpha(MINT, 220),
+            );
+            p.text(
+                rect.center() + Vec2::new(0.0, 110.0),
+                Align2::CENTER_CENTER,
+                "GET READY",
+                FontId::monospace(10.0),
+                MUTED,
+            );
         }
         if let Some(judgment) = &stage.judgment {
             if now - judgment.at < 0.65 {
@@ -1341,29 +1529,66 @@ impl KaraokeMachineApp {
 
         // timeline
         let tray_top = rect.height() - layout.tray_h;
-        let timeline = Rect::from_min_size(Pos2::new(layout.hit_x + 12.0, tray_top - 28.0), Vec2::new(rect.width() - layout.hit_x - 36.0, 5.0));
+        let timeline = Rect::from_min_size(
+            Pos2::new(layout.hit_x + 12.0, tray_top - 28.0),
+            Vec2::new(rect.width() - layout.hit_x - 36.0, 5.0),
+        );
         p.rect_filled(timeline, 3.0, Color32::from_white_alpha(18));
         let ratio = (stage.time / stage.duration.max(0.01)).clamp(0.0, 1.0) as f32;
         p.rect_filled(
-            Rect::from_min_size(timeline.min, Vec2::new(timeline.width() * ratio, timeline.height())),
+            Rect::from_min_size(
+                timeline.min,
+                Vec2::new(timeline.width() * ratio, timeline.height()),
+            ),
             3.0,
             MINT,
         );
-        p.circle_filled(Pos2::new(timeline.left() + timeline.width() * ratio, timeline.center().y), 5.0, Color32::WHITE);
-        p.text(Pos2::new(layout.hit_x + 12.0, tray_top - 19.0), Align2::LEFT_TOP, format_time(stage.time), FontId::monospace(8.0), MUTED2);
-        p.text(Pos2::new(rect.width() - 24.0, tray_top - 19.0), Align2::RIGHT_TOP, format_time(stage.duration), FontId::monospace(8.0), MUTED2);
+        p.circle_filled(
+            Pos2::new(
+                timeline.left() + timeline.width() * ratio,
+                timeline.center().y,
+            ),
+            5.0,
+            Color32::WHITE,
+        );
+        p.text(
+            Pos2::new(layout.hit_x + 12.0, tray_top - 19.0),
+            Align2::LEFT_TOP,
+            format_time(stage.time),
+            FontId::monospace(8.0),
+            MUTED2,
+        );
+        p.text(
+            Pos2::new(rect.width() - 24.0, tray_top - 19.0),
+            Align2::RIGHT_TOP,
+            format_time(stage.duration),
+            FontId::monospace(8.0),
+            MUTED2,
+        );
         if click(ui, timeline, "timeline_click") {
             if let Some(pos) = ctx_pointer(ui) {
-                let t = ((pos.x - timeline.left()) / timeline.width()).clamp(0.0, 1.0) as f64 * stage.duration;
+                let t = ((pos.x - timeline.left()) / timeline.width()).clamp(0.0, 1.0) as f64
+                    * stage.duration;
                 actions.push(Action::Seek(t));
             }
         }
 
         // bottom transport
-        let tray = Rect::from_min_size(Pos2::new(24.0, rect.height() - layout.tray_h + 18.0), Vec2::new(rect.width() - 48.0, layout.tray_h - 28.0));
+        let tray = Rect::from_min_size(
+            Pos2::new(24.0, rect.height() - layout.tray_h + 18.0),
+            Vec2::new(rect.width() - 48.0, layout.tray_h - 28.0),
+        );
         p.rect_filled(tray, 24.0, Color32::from_rgba_unmultiplied(9, 13, 23, 235));
-        p.rect_stroke(tray, 24.0, Stroke::new(1.0f32, Color32::from_white_alpha(26)), StrokeKind::Inside);
-        let play_rect = Rect::from_center_size(Pos2::new(rect.width() * 0.5, tray.center().y), Vec2::new(58.0, 58.0));
+        p.rect_stroke(
+            tray,
+            24.0,
+            Stroke::new(1.0f32, Color32::from_white_alpha(26)),
+            StrokeKind::Inside,
+        );
+        let play_rect = Rect::from_center_size(
+            Pos2::new(rect.width() * 0.5, tray.center().y),
+            Vec2::new(58.0, 58.0),
+        );
         let transport_label = if stage.audio_loading {
             "LOADING"
         } else if stage.playing {
@@ -1374,27 +1599,66 @@ impl KaraokeMachineApp {
         if round_button(ui, play_rect, transport_label, true) {
             actions.push(Action::TogglePlay);
         }
-        let restart = Rect::from_center_size(Pos2::new(play_rect.left() - 46.0, tray.center().y), Vec2::new(38.0, 38.0));
+        let restart = Rect::from_center_size(
+            Pos2::new(play_rect.left() - 46.0, tray.center().y),
+            Vec2::new(38.0, 38.0),
+        );
         if round_button(ui, restart, "R", false) {
             actions.push(Action::Restart);
         }
-        let lyrics = Rect::from_min_size(Pos2::new(play_rect.right() + 36.0, tray.center().y - 17.0), Vec2::new(96.0, 34.0));
-        if pill_toggle(ui, lyrics, if self.settings.show_lyrics { "LYRICS ON" } else { "LYRICS OFF" }, self.settings.show_lyrics) {
+        let lyrics = Rect::from_min_size(
+            Pos2::new(play_rect.right() + 36.0, tray.center().y - 17.0),
+            Vec2::new(96.0, 34.0),
+        );
+        if pill_toggle(
+            ui,
+            lyrics,
+            if self.settings.show_lyrics {
+                "LYRICS ON"
+            } else {
+                "LYRICS OFF"
+            },
+            self.settings.show_lyrics,
+        ) {
             actions.push(Action::ToggleLyrics);
         }
         let vocals = Rect::from_min_size(lyrics.right_top() + Vec2::new(8.0, 0.0), lyrics.size());
-        if pill_toggle(ui, vocals, if self.settings.vocals_volume > 0.01 { "VOCALS ON" } else { "VOCALS OFF" }, self.settings.vocals_volume > 0.01) {
+        if pill_toggle(
+            ui,
+            vocals,
+            if self.settings.vocals_volume > 0.01 {
+                "VOCALS ON"
+            } else {
+                "VOCALS OFF"
+            },
+            self.settings.vocals_volume > 0.01,
+        ) {
             actions.push(Action::ToggleVocals);
         }
         let backing = Rect::from_min_size(vocals.right_top() + Vec2::new(8.0, 0.0), lyrics.size());
-        if pill_toggle(ui, backing, if self.settings.backing_enabled { "BACKING ON" } else { "BACKING OFF" }, self.settings.backing_enabled) {
+        if pill_toggle(
+            ui,
+            backing,
+            if self.settings.backing_enabled {
+                "BACKING ON"
+            } else {
+                "BACKING OFF"
+            },
+            self.settings.backing_enabled,
+        ) {
             actions.push(Action::ToggleBacking);
         }
-        let menu_btn = Rect::from_min_size(Pos2::new(tray.left() + 16.0, tray.center().y - 17.0), Vec2::new(100.0, 34.0));
+        let menu_btn = Rect::from_min_size(
+            Pos2::new(tray.left() + 16.0, tray.center().y - 17.0),
+            Vec2::new(100.0, 34.0),
+        );
         if pill_toggle(ui, menu_btn, "LIBRARY", false) {
             actions.push(Action::OpenMenu);
         }
-        let settings_tray = Rect::from_min_size(Pos2::new(tray.right() - 120.0, tray.center().y - 17.0), Vec2::new(100.0, 34.0));
+        let settings_tray = Rect::from_min_size(
+            Pos2::new(tray.right() - 120.0, tray.center().y - 17.0),
+            Vec2::new(100.0, 34.0),
+        );
         if pill_toggle(ui, settings_tray, "SETTINGS", false) {
             actions.push(Action::OpenSettings);
         }
@@ -1404,14 +1668,44 @@ impl KaraokeMachineApp {
             p.rect_filled(rect, 0.0, Color32::from_rgba_unmultiplied(3, 6, 12, 190));
             let card = Rect::from_center_size(rect.center(), Vec2::new(620.0, 470.0));
             p.rect_filled(card, 24.0, Color32::from_rgb(9, 14, 24));
-            p.rect_stroke(card, 24.0, Stroke::new(1.0f32, Color32::from_white_alpha(30)), StrokeKind::Inside);
-            p.text(card.center_top() + Vec2::new(0.0, 28.0), Align2::CENTER_CENTER, "SESSION COMPLETE", FontId::monospace(9.0), MUTED2);
+            p.rect_stroke(
+                card,
+                24.0,
+                Stroke::new(1.0f32, Color32::from_white_alpha(30)),
+                StrokeKind::Inside,
+            );
+            p.text(
+                card.center_top() + Vec2::new(0.0, 28.0),
+                Align2::CENTER_CENTER,
+                "SESSION COMPLETE",
+                FontId::monospace(9.0),
+                MUTED2,
+            );
             if result.new_best {
-                let badge = Rect::from_center_size(card.center_top() + Vec2::new(0.0, 54.0), Vec2::new(84.0, 20.0));
-                p.rect_filled(badge, 10.0, Color32::from_rgba_unmultiplied(255, 209, 102, 24));
-                p.text(badge.center(), Align2::CENTER_CENTER, "NEW BEST", FontId::monospace(7.0), GOLD);
+                let badge = Rect::from_center_size(
+                    card.center_top() + Vec2::new(0.0, 54.0),
+                    Vec2::new(84.0, 20.0),
+                );
+                p.rect_filled(
+                    badge,
+                    10.0,
+                    Color32::from_rgba_unmultiplied(255, 209, 102, 24),
+                );
+                p.text(
+                    badge.center(),
+                    Align2::CENTER_CENTER,
+                    "NEW BEST",
+                    FontId::monospace(7.0),
+                    GOLD,
+                );
             }
-            p.text(card.center_top() + Vec2::new(0.0, 92.0), Align2::CENTER_CENTER, result.rank.to_string(), FontId::proportional(64.0), MINT);
+            p.text(
+                card.center_top() + Vec2::new(0.0, 92.0),
+                Align2::CENTER_CENTER,
+                result.rank.to_string(),
+                FontId::proportional(64.0),
+                MINT,
+            );
             let copy = match result.rank {
                 'S' => "Perfect pitch energy.",
                 'A' => "Delightfully in tune.",
@@ -1419,24 +1713,51 @@ impl KaraokeMachineApp {
                 'C' => "Finding the key.",
                 _ => "Warm-up first.",
             };
-            p.text(card.center_top() + Vec2::new(0.0, 160.0), Align2::CENTER_CENTER, copy, FontId::proportional(30.0), INK);
+            p.text(
+                card.center_top() + Vec2::new(0.0, 160.0),
+                Align2::CENTER_CENTER,
+                copy,
+                FontId::proportional(30.0),
+                INK,
+            );
             let stats = [
                 ("SCORE", result.score.to_string()),
                 ("PITCH ACCURACY", format!("{:.0}%", result.accuracy)),
-                ("NOTES HIT", format!("{}/{}", result.hit, stage.song.notes.len())),
+                (
+                    "NOTES HIT",
+                    format!("{}/{}", result.hit, stage.song.notes.len()),
+                ),
                 ("PERFECT", result.perfect.to_string()),
                 ("BEST COMBO", format!("{}×", result.combo)),
             ];
             for (i, (label, value)) in stats.iter().enumerate() {
                 let x = card.left() + 44.0 + i as f32 * 108.0;
-                p.text(Pos2::new(x, card.center().y + 60.0), Align2::LEFT_TOP, *label, FontId::monospace(7.0), MUTED2);
-                p.text(Pos2::new(x, card.center().y + 76.0), Align2::LEFT_TOP, value, FontId::monospace(17.0), INK);
+                p.text(
+                    Pos2::new(x, card.center().y + 60.0),
+                    Align2::LEFT_TOP,
+                    *label,
+                    FontId::monospace(7.0),
+                    MUTED2,
+                );
+                p.text(
+                    Pos2::new(x, card.center().y + 76.0),
+                    Align2::LEFT_TOP,
+                    value,
+                    FontId::monospace(17.0),
+                    INK,
+                );
             }
-            let retry = Rect::from_center_size(Pos2::new(card.center().x - 90.0, card.bottom() - 70.0), Vec2::new(160.0, 44.0));
+            let retry = Rect::from_center_size(
+                Pos2::new(card.center().x - 90.0, card.bottom() - 70.0),
+                Vec2::new(160.0, 44.0),
+            );
             if pill_button(ui, retry, "SING IT AGAIN", true) {
                 actions.push(Action::RetrySong);
             }
-            let library = Rect::from_center_size(Pos2::new(card.center().x + 110.0, card.bottom() - 70.0), Vec2::new(170.0, 44.0));
+            let library = Rect::from_center_size(
+                Pos2::new(card.center().x + 110.0, card.bottom() - 70.0),
+                Vec2::new(170.0, 44.0),
+            );
             if pill_button(ui, library, "BACK TO LIBRARY", false) {
                 actions.push(Action::OpenLibraryFromResults);
             }
@@ -1491,7 +1812,11 @@ mod tests {
     }
 
     fn judgment(stage: &Stage) -> &str {
-        stage.judgment.as_ref().map(|j| j.text.as_str()).unwrap_or("")
+        stage
+            .judgment
+            .as_ref()
+            .map(|j| j.text.as_str())
+            .unwrap_or("")
     }
 
     #[test]

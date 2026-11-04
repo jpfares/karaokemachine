@@ -5,16 +5,21 @@ mod settings;
 mod stage;
 mod upload;
 
-use crate::audio::{AudioEngine, input_device_names, LoadedAudio, Microphone};
-use crate::editor::{Editor, EditorEvent, RAW_PITCH_SAMPLE_RATE, spawn_raw_pitch_track, VOCAL_BINS_PER_SECOND};
-use crate::jobs::Job;
-use crate::library::{build_albums, find_root, load_scores, load_settings, load_songs, read_songlist, read_songlist_path, song_audio_path};
-use crate::map_package::{MapIndex, MapIndexEntry, MapPackage};
-use crate::model::{Album, pitch_color, Scores, Settings, Song};
-use crate::pitch::{PitchReading, PitchTracker};
-use crate::theme::{alpha, BG, INK, MINT};
 use self::stage::Stage;
 use self::upload::UploadState;
+use crate::audio::{input_device_names, AudioEngine, LoadedAudio, Microphone};
+use crate::editor::{
+    spawn_raw_pitch_track, Editor, EditorEvent, RAW_PITCH_SAMPLE_RATE, VOCAL_BINS_PER_SECOND,
+};
+use crate::jobs::Job;
+use crate::library::{
+    build_albums, find_root, load_scores, load_settings, load_songs, read_songlist,
+    read_songlist_path, song_audio_path,
+};
+use crate::map_package::{MapIndex, MapIndexEntry, MapPackage};
+use crate::model::{pitch_color, Album, Scores, Settings, Song};
+use crate::pitch::{PitchReading, PitchTracker};
+use crate::theme::{alpha, BG, INK, MINT};
 use eframe::egui::{self, Color32, Id, Pos2, RichText, Stroke, TextureHandle, Vec2};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -166,7 +171,9 @@ impl KaraokeMachineApp {
         let songlist_path = read_songlist_path();
         let pending_song = setting_env("SONG").and_then(|needle| {
             let needle = needle.to_lowercase();
-            songs.iter().position(|s| s.id.to_lowercase() == needle || s.title.to_lowercase().contains(&needle))
+            songs.iter().position(|s| {
+                s.id.to_lowercase() == needle || s.title.to_lowercase().contains(&needle)
+            })
         });
         let mut app = Self {
             ctx: cc.egui_ctx.clone(),
@@ -219,7 +226,9 @@ impl KaraokeMachineApp {
             fake_pitch: setting_env("PITCH").and_then(|v| v.parse().ok()),
             no_mic: setting_env("NOMIC").is_some(),
             shot_path: setting_env("SHOT").map(PathBuf::from),
-            shot_at: setting_env("SHOT_DELAY").and_then(|v| v.parse().ok()).unwrap_or(2.2),
+            shot_at: setting_env("SHOT_DELAY")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(2.2),
             shot_requested: false,
             auto_play: setting_env("AUTOPLAY").is_some(),
             fps_log: setting_env("FPS").is_some(),
@@ -275,8 +284,10 @@ impl KaraokeMachineApp {
         visuals.extreme_bg_color = Color32::from_rgb(15, 21, 34);
         visuals.faint_bg_color = Color32::from_rgb(12, 17, 29);
         visuals.widgets.inactive.bg_stroke = Stroke::new(1.0f32, Color32::from_white_alpha(38));
-        visuals.widgets.hovered.bg_stroke = Stroke::new(1.0f32, Color32::from_rgba_unmultiplied(124, 247, 196, 120));
-        visuals.widgets.active.bg_stroke = Stroke::new(1.0f32, Color32::from_rgba_unmultiplied(124, 247, 196, 180));
+        visuals.widgets.hovered.bg_stroke =
+            Stroke::new(1.0f32, Color32::from_rgba_unmultiplied(124, 247, 196, 120));
+        visuals.widgets.active.bg_stroke =
+            Stroke::new(1.0f32, Color32::from_rgba_unmultiplied(124, 247, 196, 180));
         visuals.override_text_color = Some(INK);
         visuals.widgets.inactive.bg_fill = Color32::from_rgb(15, 21, 34);
         visuals.widgets.hovered.bg_fill = Color32::from_rgb(24, 32, 49);
@@ -647,7 +658,11 @@ impl eframe::App for KaraokeMachineApp {
                 }
             }
         }
-        self.started_at = if self.started_at == 0.0 { now } else { self.started_at };
+        self.started_at = if self.started_at == 0.0 {
+            now
+        } else {
+            self.started_at
+        };
         self.handle_keys(ctx, now);
         self.recover_audio_devices(now);
         self.poll_audio_load(now);
@@ -800,7 +815,13 @@ impl eframe::App for KaraokeMachineApp {
                         rgba.push(pixel.a());
                     }
                     eprintln!("saving screenshot {}x{} to {}", w, h, path.display());
-                    match image::save_buffer(&path, &rgba, w as u32, h as u32, image::ColorType::Rgba8) {
+                    match image::save_buffer(
+                        &path,
+                        &rgba,
+                        w as u32,
+                        h as u32,
+                        image::ColorType::Rgba8,
+                    ) {
                         Ok(()) => eprintln!("screenshot saved"),
                         Err(error) => eprintln!("screenshot save failed: {error}"),
                     }
@@ -812,7 +833,11 @@ impl eframe::App for KaraokeMachineApp {
         if self.editor.is_some() {
             ctx.request_repaint_after(Duration::from_millis(16));
         } else if let Some(stage) = &self.stage {
-            if stage.playing || stage.count_in_until.is_some() || self.mic.is_some() || self.range_test_open {
+            if stage.playing
+                || stage.count_in_until.is_some()
+                || self.mic.is_some()
+                || self.range_test_open
+            {
                 ctx.request_repaint_after(Duration::from_millis(16));
             }
         } else if self.range_test_open {

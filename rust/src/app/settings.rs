@@ -1,10 +1,10 @@
 //! The settings window and the vocal-range test.
 
+use super::KaraokeMachineApp;
 use crate::audio::input_device_names;
 use crate::library::{save_scores, save_settings};
 use crate::model::note_name;
 use crate::theme::{GOLD, INK, MINT, MUTED, MUTED2, PINK};
-use super::KaraokeMachineApp;
 use eframe::egui::{self, Align2, RichText, Vec2};
 
 impl KaraokeMachineApp {

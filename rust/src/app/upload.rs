@@ -1,14 +1,14 @@
 //! The upload dialog: metadata fetch, cover picker and the import job.
 
+use super::cover::CoverPicker;
+use super::maps::{has_hand_mapping, write_song_file};
+use super::KaraokeMachineApp;
 use crate::jobs::{Job, StreamJob};
 use crate::library::backup_song_file;
 use crate::map_package::MapPackage;
 use crate::model::{format_time, Song};
 use crate::theme::{alpha, GOLD, MINT, MUTED, MUTED2, PINK};
 use crate::tools::node_command;
-use super::KaraokeMachineApp;
-use super::cover::CoverPicker;
-use super::maps::{has_hand_mapping, write_song_file};
 use eframe::egui::{self, Align2, Color32, FontId, Rect, RichText, Vec2};
 use serde::Deserialize;
 use std::io::{BufRead, BufReader};
@@ -118,14 +118,29 @@ pub(super) fn run_song_info(root: &Path, url: &str) -> Result<TrackInfo, String>
         .map_err(|error| format!("Could not run Node: {error}"))?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let line = stdout.lines().rev().find(|line| !line.trim().is_empty()).unwrap_or("");
+    let line = stdout
+        .lines()
+        .rev()
+        .find(|line| !line.trim().is_empty())
+        .unwrap_or("");
     let parsed: TrackInfo = serde_json::from_str(line.trim()).map_err(|error| {
         format!(
             "Could not read the track info: {error}{}",
             if stderr.trim().is_empty() {
                 String::new()
             } else {
-                format!("\n{}", stderr.lines().rev().take(4).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\n"))
+                format!(
+                    "\n{}",
+                    stderr
+                        .lines()
+                        .rev()
+                        .take(4)
+                        .collect::<Vec<_>>()
+                        .into_iter()
+                        .rev()
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                )
             }
         )
     })?;
@@ -133,7 +148,10 @@ pub(super) fn run_song_info(root: &Path, url: &str) -> Result<TrackInfo, String>
         return Err(error.clone());
     }
     if !output.status.success() {
-        return Err(format!("Track lookup failed: {}", parsed.error.unwrap_or_else(|| "unknown error".into())));
+        return Err(format!(
+            "Track lookup failed: {}",
+            parsed.error.unwrap_or_else(|| "unknown error".into())
+        ));
     }
     Ok(parsed)
 }
@@ -151,10 +169,7 @@ impl KaraokeMachineApp {
                     if let Some(error) = info.error {
                         self.upload.message = error;
                     } else {
-                        let cover_url = info
-                            .cover
-                            .clone()
-                            .filter(|value| !value.trim().is_empty());
+                        let cover_url = info.cover.clone().filter(|value| !value.trim().is_empty());
                         self.upload.title = info.title;
                         self.upload.artist = info.artist;
                         self.upload.album = info.album.unwrap_or_default();
@@ -172,7 +187,8 @@ impl KaraokeMachineApp {
                         self.upload.album_search.clear();
                         start_cover = cover_url;
                         self.upload.message = if self.upload.lyrics.trim().is_empty() {
-                            "Details fetched. No free lyrics were found — paste or edit them below.".into()
+                            "Details fetched. No free lyrics were found — paste or edit them below."
+                                .into()
                         } else {
                             "Details and lyrics fetched. Edit anything before importing.".into()
                         };
@@ -229,10 +245,12 @@ impl KaraokeMachineApp {
                         let dir = self.root.join("assets/songs").join(&id);
                         let result: Result<bool, String> = (|| {
                             let path = dir.join("song.json");
-                            let raw = std::fs::read_to_string(&path)
-                                .map_err(|error| format!("Could not read the imported song: {error}"))?;
-                            let mut song: Song = serde_json::from_str(&raw)
-                                .map_err(|error| format!("Could not parse the imported song: {error}"))?;
+                            let raw = std::fs::read_to_string(&path).map_err(|error| {
+                                format!("Could not read the imported song: {error}")
+                            })?;
+                            let mut song: Song = serde_json::from_str(&raw).map_err(|error| {
+                                format!("Could not parse the imported song: {error}")
+                            })?;
                             // The importer returns an existing folder untouched, so
                             // a song mapped by hand can reach this point.
                             let backed_up = has_hand_mapping(&song) && backup_song_file(&dir)?;
@@ -246,7 +264,9 @@ impl KaraokeMachineApp {
                         match result {
                             Ok(backed_up) => {
                                 self.reload_library(ctx, now);
-                                if let Some(index) = self.songs.iter().position(|song| song.id == id) {
+                                if let Some(index) =
+                                    self.songs.iter().position(|song| song.id == id)
+                                {
                                     self.open_song(index, now);
                                     self.toast(
                                         if backed_up {
@@ -257,7 +277,10 @@ impl KaraokeMachineApp {
                                         now,
                                     );
                                 } else {
-                                    self.toast("Map installed, but the song was not found after reload.", now);
+                                    self.toast(
+                                        "Map installed, but the song was not found after reload.",
+                                        now,
+                                    );
                                 }
                             }
                             Err(error) => self.toast(error, now),
@@ -294,7 +317,8 @@ impl KaraokeMachineApp {
         }
         let script = self.root.join("dist-tools/song-info.js");
         if !script.exists() {
-            self.upload.message = "Import tools are not built. Run `npm install && npm run assets` first.".into();
+            self.upload.message =
+                "Import tools are not built. Run `npm install && npm run assets` first.".into();
             return;
         }
         let root = self.root.clone();
@@ -328,7 +352,8 @@ impl KaraokeMachineApp {
         }
         let script = self.root.join("dist-tools/import-song.js");
         if !script.exists() {
-            self.upload.message = "Import tools are not built. Run `npm install && npm run assets` first.".into();
+            self.upload.message =
+                "Import tools are not built. Run `npm install && npm run assets` first.".into();
             return false;
         }
         let meta = serde_json::json!({
@@ -348,7 +373,10 @@ impl KaraokeMachineApp {
             return false;
         }
         let meta_path = work.join("editor-import.json");
-        if let Err(error) = std::fs::write(&meta_path, serde_json::to_string_pretty(&meta).unwrap_or_default()) {
+        if let Err(error) = std::fs::write(
+            &meta_path,
+            serde_json::to_string_pretty(&meta).unwrap_or_default(),
+        ) {
             self.upload.message = format!("Could not write import metadata: {error}");
             return false;
         }
@@ -364,7 +392,8 @@ impl KaraokeMachineApp {
         let url = self.upload.url.trim().to_string();
         self.upload.progress = 0.0;
         self.upload.stage = "Queued".into();
-        self.upload.message = "Downloading and separating the audio. This can take several minutes.".into();
+        self.upload.message =
+            "Downloading and separating the audio. This can take several minutes.".into();
         let _ = now;
         self.upload.import = Some(StreamJob::run("The importer", &self.ctx, move |sender| {
             let child = node_command(&root, &script)
@@ -378,7 +407,9 @@ impl KaraokeMachineApp {
             let mut child = match child {
                 Ok(child) => child,
                 Err(error) => {
-                    sender.send(ImportMessage::Done(Err(format!("Could not start Node: {error}"))));
+                    sender.send(ImportMessage::Done(Err(format!(
+                        "Could not start Node: {error}"
+                    ))));
                     return;
                 }
             };
@@ -388,7 +419,9 @@ impl KaraokeMachineApp {
                 for line in BufReader::new(stdout).lines().map_while(Result::ok) {
                     if let Some(rest) = line.strip_prefix("PROGRESS\t") {
                         let parts: Vec<&str> = rest.splitn(3, '\t').collect();
-                        if let Some(percent) = parts.first().and_then(|value| value.parse::<f32>().ok()) {
+                        if let Some(percent) =
+                            parts.first().and_then(|value| value.parse::<f32>().ok())
+                        {
                             let stage = parts.get(1).copied().unwrap_or("Working");
                             let message = parts.get(2).copied().unwrap_or(stage);
                             sender.send(ImportMessage::Progress(
@@ -411,16 +444,33 @@ impl KaraokeMachineApp {
                         sender.send(ImportMessage::Done(Ok(id)));
                     } else {
                         sender.send(ImportMessage::Done(Err(
-                            "Import finished but did not report a song id.".into()
+                            "Import finished but did not report a song id.".into(),
                         )));
                     }
                 }
                 _ => {
-                    let log = std::fs::read_to_string(root.join(".work/editor-import.log")).unwrap_or_default();
-                    let tail = log.lines().rev().take(8).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\n");
+                    let log = std::fs::read_to_string(root.join(".work/editor-import.log"))
+                        .unwrap_or_default();
+                    let tail = log
+                        .lines()
+                        .rev()
+                        .take(8)
+                        .collect::<Vec<_>>()
+                        .into_iter()
+                        .rev()
+                        .collect::<Vec<_>>()
+                        .join("\n");
                     let message = error_message
-                        .or_else(|| if tail.trim().is_empty() { None } else { Some(tail) })
-                        .unwrap_or_else(|| "The import failed. Check yt-dlp, ffmpeg and Demucs.".into());
+                        .or_else(|| {
+                            if tail.trim().is_empty() {
+                                None
+                            } else {
+                                Some(tail)
+                            }
+                        })
+                        .unwrap_or_else(|| {
+                            "The import failed. Check yt-dlp, ffmpeg and Demucs.".into()
+                        });
                     sender.send(ImportMessage::Done(Err(message)));
                 }
             }
@@ -430,7 +480,11 @@ impl KaraokeMachineApp {
 
     pub(super) fn draw_upload(&mut self, ctx: &egui::Context, now: f64) {
         let mut open = self.upload.open;
-        let mut artists: Vec<String> = self.songs.iter().filter_map(|song| song.artist.clone()).collect();
+        let mut artists: Vec<String> = self
+            .songs
+            .iter()
+            .filter_map(|song| song.artist.clone())
+            .collect();
         artists.sort_by_key(|name| name.to_lowercase());
         artists.dedup();
         let mut albums: Vec<(String, String)> = self
@@ -816,12 +870,10 @@ impl KaraokeMachineApp {
                 }
                 if !self.upload.cover.has_value() {
                     if let Some(cover) = &song.cover {
-                        let path = self
-                            .root
-                            .join("assets/songs")
-                            .join(&song.id)
-                            .join(cover);
-                        self.upload.cover.set_from_path(path, "Cover copied from the existing album.");
+                        let path = self.root.join("assets/songs").join(&song.id).join(cover);
+                        self.upload
+                            .cover
+                            .set_from_path(path, "Cover copied from the existing album.");
                     }
                 }
             }

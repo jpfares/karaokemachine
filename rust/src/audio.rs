@@ -40,7 +40,11 @@ impl LoadedAudio {
     /// from a worker thread. The vocal stem is padded or truncated to the
     /// backing's length; it used to be dropped on any mismatch, which
     /// silenced the guide vocal on every bundled warm-up.
-    pub fn decode(backing_path: &Path, vocals_path: Option<&Path>, sample_rate: u32) -> Result<Self> {
+    pub fn decode(
+        backing_path: &Path,
+        vocals_path: Option<&Path>,
+        sample_rate: u32,
+    ) -> Result<Self> {
         let backing = decode_audio(backing_path, sample_rate as usize)?;
         let vocals = match vocals_path {
             Some(path) => match decode_audio(path, sample_rate as usize) {
@@ -63,11 +67,20 @@ impl LoadedAudio {
             eprintln!(
                 "vocal stem is {:.2} s {} than the backing; fitting it",
                 (difference.abs() / sample_rate.max(1) as f64),
-                if difference > 0.0 { "longer" } else { "shorter" }
+                if difference > 0.0 {
+                    "longer"
+                } else {
+                    "shorter"
+                }
             );
             vocals.resize(frames * 2, 0.0);
         }
-        Self { backing, vocals, frames, sample_rate }
+        Self {
+            backing,
+            vocals,
+            frames,
+            sample_rate,
+        }
     }
 
     pub fn duration(&self) -> f64 {
@@ -84,7 +97,9 @@ impl LoadedAudio {
         if self.frames == 0 || !self.has_vocals() {
             return Vec::new();
         }
-        let bins = (self.duration() * bins_per_second.max(1.0) as f64).ceil().max(1.0) as usize;
+        let bins = (self.duration() * bins_per_second.max(1.0) as f64)
+            .ceil()
+            .max(1.0) as usize;
         let frames_per_bin = (self.frames as f64 / bins as f64).max(1.0);
         let mut peaks = vec![0.0f32; bins];
         for (bin, peak) in peaks.iter_mut().enumerate() {
@@ -115,7 +130,11 @@ impl LoadedAudio {
             let second = (first + 1).min(last);
             let frac = (source - first as f64) as f32;
             let left = lerp(self.vocals[first * 2], self.vocals[second * 2], frac);
-            let right = lerp(self.vocals[first * 2 + 1], self.vocals[second * 2 + 1], frac);
+            let right = lerp(
+                self.vocals[first * 2 + 1],
+                self.vocals[second * 2 + 1],
+                frac,
+            );
             out.push((left + right) * 0.5);
         }
         out
@@ -293,7 +312,9 @@ impl AudioEngine {
     }
 
     fn set_position(&self, seconds: f64) {
-        self.shared.position.store(seconds.to_bits(), Ordering::Relaxed);
+        self.shared
+            .position
+            .store(seconds.to_bits(), Ordering::Relaxed);
     }
 
     /// Varispeed: the read position advances `rate` frames per output frame,
@@ -325,7 +346,10 @@ impl AudioEngine {
     /// The callback never panics while holding the lock, so a poisoned mutex
     /// means a UI-side panic already happened; recover rather than cascade.
     fn lock(&self) -> std::sync::MutexGuard<'_, Mixer> {
-        self.shared.mixer.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.shared
+            .mixer
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 
@@ -410,7 +434,10 @@ fn write_output<T>(data: &mut [T], channels: usize, shared: &Arc<Shared>)
 where
     T: SizedSample + FromSample<f32>,
 {
-    let mut mixer = shared.mixer.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut mixer = shared
+        .mixer
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     for frame in data.chunks_mut(channels) {
         let (l, r) = next_frame(&mut mixer);
         if channels == 1 {
@@ -423,7 +450,10 @@ where
             }
         }
     }
-    shared.position.store((mixer.pos / shared.sample_rate).to_bits(), Ordering::Relaxed);
+    shared.position.store(
+        (mixer.pos / shared.sample_rate).to_bits(),
+        Ordering::Relaxed,
+    );
     if mixer.playing && mixer.pos >= mixer.frames as f64 {
         mixer.playing = false;
     }
@@ -439,7 +469,12 @@ fn decode_audio(path: &Path, out_rate: usize) -> Result<Vec<f32>> {
         hint.with_extension(ext);
     }
     let probed = symphonia::default::get_probe()
-        .format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default())
+        .format(
+            &hint,
+            mss,
+            &FormatOptions::default(),
+            &MetadataOptions::default(),
+        )
         .context("probing audio")?;
     let mut format = probed.format;
     let track = format
@@ -498,8 +533,16 @@ fn decode_audio(path: &Path, out_rate: usize) -> Result<Vec<f32>> {
         let t = (src - i0 as f64) as f32;
         let left0 = interleaved[i0 * in_channels];
         let left1 = interleaved[i1 * in_channels];
-        let right0 = if in_channels > 1 { interleaved[i0 * in_channels + 1] } else { left0 };
-        let right1 = if in_channels > 1 { interleaved[i1 * in_channels + 1] } else { left1 };
+        let right0 = if in_channels > 1 {
+            interleaved[i0 * in_channels + 1]
+        } else {
+            left0
+        };
+        let right1 = if in_channels > 1 {
+            interleaved[i1 * in_channels + 1]
+        } else {
+            left1
+        };
         out[frame * 2] = lerp(left0, left1, t);
         out[frame * 2 + 1] = lerp(right0, right1, t);
     }
@@ -535,14 +578,18 @@ impl Microphone {
         let mut chosen = None;
         if let Some(wanted) = selected {
             if let Ok(devices) = host.input_devices() {
-                chosen = devices.into_iter().find(|device| device.name().map(|name| name == wanted).unwrap_or(false));
+                chosen = devices
+                    .into_iter()
+                    .find(|device| device.name().map(|name| name == wanted).unwrap_or(false));
             }
         }
         let device = chosen
             .or_else(|| host.default_input_device())
             .ok_or_else(|| anyhow!("no input microphone found"))?;
         let name = device.name().unwrap_or_else(|_| "microphone".into());
-        let supported = device.default_input_config().context("microphone configuration")?;
+        let supported = device
+            .default_input_config()
+            .context("microphone configuration")?;
         let sample_format = supported.sample_format();
         let config: StreamConfig = supported.into();
         let sample_rate = config.sample_rate.0;
@@ -577,7 +624,10 @@ impl Microphone {
 
     /// The most recent `count` mono samples, oldest first.
     pub fn latest(&self, count: usize) -> Vec<f32> {
-        let ring = self.ring.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let ring = self
+            .ring
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let start = ring.len().saturating_sub(count);
         ring.iter().skip(start).copied().collect()
     }
@@ -617,7 +667,11 @@ where
     let channels = channels.max(1);
     let mut ring = ring.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     for frame in data.chunks(channels) {
-        let mono = frame.iter().map(|&sample| f32::from_sample(sample)).sum::<f32>() / channels as f32;
+        let mono = frame
+            .iter()
+            .map(|&sample| f32::from_sample(sample))
+            .sum::<f32>()
+            / channels as f32;
         if ring.len() >= MIC_RING_SAMPLES {
             ring.pop_front();
         }

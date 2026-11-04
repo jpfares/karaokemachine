@@ -45,7 +45,11 @@ pub fn detect_pitch(samples: &[f32], sample_rate: f32) -> Option<PitchReading> {
     let mut running = 0.0f32;
     for tau in 1..=max_lag {
         running += diff[tau];
-        cmnd[tau] = if running <= 1e-12 { 1.0 } else { diff[tau] * tau as f32 / running };
+        cmnd[tau] = if running <= 1e-12 {
+            1.0
+        } else {
+            diff[tau] * tau as f32 / running
+        };
     }
 
     let threshold = 0.24;

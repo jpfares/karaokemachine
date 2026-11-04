@@ -47,7 +47,13 @@ pub fn pill_button(ui: &mut Ui, rect: Rect, text: &str, primary: bool) -> bool {
             StrokeKind::Inside,
         );
     }
-    p.text(rect.center(), Align2::CENTER_CENTER, text, FontId::proportional(12.0), fg);
+    p.text(
+        rect.center(),
+        Align2::CENTER_CENTER,
+        text,
+        FontId::proportional(12.0),
+        fg,
+    );
     clicked
 }
 
@@ -66,7 +72,14 @@ pub fn pill_toggle(ui: &mut Ui, rect: Rect, text: &str, active: bool) -> bool {
     p.rect_stroke(
         rect,
         rect.height() / 2.0,
-        Stroke::new(1.0f32, if active { alpha(MINT, 90) } else { Color32::from_white_alpha(28) }),
+        Stroke::new(
+            1.0f32,
+            if active {
+                alpha(MINT, 90)
+            } else {
+                Color32::from_white_alpha(28)
+            },
+        ),
         StrokeKind::Inside,
     );
     p.text(
@@ -87,7 +100,13 @@ pub fn glyph_button(ui: &mut Ui, rect: Rect, glyph: &str) -> bool {
     let p = ui.painter();
     p.rect_filled(rect, 8.0, Color32::from_rgba_unmultiplied(255, 255, 255, 8));
     let size = if glyph.len() <= 1 { 15.0 } else { 8.0 };
-    p.text(rect.center(), Align2::CENTER_CENTER, glyph, FontId::monospace(size), INK);
+    p.text(
+        rect.center(),
+        Align2::CENTER_CENTER,
+        glyph,
+        FontId::monospace(size),
+        INK,
+    );
     clicked
 }
 
@@ -100,7 +119,11 @@ pub fn round_button(ui: &mut Ui, rect: Rect, glyph: &str, primary: bool) -> bool
     p.circle_filled(
         rect.center(),
         rect.width() / 2.0,
-        if primary { MINT } else { Color32::from_rgba_unmultiplied(255, 255, 255, 12) },
+        if primary {
+            MINT
+        } else {
+            Color32::from_rgba_unmultiplied(255, 255, 255, 12)
+        },
     );
     let font_size = if glyph.len() > 2 {
         9.0
@@ -126,25 +149,45 @@ pub fn button(ui: &mut Ui, rect: Rect, text: &str, primary: bool, enabled: bool)
     let response = ui.interact(
         rect,
         widget_id("editor_button", text, rect),
-        if enabled { Sense::click() } else { Sense::hover() },
+        if enabled {
+            Sense::click()
+        } else {
+            Sense::hover()
+        },
     );
     let hovered = response.hovered() && enabled;
     let p = ui.painter();
     let fill = if primary {
-        if hovered { Color32::from_rgb(152, 255, 213) } else { MINT }
+        if hovered {
+            Color32::from_rgb(152, 255, 213)
+        } else {
+            MINT
+        }
     } else if hovered {
         Color32::from_rgb(24, 32, 49)
     } else {
         Color32::from_rgba_unmultiplied(255, 255, 255, 9)
     };
-    p.rect_filled(rect, 7.0, if enabled { fill } else { Color32::from_white_alpha(5) });
+    p.rect_filled(
+        rect,
+        7.0,
+        if enabled {
+            fill
+        } else {
+            Color32::from_white_alpha(5)
+        },
+    );
     if !primary {
         p.rect_stroke(
             rect,
             7.0,
             Stroke::new(
                 1.0f32,
-                if enabled { Color32::from_white_alpha(35) } else { Color32::from_white_alpha(12) },
+                if enabled {
+                    Color32::from_white_alpha(35)
+                } else {
+                    Color32::from_white_alpha(12)
+                },
             ),
             StrokeKind::Inside,
         );
@@ -178,7 +221,14 @@ pub fn toggle(ui: &mut Ui, rect: Rect, text: &str, active: bool) -> bool {
     p.rect_stroke(
         rect,
         7.0,
-        Stroke::new(1.0f32, if active { alpha(MINT, 95) } else { Color32::from_white_alpha(26) }),
+        Stroke::new(
+            1.0f32,
+            if active {
+                alpha(MINT, 95)
+            } else {
+                Color32::from_white_alpha(26)
+            },
+        ),
         StrokeKind::Inside,
     );
     p.text(

@@ -1,11 +1,13 @@
 use crate::audio::AudioEngine;
 use crate::jobs::Job;
-use crate::model::{format_time, note_name, pitch_color, CustomWord, LyricLine, Note, PlacedWord, Song};
+use crate::model::{
+    format_time, note_name, pitch_color, CustomWord, LyricLine, Note, PlacedWord, Song,
+};
 use crate::theme::{alpha, BG, GOLD, INK, MINT, MUTED, MUTED2, PANEL, PANEL2, PINK};
 use crate::widgets::{button, toggle};
 use eframe::egui::{
-    self, Align2, Color32, CursorIcon, FontId, Id, LayerId, Order, PointerButton, Pos2, Rect, RichText, Sense,
-    Stroke, StrokeKind, Ui, Vec2,
+    self, Align2, Color32, CursorIcon, FontId, Id, LayerId, Order, PointerButton, Pos2, Rect,
+    RichText, Sense, Stroke, StrokeKind, Ui, Vec2,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -184,12 +186,7 @@ impl Editor {
         } else {
             migrate_legacy_ribbons(&mut initial_notes, &mut next_ribbon_id);
         }
-        let next_custom_id = custom_words
-            .iter()
-            .map(|word| word.id)
-            .max()
-            .unwrap_or(0)
-            + 1;
+        let next_custom_id = custom_words.iter().map(|word| word.id).max().unwrap_or(0) + 1;
         let word_bank = build_word_bank(&song.lines, &custom_words, &words);
         let mut low = song.low.max(0);
         let mut high = song.high.min(127);
@@ -644,10 +641,7 @@ impl Editor {
                     let midi = self.midi_at_y(pos.y, layout);
                     if let Some(audio) = audio {
                         audio.play_preview(midi, 0.55);
-                        self.status = format!(
-                            "Preview {} from the piano rail.",
-                            note_name(midi)
-                        );
+                        self.status = format!("Preview {} from the piano rail.", note_name(midi));
                     } else {
                         self.status = "No audio output is available for note preview.".into();
                     }
@@ -673,7 +667,9 @@ impl Editor {
         });
         if middle_down
             && self.drag.is_none()
-            && pointer.map(|pos| layout.note_area.contains(pos)).unwrap_or(false)
+            && pointer
+                .map(|pos| layout.note_area.contains(pos))
+                .unwrap_or(false)
         {
             self.scroll = (self.scroll - delta.x as f64 / self.zoom as f64).max(0.0);
         }
@@ -683,12 +679,7 @@ impl Editor {
         }
     }
 
-    fn handle_right_scrub(
-        &mut self,
-        ui: &mut Ui,
-        layout: &Layout,
-        audio: &Option<AudioEngine>,
-    ) {
+    fn handle_right_scrub(&mut self, ui: &mut Ui, layout: &Layout, audio: &Option<AudioEngine>) {
         if self.custom_word_open {
             self.right_scrubbing = false;
             return;
@@ -706,10 +697,7 @@ impl Editor {
             self.right_scrubbing = false;
             return;
         };
-        let area = layout
-            .wave
-            .union(layout.note_area)
-            .union(layout.ruler);
+        let area = layout.wave.union(layout.note_area).union(layout.ruler);
         if !area.contains(pos) {
             self.right_scrubbing = false;
             return;
@@ -718,9 +706,7 @@ impl Editor {
             self.right_scrubbing = true;
             self.status = "Scrubbing the now-playing line. Release to leave it here.".into();
         }
-        let time = self
-            .x_to_time(pos.x, layout)
-            .clamp(0.0, self.duration);
+        let time = self.x_to_time(pos.x, layout).clamp(0.0, self.duration);
         if (time - self.playhead).abs() > 0.0005 {
             self.seek(time, audio);
         }
@@ -783,7 +769,9 @@ impl Editor {
                 }
             }
             EditorTool::Note => {
-                if response.drag_started_by(PointerButton::Primary) && layout.note_area.contains(pos) {
+                if response.drag_started_by(PointerButton::Primary)
+                    && layout.note_area.contains(pos)
+                {
                     self.push_history();
                     let midi = self.midi_at_y(pos.y, layout);
                     let start = self.snap_time(self.x_to_time(pos.x, layout));
@@ -803,7 +791,9 @@ impl Editor {
                     self.selected.insert(index);
                     self.drag = Some(Drag::NewNote { index, start });
                     self.dirty = true;
-                } else if response.clicked_by(PointerButton::Primary) && layout.note_area.contains(pos) {
+                } else if response.clicked_by(PointerButton::Primary)
+                    && layout.note_area.contains(pos)
+                {
                     if let Some(index) = self.hit_note(pos, layout) {
                         self.selected.clear();
                         self.selected.insert(index);
@@ -827,7 +817,8 @@ impl Editor {
                         self.selected_word = None;
                         self.selected.insert(self.notes.len() - 1);
                         self.dirty = true;
-                        self.status = "Note placed. Use RIBBON to connect notes into one vocal run.".into();
+                        self.status =
+                            "Note placed. Use RIBBON to connect notes into one vocal run.".into();
                     }
                 }
             }
@@ -838,7 +829,8 @@ impl Editor {
                         self.selected_word = Some(word_index);
                         let word = &self.words[word_index];
                         let grab_time = self.x_to_time(pos.x, layout) - word.start;
-                        let grab_y = (pos.y - layout.note_area.top()) / layout.note_area.height().max(1.0)
+                        let grab_y = (pos.y - layout.note_area.top())
+                            / layout.note_area.height().max(1.0)
                             - word.y;
                         self.push_history();
                         self.drag = Some(Drag::MoveWord {
@@ -914,7 +906,9 @@ impl Editor {
                         self.drag = Some(Drag::Ribbon {
                             anchor_start: self.notes[index].start,
                         });
-                        self.status = "Ribbon selection — release over the last note to connect the run.".into();
+                        self.status =
+                            "Ribbon selection — release over the last note to connect the run."
+                                .into();
                     }
                 } else if response.clicked_by(PointerButton::Primary) {
                     if let Some(index) = self.hit_note(pos, layout) {
@@ -934,13 +928,15 @@ impl Editor {
             }
             EditorTool::Eraser => {
                 if response.drag_started_by(PointerButton::Primary) {
-                    if self.hit_word(pos, layout).is_some() || self.hit_note(pos, layout).is_some() {
+                    if self.hit_word(pos, layout).is_some() || self.hit_note(pos, layout).is_some()
+                    {
                         self.push_history();
                         self.drag = Some(Drag::Erase);
                         self.erase_at(pos, layout);
                     }
                 } else if response.clicked_by(PointerButton::Primary)
-                    && (self.hit_word(pos, layout).is_some() || self.hit_note(pos, layout).is_some())
+                    && (self.hit_word(pos, layout).is_some()
+                        || self.hit_note(pos, layout).is_some())
                 {
                     self.push_history();
                     self.erase_at(pos, layout);
@@ -952,7 +948,9 @@ impl Editor {
         match self.drag {
             Some(Drag::NewNote { index, start }) => {
                 if response.dragged_by(PointerButton::Primary) {
-                    let end = self.snap_time(self.x_to_time(pos.x, layout)).max(start + 0.06);
+                    let end = self
+                        .snap_time(self.x_to_time(pos.x, layout))
+                        .max(start + 0.06);
                     if let Some(note) = self.notes.get_mut(index) {
                         note.dur = (end - start).clamp(0.06, 30.0);
                     }
@@ -962,7 +960,8 @@ impl Editor {
                     }
                     self.drag = None;
                     self.sort_notes();
-                    self.status = "Note placed. Use RIBBON to connect notes into one vocal run.".into();
+                    self.status =
+                        "Note placed. Use RIBBON to connect notes into one vocal run.".into();
                 }
             }
             Some(Drag::Move {
@@ -1013,8 +1012,7 @@ impl Editor {
             }) => {
                 if response.dragged_by(PointerButton::Primary) {
                     let start = self.snap_time(self.x_to_time(pos.x, layout) - grab_time);
-                    let y = ((pos.y - layout.note_area.top())
-                        / layout.note_area.height().max(1.0)
+                    let y = ((pos.y - layout.note_area.top()) / layout.note_area.height().max(1.0)
                         - grab_y)
                         .clamp(0.02, 0.98);
                     if let Some(word) = self.words.get_mut(index) {
@@ -1052,10 +1050,8 @@ impl Editor {
                                 note.ribbon = Some(ribbon);
                             }
                         }
-                        self.status = format!(
-                            "{} notes connected into one ribbon.",
-                            self.selected.len()
-                        );
+                        self.status =
+                            format!("{} notes connected into one ribbon.", self.selected.len());
                         self.dirty = true;
                     } else if self.selected.len() == 1 {
                         self.status = "Select at least two notes to make a ribbon.".into();
@@ -1073,7 +1069,13 @@ impl Editor {
         }
     }
 
-    fn draw_header(&self, ui: &mut Ui, p: &egui::Painter, layout: &Layout, event: &mut EditorEvent) {
+    fn draw_header(
+        &self,
+        ui: &mut Ui,
+        p: &egui::Painter,
+        layout: &Layout,
+        event: &mut EditorEvent,
+    ) {
         let rect = ui.max_rect();
         let header = Rect::from_min_max(rect.min, Pos2::new(rect.right(), rect.top() + 60.0));
         p.rect_filled(header, 0.0, Color32::from_rgba_unmultiplied(5, 8, 15, 248));
@@ -1117,8 +1119,13 @@ impl Editor {
             FontId::monospace(7.0),
             MUTED,
         );
-        let badge = Rect::from_min_size(Pos2::new(rect.right() - 390.0, 17.0), Vec2::new(96.0, 26.0));
-        p.rect_filled(badge, 13.0, Color32::from_rgba_unmultiplied(255, 93, 158, 22));
+        let badge =
+            Rect::from_min_size(Pos2::new(rect.right() - 390.0, 17.0), Vec2::new(96.0, 26.0));
+        p.rect_filled(
+            badge,
+            13.0,
+            Color32::from_rgba_unmultiplied(255, 93, 158, 22),
+        );
         p.rect_stroke(
             badge,
             13.0,
@@ -1128,12 +1135,19 @@ impl Editor {
         p.text(
             badge.center(),
             Align2::CENTER_CENTER,
-            if self.song.mapped { "MAPPED" } else { "UNMAPPED" },
+            if self.song.mapped {
+                "MAPPED"
+            } else {
+                "UNMAPPED"
+            },
             FontId::monospace(8.0),
             if self.song.mapped { MINT } else { PINK },
         );
         let progress = self.word_progress();
-        let progress_rect = Rect::from_min_size(Pos2::new(rect.right() - 284.0, 21.0), Vec2::new(124.0, 18.0));
+        let progress_rect = Rect::from_min_size(
+            Pos2::new(rect.right() - 284.0, 21.0),
+            Vec2::new(124.0, 18.0),
+        );
         p.rect_filled(progress_rect, 9.0, Color32::from_white_alpha(8));
         let fill = Rect::from_min_size(
             progress_rect.min,
@@ -1147,7 +1161,8 @@ impl Editor {
             FontId::monospace(7.0),
             INK,
         );
-        let submit_rect = Rect::from_min_size(Pos2::new(rect.right() - 54.0, 12.0), Vec2::new(38.0, 36.0));
+        let submit_rect =
+            Rect::from_min_size(Pos2::new(rect.right() - 54.0, 12.0), Vec2::new(38.0, 36.0));
         let ok = self.validate().is_ok();
         if paint_icon_button(
             ui,
@@ -1180,11 +1195,31 @@ impl Editor {
         );
         let mut x = 16.0;
         for (tool, icon, tip) in [
-            (EditorTool::Pan, EditorIcon::Pan, "Pan — drag; middle-drag works from any tool"),
-            (EditorTool::Note, EditorIcon::Note, "Note — click or drag to draw one pitch"),
-            (EditorTool::Ribbon, EditorIcon::Ribbon, "Ribbon — drag across notes to connect them"),
-            (EditorTool::Eraser, EditorIcon::Eraser, "Eraser — click or sweep over notes and words"),
-            (EditorTool::Select, EditorIcon::Select, "Select — move notes, words, and note ends"),
+            (
+                EditorTool::Pan,
+                EditorIcon::Pan,
+                "Pan — drag; middle-drag works from any tool",
+            ),
+            (
+                EditorTool::Note,
+                EditorIcon::Note,
+                "Note — click or drag to draw one pitch",
+            ),
+            (
+                EditorTool::Ribbon,
+                EditorIcon::Ribbon,
+                "Ribbon — drag across notes to connect them",
+            ),
+            (
+                EditorTool::Eraser,
+                EditorIcon::Eraser,
+                "Eraser — click or sweep over notes and words",
+            ),
+            (
+                EditorTool::Select,
+                EditorIcon::Select,
+                "Select — move notes, words, and note ends",
+            ),
         ] {
             let r = Rect::from_min_size(Pos2::new(x, bar.top() + 6.0), Vec2::new(38.0, 32.0));
             if paint_icon_button(ui, r, icon, self.tool == tool, true, tip) {
@@ -1204,18 +1239,28 @@ impl Editor {
             FontId::monospace(7.0),
             MUTED2,
         );
-        let snap = Rect::from_min_size(Pos2::new(bar.right() - 332.0, bar.top() + 6.0), Vec2::new(38.0, 32.0));
+        let snap = Rect::from_min_size(
+            Pos2::new(bar.right() - 332.0, bar.top() + 6.0),
+            Vec2::new(38.0, 32.0),
+        );
         if paint_icon_button(
             ui,
             snap,
             EditorIcon::Snap,
             self.snap,
             true,
-            if self.snap { "Snap to the grid — on" } else { "Snap to the grid — off" },
+            if self.snap {
+                "Snap to the grid — on"
+            } else {
+                "Snap to the grid — off"
+            },
         ) {
             self.snap = !self.snap;
         }
-        let sugg = Rect::from_min_size(Pos2::new(bar.right() - 290.0, bar.top() + 6.0), Vec2::new(38.0, 32.0));
+        let sugg = Rect::from_min_size(
+            Pos2::new(bar.right() - 290.0, bar.top() + 6.0),
+            Vec2::new(38.0, 32.0),
+        );
         if paint_icon_button(
             ui,
             sugg,
@@ -1226,7 +1271,10 @@ impl Editor {
         ) {
             self.show_suggestions = !self.show_suggestions;
         }
-        let follow = Rect::from_min_size(Pos2::new(bar.right() - 248.0, bar.top() + 6.0), Vec2::new(38.0, 32.0));
+        let follow = Rect::from_min_size(
+            Pos2::new(bar.right() - 248.0, bar.top() + 6.0),
+            Vec2::new(38.0, 32.0),
+        );
         if paint_icon_button(
             ui,
             follow,
@@ -1237,8 +1285,14 @@ impl Editor {
         ) {
             self.follow = !self.follow;
         }
-        let zoom_out = Rect::from_min_size(Pos2::new(bar.right() - 190.0, bar.top() + 6.0), Vec2::new(38.0, 32.0));
-        let zoom_in = Rect::from_min_size(Pos2::new(bar.right() - 148.0, bar.top() + 6.0), Vec2::new(38.0, 32.0));
+        let zoom_out = Rect::from_min_size(
+            Pos2::new(bar.right() - 190.0, bar.top() + 6.0),
+            Vec2::new(38.0, 32.0),
+        );
+        let zoom_in = Rect::from_min_size(
+            Pos2::new(bar.right() - 148.0, bar.top() + 6.0),
+            Vec2::new(38.0, 32.0),
+        );
         if paint_icon_button(ui, zoom_out, EditorIcon::ZoomOut, false, true, "Zoom out") {
             self.zoom = (self.zoom / 1.25).clamp(24.0, 420.0);
         }
@@ -1268,14 +1322,20 @@ impl Editor {
             let black = [1, 3, 6, 8, 10].contains(&(((midi % 12) + 12) % 12));
             if black {
                 painter.rect_filled(
-                    Rect::from_min_size(Pos2::new(area.left(), top), Vec2::new(area.width(), lane_h)),
+                    Rect::from_min_size(
+                        Pos2::new(area.left(), top),
+                        Vec2::new(area.width(), lane_h),
+                    ),
                     0.0,
                     Color32::from_white_alpha(8),
                 );
             }
             if midi % 12 == 0 {
                 painter.line_segment(
-                    [Pos2::new(area.left(), top + lane_h), Pos2::new(area.right(), top + lane_h)],
+                    [
+                        Pos2::new(area.left(), top + lane_h),
+                        Pos2::new(area.right(), top + lane_h),
+                    ],
                     Stroke::new(1.0f32, Color32::from_white_alpha(34)),
                 );
             }
@@ -1293,7 +1353,10 @@ impl Editor {
             let bar = self.song.bpm.map(|_| tick % 4 == 0).unwrap_or(false);
             painter.line_segment(
                 [Pos2::new(x, area.top()), Pos2::new(x, area.bottom())],
-                Stroke::new(if bar { 1.1f32 } else { 0.6f32 }, Color32::from_white_alpha(if bar { 22 } else { 9 })),
+                Stroke::new(
+                    if bar { 1.1f32 } else { 0.6f32 },
+                    Color32::from_white_alpha(if bar { 22 } else { 9 }),
+                ),
             );
         }
 
@@ -1311,7 +1374,10 @@ impl Editor {
                 let c = pitch_color(t);
                 let color = Color32::from_rgba_unmultiplied(c[0], c[1], c[2], 34);
                 let outline = Color32::from_rgba_unmultiplied(c[0], c[1], c[2], 64);
-                let r = Rect::from_min_max(Pos2::new(x0, y - h / 2.0), Pos2::new(x1.max(x0 + 2.0), y + h / 2.0));
+                let r = Rect::from_min_max(
+                    Pos2::new(x0, y - h / 2.0),
+                    Pos2::new(x1.max(x0 + 2.0), y + h / 2.0),
+                );
                 painter.rect_filled(r, h / 2.0, color);
                 painter.rect_stroke(r, h / 2.0, Stroke::new(0.8f32, outline), StrokeKind::Inside);
             }
@@ -1351,13 +1417,23 @@ impl Editor {
                 painter.rect_stroke(
                     r,
                     h / 2.0,
-                    Stroke::new(if selected { 1.8f32 } else { 0.7f32 }, if selected { Color32::WHITE } else { Color32::from_white_alpha(50) }),
+                    Stroke::new(
+                        if selected { 1.8f32 } else { 0.7f32 },
+                        if selected {
+                            Color32::WHITE
+                        } else {
+                            Color32::from_white_alpha(50)
+                        },
+                    ),
                     StrokeKind::Inside,
                 );
                 if selected && r.width() > 18.0 {
                     for hx in [r.left() + 3.0, r.right() - 3.0] {
                         painter.line_segment(
-                            [Pos2::new(hx, r.top() + 2.0), Pos2::new(hx, r.bottom() - 2.0)],
+                            [
+                                Pos2::new(hx, r.top() + 2.0),
+                                Pos2::new(hx, r.bottom() - 2.0),
+                            ],
                             Stroke::new(2.0f32, Color32::from_white_alpha(220)),
                         );
                     }
@@ -1428,7 +1504,10 @@ impl Editor {
             let black = [1, 3, 6, 8, 10].contains(&(((midi % 12) + 12) % 12));
             if black {
                 p.rect_filled(
-                    Rect::from_min_size(Pos2::new(layout.rail.left(), y - lane_h / 2.0), Vec2::new(layout.rail.width(), lane_h)),
+                    Rect::from_min_size(
+                        Pos2::new(layout.rail.left(), y - lane_h / 2.0),
+                        Vec2::new(layout.rail.width(), lane_h),
+                    ),
                     0.0,
                     Color32::from_white_alpha(10),
                 );
@@ -1516,7 +1595,10 @@ impl Editor {
         );
         let center = level_area.center().y;
         painter.line_segment(
-            [Pos2::new(area.left(), center), Pos2::new(area.right(), center)],
+            [
+                Pos2::new(area.left(), center),
+                Pos2::new(area.right(), center),
+            ],
             Stroke::new(0.7f32, Color32::from_white_alpha(20)),
         );
 
@@ -1548,7 +1630,10 @@ impl Editor {
                 let amplitude = (peak / max_peak).sqrt().clamp(0.0, 1.0);
                 let h = (amplitude * half).max(0.6);
                 painter.line_segment(
-                    [Pos2::new(x as f32, center - h), Pos2::new(x as f32, center + h)],
+                    [
+                        Pos2::new(x as f32, center - h),
+                        Pos2::new(x as f32, center + h),
+                    ],
                     Stroke::new(1.0f32, Color32::from_rgba_unmultiplied(100, 200, 255, 120)),
                 );
             }
@@ -1567,7 +1652,11 @@ impl Editor {
                     "Raw pitch unavailable"
                 },
                 FontId::proportional(9.0),
-                if self.pitch_job.is_some() { GOLD } else { MUTED2 },
+                if self.pitch_job.is_some() {
+                    GOLD
+                } else {
+                    MUTED2
+                },
             );
         } else {
             // The raw pitch overview is independent of the piano-rail scroll.
@@ -1600,16 +1689,12 @@ impl Editor {
                     previous = None;
                     continue;
                 };
-                let x = self.time_to_x(
-                    bin as f64 / VOCAL_BINS_PER_SECOND as f64,
-                    layout,
-                );
+                let x = self.time_to_x(bin as f64 / VOCAL_BINS_PER_SECOND as f64, layout);
                 if x < area.left() - 4.0 || x > area.right() + 4.0 {
                     previous = None;
                     continue;
                 }
-                let y = (pitch_area.top()
-                    + (pitch_high - midi) / span * pitch_area.height())
+                let y = (pitch_area.top() + (pitch_high - midi) / span * pitch_area.height())
                     .clamp(pitch_area.top() + 2.0, pitch_area.bottom() - 2.0);
                 let t = ((y - pitch_area.top()) / pitch_area.height().max(1.0)).clamp(0.0, 1.0);
                 let color = pitch_color(t);
@@ -1660,11 +1745,7 @@ impl Editor {
                 0.0
             } else {
                 let index = (time * VOCAL_BINS_PER_SECOND as f64).floor() as usize;
-                self.vocal_peaks
-                    .get(index)
-                    .copied()
-                    .unwrap_or(0.0)
-                    / max_peak
+                self.vocal_peaks.get(index).copied().unwrap_or(0.0) / max_peak
             };
             let label = Rect::from_min_size(
                 Pos2::new(area.left() + 8.0, area.bottom() - 23.0),
@@ -1720,23 +1801,19 @@ impl Editor {
         let Some(pos) = ui.input(|i| i.pointer.hover_pos()) else {
             return;
         };
-        let area = layout
-            .wave
-            .union(layout.note_area)
-            .union(layout.ruler);
+        let area = layout.wave.union(layout.note_area).union(layout.ruler);
         if !area.contains(pos) {
             return;
         }
-        let x = pos.x.clamp(layout.note_area.left(), layout.note_area.right());
+        let x = pos
+            .x
+            .clamp(layout.note_area.left(), layout.note_area.right());
         ui.painter().line_segment(
             [
                 Pos2::new(x, layout.wave.top()),
                 Pos2::new(x, layout.note_area.bottom()),
             ],
-            Stroke::new(
-                1.0f32,
-                Color32::from_rgba_unmultiplied(185, 190, 202, 72),
-            ),
+            Stroke::new(1.0f32, Color32::from_rgba_unmultiplied(185, 190, 202, 72)),
         );
     }
 
@@ -1750,7 +1827,10 @@ impl Editor {
     ) {
         let ruler = layout.ruler;
         p.rect_filled(ruler, 0.0, Color32::from_rgb(8, 12, 21));
-        p.line_segment([ruler.left_top(), ruler.right_top()], Stroke::new(1.0f32, Color32::from_white_alpha(16)));
+        p.line_segment(
+            [ruler.left_top(), ruler.right_top()],
+            Stroke::new(1.0f32, Color32::from_white_alpha(16)),
+        );
         let visible = (ruler.width() / self.zoom) as f64;
         let candidates = [0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0, 60.0, 120.0];
         let step = candidates
@@ -1766,7 +1846,10 @@ impl Editor {
             if x < ruler.left() || x > ruler.right() {
                 continue;
             }
-            p.line_segment([Pos2::new(x, ruler.top()), Pos2::new(x, ruler.top() + 7.0)], Stroke::new(1.0f32, Color32::from_white_alpha(35)));
+            p.line_segment(
+                [Pos2::new(x, ruler.top()), Pos2::new(x, ruler.top() + 7.0)],
+                Stroke::new(1.0f32, Color32::from_white_alpha(35)),
+            );
             p.text(
                 Pos2::new(x + 5.0, ruler.center().y + 1.0),
                 Align2::LEFT_CENTER,
@@ -1778,14 +1861,19 @@ impl Editor {
         let px = self.time_to_x(self.playhead, layout);
         if px >= ruler.left() && px <= ruler.right() {
             p.line_segment(
-                [Pos2::new(px, ruler.top() + 12.0), Pos2::new(px, ruler.bottom())],
+                [
+                    Pos2::new(px, ruler.top() + 12.0),
+                    Pos2::new(px, ruler.bottom()),
+                ],
                 Stroke::new(2.0f32, GOLD),
             );
         }
         let response = ui.interact(ruler, Id::new("editor_ruler"), Sense::click_and_drag());
         if (response.clicked() || response.dragged()) && ui.input(|i| i.pointer.primary_down()) {
             if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
-                let t = self.x_to_time(pos.x.clamp(ruler.left(), ruler.right()), layout).clamp(0.0, self.duration);
+                let t = self
+                    .x_to_time(pos.x.clamp(ruler.left(), ruler.right()), layout)
+                    .clamp(0.0, self.duration);
                 self.seek(t, audio);
                 if self.playing {
                     if let Some(audio) = audio {
@@ -1807,12 +1895,27 @@ impl Editor {
         let rect = ui.max_rect();
         let tray = layout.transport;
         p.rect_filled(tray, 0.0, PANEL);
-        p.line_segment([tray.left_top(), tray.right_top()], Stroke::new(1.0f32, Color32::from_white_alpha(18)));
-        let play = Rect::from_min_size(Pos2::new(tray.left() + 16.0, tray.top() + 8.0), Vec2::new(86.0, 34.0));
-        if button(ui, play, if self.playing { "PAUSE" } else { "PLAY" }, true, true) {
+        p.line_segment(
+            [tray.left_top(), tray.right_top()],
+            Stroke::new(1.0f32, Color32::from_white_alpha(18)),
+        );
+        let play = Rect::from_min_size(
+            Pos2::new(tray.left() + 16.0, tray.top() + 8.0),
+            Vec2::new(86.0, 34.0),
+        );
+        if button(
+            ui,
+            play,
+            if self.playing { "PAUSE" } else { "PLAY" },
+            true,
+            true,
+        ) {
             self.toggle_play(audio);
         }
-        let stop = Rect::from_min_size(Pos2::new(play.right() + 7.0, play.top()), Vec2::new(62.0, 34.0));
+        let stop = Rect::from_min_size(
+            Pos2::new(play.right() + 7.0, play.top()),
+            Vec2::new(62.0, 34.0),
+        );
         if button(ui, stop, "STOP", false, true) {
             self.playing = false;
             if let Some(audio) = audio {
@@ -1823,7 +1926,11 @@ impl Editor {
         p.text(
             Pos2::new(stop.right() + 18.0, tray.center().y),
             Align2::LEFT_CENTER,
-            format!("{} / {}", format_time(self.playhead), format_time(self.duration)),
+            format!(
+                "{} / {}",
+                format_time(self.playhead),
+                format_time(self.duration)
+            ),
             FontId::monospace(11.0),
             INK,
         );
@@ -1837,7 +1944,15 @@ impl Editor {
         let mut x = stop.right() + 146.0;
         for speed in [0.5f32, 0.75, 1.0, 1.25, 1.5] {
             let r = Rect::from_min_size(Pos2::new(x, tray.top() + 8.0), Vec2::new(44.0, 34.0));
-            if toggle(ui, r, &format!("{speed:.2}×").replace("1.00×", "1×").replace("0.50×", "0.5×").replace("1.50×", "1.5×"), (self.speed - speed).abs() < 0.01) {
+            if toggle(
+                ui,
+                r,
+                &format!("{speed:.2}×")
+                    .replace("1.00×", "1×")
+                    .replace("0.50×", "0.5×")
+                    .replace("1.50×", "1.5×"),
+                (self.speed - speed).abs() < 0.01,
+            ) {
                 self.speed = speed;
                 if let Some(audio) = audio {
                     audio.set_rate(speed);
@@ -1845,31 +1960,71 @@ impl Editor {
             }
             x += 48.0;
         }
-        let vocals = Rect::from_min_size(Pos2::new(tray.right() - 290.0, tray.top() + 8.0), Vec2::new(94.0, 34.0));
-        if toggle(ui, vocals, if self.vocals_on { "VOCALS ON" } else { "VOCALS OFF" }, self.vocals_on) {
+        let vocals = Rect::from_min_size(
+            Pos2::new(tray.right() - 290.0, tray.top() + 8.0),
+            Vec2::new(94.0, 34.0),
+        );
+        if toggle(
+            ui,
+            vocals,
+            if self.vocals_on {
+                "VOCALS ON"
+            } else {
+                "VOCALS OFF"
+            },
+            self.vocals_on,
+        ) {
             self.vocals_on = !self.vocals_on;
             self.apply_editor_volumes(audio);
         }
-        let backing = Rect::from_min_size(Pos2::new(vocals.right() + 7.0, vocals.top()), Vec2::new(100.0, 34.0));
-        if toggle(ui, backing, if self.backing_on { "BACKING ON" } else { "BACKING OFF" }, self.backing_on) {
+        let backing = Rect::from_min_size(
+            Pos2::new(vocals.right() + 7.0, vocals.top()),
+            Vec2::new(100.0, 34.0),
+        );
+        if toggle(
+            ui,
+            backing,
+            if self.backing_on {
+                "BACKING ON"
+            } else {
+                "BACKING OFF"
+            },
+            self.backing_on,
+        ) {
             self.backing_on = !self.backing_on;
             self.apply_editor_volumes(audio);
         }
-        let hint = Rect::from_min_size(Pos2::new(tray.right() - 430.0, tray.top() + 8.0), Vec2::new(124.0, 34.0));
+        let hint = Rect::from_min_size(
+            Pos2::new(tray.right() - 430.0, tray.top() + 8.0),
+            Vec2::new(124.0, 34.0),
+        );
         p.text(
             hint.center(),
             Align2::CENTER_CENTER,
-            if self.audio_ready { "AUDIO READY" } else { "CHART PREVIEW" },
+            if self.audio_ready {
+                "AUDIO READY"
+            } else {
+                "CHART PREVIEW"
+            },
             FontId::monospace(7.0),
             if self.audio_ready { MINT } else { GOLD },
         );
         let _ = rect;
     }
 
-    fn draw_word_bank(&mut self, ui: &mut Ui, p: &egui::Painter, layout: &Layout, audio: &Option<AudioEngine>) {
+    fn draw_word_bank(
+        &mut self,
+        ui: &mut Ui,
+        p: &egui::Painter,
+        layout: &Layout,
+        audio: &Option<AudioEngine>,
+    ) {
         let bank = layout.bank;
         p.rect_filled(bank, 0.0, Color32::from_rgb(8, 12, 21));
-        p.line_segment([bank.left_top(), bank.right_top()], Stroke::new(1.0f32, Color32::from_white_alpha(20)));
+        p.line_segment(
+            [bank.left_top(), bank.right_top()],
+            Stroke::new(1.0f32, Color32::from_white_alpha(20)),
+        );
         let remaining = self.word_bank.iter().filter(|word| !word.placed).count();
         p.text(
             Pos2::new(bank.left() + 16.0, bank.top() + 10.0),
@@ -1930,18 +2085,28 @@ impl Editor {
                             if let Some(line) = token.line {
                                 if last_line != Some(line) {
                                     if last_line.is_some() {
-                                        let (sep, _) = ui.allocate_exact_size(Vec2::new(8.0, 34.0), Sense::hover());
+                                        let (sep, _) = ui.allocate_exact_size(
+                                            Vec2::new(8.0, 34.0),
+                                            Sense::hover(),
+                                        );
                                         let painter = ui.painter();
                                         painter.line_segment(
-                                            [sep.center_top() + Vec2::new(4.0, 3.0), sep.center_bottom() - Vec2::new(4.0, 3.0)],
+                                            [
+                                                sep.center_top() + Vec2::new(4.0, 3.0),
+                                                sep.center_bottom() - Vec2::new(4.0, 3.0),
+                                            ],
                                             Stroke::new(1.0f32, Color32::from_white_alpha(25)),
                                         );
                                     }
                                     last_line = Some(line);
                                 }
                             }
-                            let width = (token.text.chars().count() as f32 * 8.0 + 26.0).clamp(48.0, 150.0);
-                            let (chip, response) = ui.allocate_exact_size(Vec2::new(width, 34.0), Sense::click_and_drag());
+                            let width =
+                                (token.text.chars().count() as f32 * 8.0 + 26.0).clamp(48.0, 150.0);
+                            let (chip, response) = ui.allocate_exact_size(
+                                Vec2::new(width, 34.0),
+                                Sense::click_and_drag(),
+                            );
                             let active = self.pending_word == Some(i);
                             let custom = token.custom_id.is_some();
                             let fill = if active { alpha(MINT, 44) } else { PANEL2 };
@@ -1954,7 +2119,12 @@ impl Editor {
                             };
                             let painter = ui.painter();
                             painter.rect_filled(chip, 9.0, fill);
-                            painter.rect_stroke(chip, 9.0, Stroke::new(1.0f32, border), StrokeKind::Inside);
+                            painter.rect_stroke(
+                                chip,
+                                9.0,
+                                Stroke::new(1.0f32, border),
+                                StrokeKind::Inside,
+                            );
                             painter.text(
                                 chip.center(),
                                 Align2::CENTER_CENTER,
@@ -1995,7 +2165,11 @@ impl Editor {
                 self.pending_word = None;
                 self.status = "Drag the word anywhere in the level; notes are only a guide.".into();
             } else {
-                self.pending_word = if self.pending_word == Some(token) { None } else { Some(token) };
+                self.pending_word = if self.pending_word == Some(token) {
+                    None
+                } else {
+                    Some(token)
+                };
                 self.status = if self.pending_word.is_some() {
                     "Word armed — click anywhere in the level to place it.".into()
                 } else {
@@ -2008,14 +2182,32 @@ impl Editor {
         // owns the drag, so this paints above the canvas on the tooltip layer.
         if let Some(token) = self.word_drag {
             if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
-                let ghost = ui.ctx().layer_painter(LayerId::new(Order::Tooltip, Id::new("editor_word_ghost")));
+                let ghost = ui
+                    .ctx()
+                    .layer_painter(LayerId::new(Order::Tooltip, Id::new("editor_word_ghost")));
                 let text = &self.word_bank[token].text;
                 let width = (text.chars().count() as f32 * 8.0 + 30.0).clamp(54.0, 160.0);
-                let rect = Rect::from_center_size(pos + Vec2::new(0.0, -18.0), Vec2::new(width, 32.0));
-                ghost.rect_filled(rect, 9.0, Color32::from_rgba_unmultiplied(124, 247, 196, 235));
-                ghost.text(rect.center(), Align2::CENTER_CENTER, text, FontId::proportional(12.0), Color32::from_rgb(5, 18, 13));
+                let rect =
+                    Rect::from_center_size(pos + Vec2::new(0.0, -18.0), Vec2::new(width, 32.0));
+                ghost.rect_filled(
+                    rect,
+                    9.0,
+                    Color32::from_rgba_unmultiplied(124, 247, 196, 235),
+                );
+                ghost.text(
+                    rect.center(),
+                    Align2::CENTER_CENTER,
+                    text,
+                    FontId::proportional(12.0),
+                    Color32::from_rgb(5, 18, 13),
+                );
                 if layout.note_area.contains(pos) {
-                    ghost.rect_stroke(layout.note_area, 0.0, Stroke::new(1.0f32, alpha(MINT, 65)), StrokeKind::Inside);
+                    ghost.rect_stroke(
+                        layout.note_area,
+                        0.0,
+                        Stroke::new(1.0f32, alpha(MINT, 65)),
+                        StrokeKind::Inside,
+                    );
                 }
             }
             if ui.input(|i| !i.pointer.any_down()) {
@@ -2101,10 +2293,21 @@ impl Editor {
     ) {
         let r = layout.inspector;
         p.rect_filled(r, 12.0, PANEL);
-        p.rect_stroke(r, 12.0, Stroke::new(1.0f32, Color32::from_white_alpha(20)), StrokeKind::Inside);
+        p.rect_stroke(
+            r,
+            12.0,
+            Stroke::new(1.0f32, Color32::from_white_alpha(20)),
+            StrokeKind::Inside,
+        );
         let mut y = r.top() + 14.0;
         let x = r.left() + 14.0;
-        p.text(Pos2::new(x, y), Align2::LEFT_TOP, "MAPPING", FontId::monospace(7.0), MUTED2);
+        p.text(
+            Pos2::new(x, y),
+            Align2::LEFT_TOP,
+            "MAPPING",
+            FontId::monospace(7.0),
+            MUTED2,
+        );
         y += 18.0;
         let total = self.word_bank.len();
         let placed = total.saturating_sub(self.word_bank.iter().filter(|w| !w.placed).count());
@@ -2119,12 +2322,20 @@ impl Editor {
         p.text(
             Pos2::new(x, y),
             Align2::LEFT_TOP,
-            format!("{} notes · {} ribbons · {} lines", self.notes.len(), self.ribbon_count(), self.song.lines.len()),
+            format!(
+                "{} notes · {} ribbons · {} lines",
+                self.notes.len(),
+                self.ribbon_count(),
+                self.song.lines.len()
+            ),
             FontId::monospace(8.0),
             MUTED,
         );
         y += 24.0;
-        p.line_segment([Pos2::new(x, y), Pos2::new(r.right() - 14.0, y)], Stroke::new(1.0f32, Color32::from_white_alpha(18)));
+        p.line_segment(
+            [Pos2::new(x, y), Pos2::new(r.right() - 14.0, y)],
+            Stroke::new(1.0f32, Color32::from_white_alpha(18)),
+        );
         y += 12.0;
 
         if let Some(index) = self.selected_word {
@@ -2166,7 +2377,8 @@ impl Editor {
                     MUTED2,
                 );
                 y += 28.0;
-                let delete = Rect::from_min_size(Pos2::new(x, y), Vec2::new(r.width() - 28.0, 30.0));
+                let delete =
+                    Rect::from_min_size(Pos2::new(x, y), Vec2::new(r.width() - 28.0, 30.0));
                 if button(ui, delete, "DELETE WORD", false, true) {
                     self.delete_selected();
                 }
@@ -2177,7 +2389,11 @@ impl Editor {
             p.text(
                 Pos2::new(x, y),
                 Align2::LEFT_TOP,
-                if count == 1 { "SELECTED NOTE" } else { "SELECTED NOTES" },
+                if count == 1 {
+                    "SELECTED NOTE"
+                } else {
+                    "SELECTED NOTES"
+                },
                 FontId::monospace(7.0),
                 MUTED2,
             );
@@ -2226,17 +2442,22 @@ impl Editor {
             }
             let bw = (r.width() - 38.0) / 2.0;
             for (i, label) in ["− OCT", "+ OCT"].iter().enumerate() {
-                let b = Rect::from_min_size(Pos2::new(x + i as f32 * (bw + 10.0), y), Vec2::new(bw, 30.0));
+                let b = Rect::from_min_size(
+                    Pos2::new(x + i as f32 * (bw + 10.0), y),
+                    Vec2::new(bw, 30.0),
+                );
                 if button(ui, b, label, false, true) {
                     self.transpose_selected(if i == 0 { -12 } else { 12 });
                 }
             }
             y += 38.0;
             let detach = Rect::from_min_size(Pos2::new(x, y), Vec2::new(r.width() - 28.0, 28.0));
-            let has_ribbon = self
-                .selected
-                .iter()
-                .any(|index| self.notes.get(*index).and_then(|note| note.ribbon).is_some());
+            let has_ribbon = self.selected.iter().any(|index| {
+                self.notes
+                    .get(*index)
+                    .and_then(|note| note.ribbon)
+                    .is_some()
+            });
             if button(ui, detach, "DETACH RIBBON", false, has_ribbon) && has_ribbon {
                 self.detach_selected_ribbons();
             }
@@ -2257,9 +2478,18 @@ impl Editor {
             y += 34.0;
         }
 
-        p.line_segment([Pos2::new(x, y), Pos2::new(r.right() - 14.0, y)], Stroke::new(1.0f32, Color32::from_white_alpha(18)));
+        p.line_segment(
+            [Pos2::new(x, y), Pos2::new(r.right() - 14.0, y)],
+            Stroke::new(1.0f32, Color32::from_white_alpha(18)),
+        );
         y += 12.0;
-        p.text(Pos2::new(x, y), Align2::LEFT_TOP, "STATUS", FontId::monospace(7.0), MUTED2);
+        p.text(
+            Pos2::new(x, y),
+            Align2::LEFT_TOP,
+            "STATUS",
+            FontId::monospace(7.0),
+            MUTED2,
+        );
         y += 16.0;
         let galley = p.layout(
             self.status.clone(),
@@ -2270,7 +2500,13 @@ impl Editor {
         let status_h = galley.size().y;
         p.galley(Pos2::new(x, y), galley, MUTED);
         y += status_h + 14.0;
-        p.text(Pos2::new(x, y), Align2::LEFT_TOP, "SHORTCUTS", FontId::monospace(7.0), MUTED2);
+        p.text(
+            Pos2::new(x, y),
+            Align2::LEFT_TOP,
+            "SHORTCUTS",
+            FontId::monospace(7.0),
+            MUTED2,
+        );
         y += 16.0;
         for line in [
             "1–5  tools",
@@ -2282,7 +2518,13 @@ impl Editor {
             "Delete  remove selection",
             "Middle-drag  pan",
         ] {
-            p.text(Pos2::new(x, y), Align2::LEFT_TOP, line, FontId::monospace(7.5), MUTED2);
+            p.text(
+                Pos2::new(x, y),
+                Align2::LEFT_TOP,
+                line,
+                FontId::monospace(7.5),
+                MUTED2,
+            );
             y += 15.0;
         }
         let save = Rect::from_min_size(
@@ -2297,15 +2539,14 @@ impl Editor {
             Pos2::new(x, r.bottom() - 52.0),
             Vec2::new(r.width() - 28.0, 38.0),
         );
-        let top_action = if self.song.mapped { export.top() } else { save.top() };
+        let top_action = if self.song.mapped {
+            export.top()
+        } else {
+            save.top()
+        };
         let ok = self.validate().is_ok();
         if let Err(reason) = self.validate() {
-            let galley = p.layout(
-                reason,
-                FontId::proportional(9.0),
-                PINK,
-                r.width() - 28.0,
-            );
+            let galley = p.layout(reason, FontId::proportional(9.0), PINK, r.width() - 28.0);
             let h = galley.size().y;
             p.galley(Pos2::new(x, top_action - h - 4.0), galley, PINK);
         } else {
@@ -2338,7 +2579,11 @@ impl Editor {
 
     fn word_progress(&self) -> f32 {
         if self.word_bank.is_empty() {
-            if self.notes.is_empty() { 0.0 } else { 1.0 }
+            if self.notes.is_empty() {
+                0.0
+            } else {
+                1.0
+            }
         } else {
             let placed = self.word_bank.iter().filter(|word| word.placed).count() as f32;
             placed / self.word_bank.len() as f32
@@ -2360,13 +2605,14 @@ impl Editor {
 
     fn midi_at_y(&self, y: f32, layout: &Layout) -> i32 {
         let lane_h = layout.note_area.height() / (self.high - self.low + 1) as f32;
-        (self.high - ((y - layout.note_area.top()) / lane_h).floor() as i32).clamp(self.low, self.high)
+        (self.high - ((y - layout.note_area.top()) / lane_h).floor() as i32)
+            .clamp(self.low, self.high)
     }
 
     fn word_rect(&self, word: &PlacedWord, layout: &Layout) -> Rect {
         let x = self.time_to_x(word.start, layout);
-        let y = layout.note_area.top()
-            + word.y.clamp(0.0, 1.0) * layout.note_area.height().max(1.0);
+        let y =
+            layout.note_area.top() + word.y.clamp(0.0, 1.0) * layout.note_area.height().max(1.0);
         let width = (word.text.chars().count() as f32 * 8.0 + 28.0).clamp(52.0, 190.0);
         Rect::from_center_size(Pos2::new(x, y), Vec2::new(width, 24.0))
     }
@@ -2632,7 +2878,7 @@ impl Editor {
             let note = &self.notes[index];
             let y = ((self.midi_to_y(note.midi, layout) - layout.note_area.top())
                 / layout.note_area.height().max(1.0))
-                .clamp(0.02, 0.98);
+            .clamp(0.02, 0.98);
             (note.start, y)
         } else {
             (
@@ -2674,7 +2920,13 @@ impl Editor {
         self.push_history();
         let id = self.next_custom_id;
         self.next_custom_id = self.next_custom_id.saturating_add(1);
-        self.custom_words.insert(0, CustomWord { id, text: text.clone() });
+        self.custom_words.insert(
+            0,
+            CustomWord {
+                id,
+                text: text.clone(),
+            },
+        );
         self.rebuild_word_bank();
         self.custom_word_input.clear();
         self.custom_word_open = false;
@@ -2807,7 +3059,9 @@ pub fn spawn_raw_pitch_track(
     mono: Vec<f32>,
     bins_per_second: f32,
 ) -> Job<Vec<Option<f32>>> {
-    Job::run("The pitch analysis", ctx, move || Ok(analyze_raw_pitch(&mono, bins_per_second)))
+    Job::run("The pitch analysis", ctx, move || {
+        Ok(analyze_raw_pitch(&mono, bins_per_second))
+    })
 }
 
 fn analyze_raw_pitch(mono: &[f32], bins_per_second: f32) -> Vec<Option<f32>> {
@@ -2815,20 +3069,19 @@ fn analyze_raw_pitch(mono: &[f32], bins_per_second: f32) -> Vec<Option<f32>> {
     if mono.len() < WINDOW {
         return Vec::new();
     }
-    let bins = (mono.len() as f32 / RAW_PITCH_SAMPLE_RATE * bins_per_second.max(1.0))
-        .ceil() as usize;
+    let bins =
+        (mono.len() as f32 / RAW_PITCH_SAMPLE_RATE * bins_per_second.max(1.0)).ceil() as usize;
     let mut track = vec![None; bins];
     for (bin, slot) in track.iter_mut().enumerate() {
         let center_seconds = bin as f32 / bins_per_second.max(1.0);
-        let start = ((center_seconds * RAW_PITCH_SAMPLE_RATE - WINDOW as f32 * 0.5)
-            .max(0.0)) as usize;
+        let start =
+            ((center_seconds * RAW_PITCH_SAMPLE_RATE - WINDOW as f32 * 0.5).max(0.0)) as usize;
         if start + WINDOW > mono.len() {
             break;
         }
-        let Some(reading) = crate::pitch::detect_pitch(
-            &mono[start..start + WINDOW],
-            RAW_PITCH_SAMPLE_RATE,
-        ) else {
+        let Some(reading) =
+            crate::pitch::detect_pitch(&mono[start..start + WINDOW], RAW_PITCH_SAMPLE_RATE)
+        else {
             continue;
         };
         if reading.clarity >= 0.18 && reading.rms >= 0.0015 {
@@ -2883,9 +3136,9 @@ fn build_word_bank(
             .then_with(|| a.index.cmp(&b.index))
     });
     for mut token in lyric_tokens {
-        token.placed = words.iter().any(|word| {
-            word.line == token.line && word.word_index == token.index
-        });
+        token.placed = words
+            .iter()
+            .any(|word| word.line == token.line && word.word_index == token.index);
         bank.push(token);
     }
     bank
@@ -2894,7 +3147,11 @@ fn build_word_bank(
 fn split_line_words(line: &LyricLine) -> Vec<(String, f64, f64)> {
     let mut source: Vec<(String, f64, f64)> = Vec::new();
     if line.words.is_empty() {
-        source.push((line.text.clone(), line.start, line.end.max(line.start + 0.3)));
+        source.push((
+            line.text.clone(),
+            line.start,
+            line.end.max(line.start + 0.3),
+        ));
     } else {
         for word in &line.words {
             source.push((
@@ -2927,7 +3184,11 @@ fn split_line_words(line: &LyricLine) -> Vec<(String, f64, f64)> {
         }
     }
     if result.is_empty() {
-        result.push((line.text.clone(), line.start, line.end.max(line.start + 0.3)));
+        result.push((
+            line.text.clone(),
+            line.start,
+            line.end.max(line.start + 0.3),
+        ));
     }
     result
 }
@@ -2954,7 +3215,11 @@ fn paint_icon_button(
                 rect.left() as i32,
                 rect.top() as i32,
             )),
-            if enabled { Sense::click() } else { Sense::hover() },
+            if enabled {
+                Sense::click()
+            } else {
+                Sense::hover()
+            },
         )
         .on_hover_text(tooltip);
     let p = ui.painter();
@@ -2965,7 +3230,15 @@ fn paint_icon_button(
     } else {
         Color32::from_rgba_unmultiplied(255, 255, 255, 6)
     };
-    p.rect_filled(rect, 8.0, if enabled { fill } else { Color32::from_white_alpha(4) });
+    p.rect_filled(
+        rect,
+        8.0,
+        if enabled {
+            fill
+        } else {
+            Color32::from_white_alpha(4)
+        },
+    );
     p.rect_stroke(
         rect,
         8.0,
@@ -2990,7 +3263,13 @@ fn paint_icon_button(
     enabled && response.clicked()
 }
 
-fn paint_editor_icon(p: &egui::Painter, rect: Rect, icon: EditorIcon, color: Color32, active: bool) {
+fn paint_editor_icon(
+    p: &egui::Painter,
+    rect: Rect,
+    icon: EditorIcon,
+    color: Color32,
+    active: bool,
+) {
     let c = rect.center();
     let s = rect.width().min(rect.height()) * 0.44;
     let stroke = Stroke::new(1.9f32, color);
@@ -3012,7 +3291,10 @@ fn paint_editor_icon(p: &egui::Painter, rect: Rect, icon: EditorIcon, color: Col
         }
         EditorIcon::Note => {
             p.line_segment(
-                [c + Vec2::new(s * 0.48, -s), c + Vec2::new(s * 0.48, s * 0.48)],
+                [
+                    c + Vec2::new(s * 0.48, -s),
+                    c + Vec2::new(s * 0.48, s * 0.48),
+                ],
                 stroke,
             );
             p.rect_filled(
@@ -3023,7 +3305,10 @@ fn paint_editor_icon(p: &egui::Painter, rect: Rect, icon: EditorIcon, color: Col
         }
         EditorIcon::Ribbon => {
             p.rect_filled(
-                Rect::from_center_size(c + Vec2::new(-s * 0.56, 0.0), Vec2::new(s * 0.92, s * 0.46)),
+                Rect::from_center_size(
+                    c + Vec2::new(-s * 0.56, 0.0),
+                    Vec2::new(s * 0.92, s * 0.46),
+                ),
                 s * 0.22,
                 color,
             );
@@ -3039,10 +3324,22 @@ fn paint_editor_icon(p: &egui::Painter, rect: Rect, icon: EditorIcon, color: Col
         }
         EditorIcon::Eraser => {
             let points = vec![
-                Pos2::new(rect.left() + rect.width() * 0.12, rect.bottom() - rect.height() * 0.12),
-                Pos2::new(rect.left() + rect.width() * 0.56, rect.top() + rect.height() * 0.1),
-                Pos2::new(rect.right() - rect.width() * 0.06, rect.top() + rect.height() * 0.32),
-                Pos2::new(rect.right() - rect.width() * 0.42, rect.bottom() - rect.height() * 0.04),
+                Pos2::new(
+                    rect.left() + rect.width() * 0.12,
+                    rect.bottom() - rect.height() * 0.12,
+                ),
+                Pos2::new(
+                    rect.left() + rect.width() * 0.56,
+                    rect.top() + rect.height() * 0.1,
+                ),
+                Pos2::new(
+                    rect.right() - rect.width() * 0.06,
+                    rect.top() + rect.height() * 0.32,
+                ),
+                Pos2::new(
+                    rect.right() - rect.width() * 0.42,
+                    rect.bottom() - rect.height() * 0.04,
+                ),
             ];
             p.add(egui::Shape::convex_polygon(
                 points,
@@ -3051,8 +3348,14 @@ fn paint_editor_icon(p: &egui::Painter, rect: Rect, icon: EditorIcon, color: Col
             ));
             p.line_segment(
                 [
-                    Pos2::new(rect.left() + rect.width() * 0.4, rect.bottom() - rect.height() * 0.1),
-                    Pos2::new(rect.right() - rect.width() * 0.22, rect.top() + rect.height() * 0.2),
+                    Pos2::new(
+                        rect.left() + rect.width() * 0.4,
+                        rect.bottom() - rect.height() * 0.1,
+                    ),
+                    Pos2::new(
+                        rect.right() - rect.width() * 0.22,
+                        rect.top() + rect.height() * 0.2,
+                    ),
                 ],
                 Stroke::new(1.0f32, color),
             );
@@ -3071,7 +3374,11 @@ fn paint_editor_icon(p: &egui::Painter, rect: Rect, icon: EditorIcon, color: Col
                 for col in -1..=1 {
                     let point = c + Vec2::new(col as f32 * s * 0.8, row as f32 * s * 0.8);
                     let radius = if row == 0 && col == 0 { 2.2 } else { 1.3 };
-                    p.circle_filled(point, radius, if row == 0 && col == 0 { MINT } else { color });
+                    p.circle_filled(
+                        point,
+                        radius,
+                        if row == 0 && col == 0 { MINT } else { color },
+                    );
                 }
             }
             p.line_segment(
@@ -3081,13 +3388,19 @@ fn paint_editor_icon(p: &egui::Painter, rect: Rect, icon: EditorIcon, color: Col
         }
         EditorIcon::Suggestions => {
             p.rect_stroke(
-                Rect::from_center_size(c + Vec2::new(-s * 0.16, -s * 0.16), Vec2::new(s * 1.5, s * 1.1)),
+                Rect::from_center_size(
+                    c + Vec2::new(-s * 0.16, -s * 0.16),
+                    Vec2::new(s * 1.5, s * 1.1),
+                ),
                 3.0,
                 Stroke::new(1.2f32, alpha(color, 110)),
                 StrokeKind::Inside,
             );
             p.rect_stroke(
-                Rect::from_center_size(c + Vec2::new(s * 0.16, s * 0.16), Vec2::new(s * 1.5, s * 1.1)),
+                Rect::from_center_size(
+                    c + Vec2::new(s * 0.16, s * 0.16),
+                    Vec2::new(s * 1.5, s * 1.1),
+                ),
                 3.0,
                 Stroke::new(1.5f32, color),
                 StrokeKind::Inside,
@@ -3095,53 +3408,95 @@ fn paint_editor_icon(p: &egui::Painter, rect: Rect, icon: EditorIcon, color: Col
         }
         EditorIcon::Follow => {
             p.circle_stroke(c, s * 0.92, Stroke::new(1.5f32, color));
-            p.line_segment([c - Vec2::new(s * 1.15, 0.0), c - Vec2::new(s * 0.5, 0.0)], stroke);
-            p.line_segment([c + Vec2::new(s * 0.5, 0.0), c + Vec2::new(s * 1.15, 0.0)], stroke);
-            p.line_segment([c - Vec2::new(0.0, s * 1.15), c - Vec2::new(0.0, s * 0.5)], stroke);
-            p.line_segment([c + Vec2::new(0.0, s * 0.5), c + Vec2::new(0.0, s * 1.15)], stroke);
+            p.line_segment(
+                [c - Vec2::new(s * 1.15, 0.0), c - Vec2::new(s * 0.5, 0.0)],
+                stroke,
+            );
+            p.line_segment(
+                [c + Vec2::new(s * 0.5, 0.0), c + Vec2::new(s * 1.15, 0.0)],
+                stroke,
+            );
+            p.line_segment(
+                [c - Vec2::new(0.0, s * 1.15), c - Vec2::new(0.0, s * 0.5)],
+                stroke,
+            );
+            p.line_segment(
+                [c + Vec2::new(0.0, s * 0.5), c + Vec2::new(0.0, s * 1.15)],
+                stroke,
+            );
             p.circle_filled(c, 1.8, if active { color } else { MINT });
         }
         EditorIcon::ZoomOut | EditorIcon::ZoomIn => {
             let lens = c + Vec2::new(-s * 0.18, -s * 0.18);
             p.circle_stroke(lens, s * 0.62, Stroke::new(1.6f32, color));
             p.line_segment(
-                [lens + Vec2::new(s * 0.46, s * 0.46), c + Vec2::new(s * 1.1, s * 1.1)],
+                [
+                    lens + Vec2::new(s * 0.46, s * 0.46),
+                    c + Vec2::new(s * 1.1, s * 1.1),
+                ],
                 Stroke::new(1.8f32, color),
             );
             p.line_segment(
-                [lens - Vec2::new(s * 0.33, 0.0), lens + Vec2::new(s * 0.33, 0.0)],
+                [
+                    lens - Vec2::new(s * 0.33, 0.0),
+                    lens + Vec2::new(s * 0.33, 0.0),
+                ],
                 Stroke::new(1.5f32, color),
             );
             if matches!(icon, EditorIcon::ZoomIn) {
                 p.line_segment(
-                    [lens - Vec2::new(0.0, s * 0.33), lens + Vec2::new(0.0, s * 0.33)],
+                    [
+                        lens - Vec2::new(0.0, s * 0.33),
+                        lens + Vec2::new(0.0, s * 0.33),
+                    ],
                     Stroke::new(1.5f32, color),
                 );
             }
         }
         EditorIcon::Plus => {
-            p.line_segment([c - Vec2::new(s * 0.8, 0.0), c + Vec2::new(s * 0.8, 0.0)], stroke);
-            p.line_segment([c - Vec2::new(0.0, s * 0.8), c + Vec2::new(0.0, s * 0.8)], stroke);
-        }
-        EditorIcon::Back => {
-            p.line_segment([c + Vec2::new(s * 0.7, 0.0), c - Vec2::new(s * 0.7, 0.0)], stroke);
             p.line_segment(
-                [c - Vec2::new(s * 0.7, 0.0), c - Vec2::new(s * 0.15, -s * 0.55)],
+                [c - Vec2::new(s * 0.8, 0.0), c + Vec2::new(s * 0.8, 0.0)],
                 stroke,
             );
             p.line_segment(
-                [c - Vec2::new(s * 0.7, 0.0), c - Vec2::new(s * 0.15, s * 0.55)],
+                [c - Vec2::new(0.0, s * 0.8), c + Vec2::new(0.0, s * 0.8)],
+                stroke,
+            );
+        }
+        EditorIcon::Back => {
+            p.line_segment(
+                [c + Vec2::new(s * 0.7, 0.0), c - Vec2::new(s * 0.7, 0.0)],
+                stroke,
+            );
+            p.line_segment(
+                [
+                    c - Vec2::new(s * 0.7, 0.0),
+                    c - Vec2::new(s * 0.15, -s * 0.55),
+                ],
+                stroke,
+            );
+            p.line_segment(
+                [
+                    c - Vec2::new(s * 0.7, 0.0),
+                    c - Vec2::new(s * 0.15, s * 0.55),
+                ],
                 stroke,
             );
         }
         EditorIcon::Submit => {
             p.circle_stroke(c, s * 0.95, Stroke::new(1.5f32, color));
             p.line_segment(
-                [c + Vec2::new(-s * 0.45, s * 0.02), c + Vec2::new(-s * 0.08, s * 0.4)],
+                [
+                    c + Vec2::new(-s * 0.45, s * 0.02),
+                    c + Vec2::new(-s * 0.08, s * 0.4),
+                ],
                 Stroke::new(1.9f32, color),
             );
             p.line_segment(
-                [c + Vec2::new(-s * 0.08, s * 0.4), c + Vec2::new(s * 0.5, -s * 0.38)],
+                [
+                    c + Vec2::new(-s * 0.08, s * 0.4),
+                    c + Vec2::new(s * 0.5, -s * 0.38),
+                ],
                 Stroke::new(1.9f32, color),
             );
         }
