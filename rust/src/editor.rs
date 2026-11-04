@@ -2477,7 +2477,7 @@ impl Editor {
             Pos2::new(x, y),
             Align2::LEFT_TOP,
             format!(
-                "{} notes · {} ribbons · {} lines",
+                "{} notes · {} connectors · {} lines",
                 self.notes.len(),
                 self.ribbon_count(),
                 self.song.lines.len()
