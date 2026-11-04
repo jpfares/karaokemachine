@@ -337,18 +337,14 @@ impl KaraokeMachineApp {
         }
         self.refresh_song_maps(index);
         let song = &self.songs[index];
-        let finals: Vec<&MapInfo> = song.maps.iter().filter(|map| !map.draft).collect();
         if mode == MapPickerMode::Play {
-            if finals.len() == 1 {
-                let path = finals[0].path.clone();
+            if song.maps.len() == 1 {
+                let path = song.maps[0].path.clone();
                 self.open_song_with_map(index, &path, now);
                 return;
             }
-            if finals.is_empty() {
-                self.toast(
-                    "No finished level for this song. Choose a map file to edit.",
-                    now,
-                );
+            if song.maps.is_empty() {
+                self.toast("No map files for this song. Choose one to edit.", now);
                 self.open_map_picker(index, MapPickerMode::Edit, now);
                 return;
             }
@@ -661,7 +657,7 @@ impl KaraokeMachineApp {
         let mut create = false;
         egui::Window::new(match picker.mode {
             MapPickerMode::Edit => "Choose a map file",
-            MapPickerMode::Play => "Choose a level",
+            MapPickerMode::Play => "Choose a map",
         })
         .open(&mut window_open)
         .collapsible(false)
@@ -712,20 +708,16 @@ impl KaraokeMachineApp {
                     });
                 }
                 MapPickerMode::Play => {
-                    ui.label(format!("{} — choose a level.", song.title));
+                    ui.label(format!("{} — choose a map.", song.title));
                     let selected_label = picker
                         .selected
                         .and_then(|index| maps.get(index))
-                        .filter(|map| !map.draft)
                         .map(MapInfo::display_name)
-                        .unwrap_or_else(|| "Select a level".into());
+                        .unwrap_or_else(|| "Select a map".into());
                     egui::ComboBox::from_id_salt("play_map_select")
                         .selected_text(selected_label)
                         .show_ui(ui, |ui| {
                             for (index, map) in maps.iter().enumerate() {
-                                if map.draft {
-                                    continue;
-                                }
                                 ui.selectable_value(
                                     &mut picker.selected,
                                     Some(index),
@@ -734,10 +726,7 @@ impl KaraokeMachineApp {
                             }
                         });
                     ui.add_space(10.0);
-                    let can_play = picker
-                        .selected
-                        .and_then(|index| maps.get(index))
-                        .is_some_and(|map| !map.draft);
+                    let can_play = picker.selected.and_then(|index| maps.get(index)).is_some();
                     if ui
                         .add_enabled(can_play, egui::Button::new("PLAY"))
                         .clicked()

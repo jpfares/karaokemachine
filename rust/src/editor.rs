@@ -295,7 +295,7 @@ impl Editor {
             backing_on: true,
             vocals_on: true,
             show_suggestions: true,
-            follow: true,
+            follow: false,
             snap: true,
             duration,
             right_scrubbing: false,

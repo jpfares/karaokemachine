@@ -26,8 +26,8 @@ IMPORTANT: NO COMMERCIAL AUDIO IS BUNDLED
 - Press SUBMIT MAPPING only when the editor says the mapping is complete.
   After that the map file becomes a finished level and the song is playable.
 - Drafts and finished levels are separate JSON files in the song's
-  "maps" folder. If a song has multiple finished levels, choose one from the
-  level dropdown before pressing PLAY.
+  "maps" folder. Drafts are playable previews. If a song has multiple map
+  files, choose one from the map dropdown before pressing PLAY.
 
 MAPS AND AUDIO
 - A map package contains notes, lyrics, cover art, and the original source

@@ -76,9 +76,9 @@ always asks which map file to open; you can also create a new file there.
 5. Drag lyric words anywhere onto the level as decorations.
 6. Press **SAVE AS DRAFT** to keep working, or **SUBMIT MAPPING** to finish the level.
 
-A draft cannot be played. When a song has exactly one finished level, pressing it plays
-that level. With zero or multiple finished levels, choose the file from the level
-selector before pressing **PLAY**.
+Drafts can be played as previews, but only a submitted level can be exported or shared.
+When a song has exactly one map file, pressing it plays that map. With zero or multiple
+map files, choose one from the map selector before pressing **PLAY**.
 
 ## Level editor
 

@@ -985,10 +985,6 @@ impl KaraokeMachineApp {
                 return;
             }
         };
-        if map.draft {
-            self.toast("That map file is still a draft.", now);
-            return;
-        }
         map.apply_to_song(&mut song);
         self.editor = None;
         self.map_picker = None;

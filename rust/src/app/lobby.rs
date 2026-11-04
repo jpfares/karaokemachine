@@ -373,7 +373,7 @@ impl KaraokeMachineApp {
             let unmapped = album
                 .songs
                 .iter()
-                .filter(|index| !self.songs[**index].mapped)
+                .filter(|index| self.songs[**index].maps.is_empty())
                 .count();
             if unmapped > 0 {
                 let badge = Rect::from_min_size(
@@ -384,7 +384,7 @@ impl KaraokeMachineApp {
                 p.text(
                     badge.center(),
                     Align2::CENTER_CENTER,
-                    format!("{unmapped} UNMAPPED"),
+                    format!("{unmapped} NO MAP"),
                     FontId::monospace(6.0),
                     PINK,
                 );
@@ -482,19 +482,15 @@ impl KaraokeMachineApp {
         let unmapped = album
             .songs
             .iter()
-            .filter(|index| !self.songs[**index].mapped)
+            .filter(|index| self.songs[**index].maps.is_empty())
             .count();
         p.text(
             art.right_top() + Vec2::new(16.0, 76.0),
             Align2::LEFT_TOP,
             if unmapped > 0 {
-                format!(
-                    "{} of {} tracks need a manual mapping.",
-                    unmapped,
-                    album.songs.len()
-                )
+                format!("{} of {} tracks need a map.", unmapped, album.songs.len())
             } else {
-                "All tracks mapped and playable.".into()
+                "All tracks have a playable map.".into()
             },
             FontId::proportional(10.0),
             if unmapped > 0 { PINK } else { MINT },
@@ -523,14 +519,13 @@ impl KaraokeMachineApp {
                 FontId::proportional(12.5),
                 INK,
             );
-            let finals = song.maps.iter().filter(|map| !map.draft).count();
-            let drafts = song.maps.len().saturating_sub(finals);
-            let sub = if finals == 0 && drafts > 0 {
-                "DRAFT ONLY · submit a level to play".to_string()
-            } else if finals == 0 {
-                "NO LEVEL · choose a map file to edit".to_string()
-            } else if finals > 1 {
-                format!("{finals} LEVELS · choose one to play")
+            let map_count = song.maps.len();
+            let sub = if map_count == 0 {
+                "NO MAP · choose a map file to edit".to_string()
+            } else if map_count > 1 {
+                format!("{map_count} MAPS · choose one to play")
+            } else if song.maps[0].draft {
+                "DRAFT · playable preview".to_string()
             } else if song.lyrics_synced.unwrap_or(false) {
                 "synced lyrics".to_string()
             } else if !song.lines.is_empty() {
@@ -543,7 +538,7 @@ impl KaraokeMachineApp {
                 Align2::LEFT_CENTER,
                 sub,
                 FontId::monospace(7.0),
-                if finals == 0 { PINK } else { MUTED2 },
+                if map_count == 0 { PINK } else { MUTED2 },
             );
             let meta = format!(
                 "{} · {}",
@@ -562,15 +557,15 @@ impl KaraokeMachineApp {
             p.text(
                 Pos2::new(row.right() - 66.0, row.center().y),
                 Align2::RIGHT_CENTER,
-                if song.mapped { "PLAY" } else { "MAP" },
+                if map_count > 0 { "PLAY" } else { "MAP" },
                 FontId::monospace(7.0),
-                if song.mapped { MINT } else { PINK },
+                if map_count > 0 { MINT } else { PINK },
             );
             let edit = Rect::from_min_size(
                 Pos2::new(row.right() - 36.0, row.top() + 9.0),
                 Vec2::new(30.0, 24.0),
             );
-            if pill_toggle(ui, edit, "EDIT", !song.mapped) {
+            if pill_toggle(ui, edit, "EDIT", map_count == 0) {
                 actions.push(Action::EditSong(song_index));
             }
             let main = Rect::from_min_max(row.min, Pos2::new(row.right() - 42.0, row.bottom()));
@@ -681,10 +676,10 @@ impl KaraokeMachineApp {
                 MUTED2,
             );
             let status = if let Some(song) = song {
-                if song.mapped {
+                if !song.maps.is_empty() {
                     "PLAY"
                 } else {
-                    "UNMAPPED"
+                    "MAP"
                 }
             } else {
                 "QUEUED"
@@ -695,7 +690,7 @@ impl KaraokeMachineApp {
                 status,
                 FontId::monospace(7.0),
                 match song {
-                    Some(song) if song.mapped => MINT,
+                    Some(song) if !song.maps.is_empty() => MINT,
                     Some(_) => PINK,
                     None => MUTED2,
                 },
