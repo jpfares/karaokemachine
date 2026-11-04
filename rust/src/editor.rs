@@ -16,6 +16,10 @@ use std::time::Duration;
 pub const VOCAL_BINS_PER_SECOND: f32 = 80.0;
 pub const RAW_PITCH_SAMPLE_RATE: f32 = 8000.0;
 
+/// Keep a dragged note long enough to remain selectable without changing the
+/// length the pointer asked for.
+const MIN_NOTE_DURATION: f64 = 0.06;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EditorTool {
     Pan,
@@ -29,7 +33,9 @@ impl EditorTool {
     fn hint(self) -> &'static str {
         match self {
             EditorTool::Pan => "Drag to pan. Middle-drag pans from any tool. Right-click moves the now-playing line.",
-            EditorTool::Note => "Click or drag on the lane to draw one pitch. Drag sets length.",
+            EditorTool::Note => {
+                "Click or drag on the lane to draw one pitch in either direction. Drag a note edge from inside to resize."
+            }
             EditorTool::Ribbon => "Drag across notes to connect them into one visual ribbon.",
             EditorTool::Eraser => "Click or sweep over notes and word decorations to erase them.",
             EditorTool::Select => "Select notes, ribbons, or word decorations. Drag note ends to resize.",
@@ -84,7 +90,7 @@ struct Snapshot {
 enum Drag {
     NewNote {
         index: usize,
-        start: f64,
+        anchor: f64,
     },
     Move {
         index: usize,
@@ -731,6 +737,44 @@ impl Editor {
         }
     }
 
+    fn begin_edge_resize(&mut self, index: usize, left_edge: bool) {
+        self.selected.clear();
+        self.selected.insert(index);
+        self.selected_word = None;
+        let (note_start, note_dur) = {
+            let note = &self.notes[index];
+            (note.start, note.dur)
+        };
+        self.push_history();
+        self.drag = Some(if left_edge {
+            Drag::ResizeLeft {
+                index,
+                end: note_start + note_dur,
+            }
+        } else {
+            Drag::ResizeRight {
+                index,
+                start: note_start,
+            }
+        });
+    }
+
+    /// Set a note to span from the press anchor to the current pointer. This
+    /// works in both directions, so dragging left is not forced to grow right.
+    fn update_new_note(&mut self, index: usize, anchor: f64, current: f64) {
+        let (start, end) = if current >= anchor {
+            (anchor, current)
+        } else {
+            (current, anchor)
+        };
+        let start = start.max(0.0);
+        let end = end.max(start);
+        if let Some(note) = self.notes.get_mut(index) {
+            note.start = start;
+            note.dur = (end - start).max(MIN_NOTE_DURATION);
+        }
+    }
+
     fn handle_canvas(
         &mut self,
         ui: &mut Ui,
@@ -743,7 +787,12 @@ impl Editor {
         let Some(pos) = pointer else {
             return;
         };
-        if self.tool == EditorTool::Select && self.note_edge_at(pos, layout).is_some() {
+        let over_edge = match self.tool {
+            EditorTool::Select => self.note_edge_at(pos, layout).is_some(),
+            EditorTool::Note => self.note_edge_at_inside(pos, layout).is_some(),
+            _ => false,
+        };
+        if over_edge {
             ui.ctx().set_cursor_icon(CursorIcon::ResizeHorizontal);
         }
 
@@ -769,28 +818,41 @@ impl Editor {
                 }
             }
             EditorTool::Note => {
-                if response.drag_started_by(PointerButton::Primary)
-                    && layout.note_area.contains(pos)
-                {
-                    self.push_history();
-                    let midi = self.midi_at_y(pos.y, layout);
-                    let start = self.snap_time(self.x_to_time(pos.x, layout));
-                    let index = self.notes.len();
-                    self.notes.push(Note {
-                        start,
-                        dur: 0.25,
-                        midi,
-                        word: None,
-                        word_index: None,
-                        line: None,
-                        vel: None,
-                        ribbon: None,
-                    });
-                    self.selected.clear();
-                    self.selected_word = None;
-                    self.selected.insert(index);
-                    self.drag = Some(Drag::NewNote { index, start });
-                    self.dirty = true;
+                if response.drag_started_by(PointerButton::Primary) {
+                    // `drag_started` fires after the pointer has moved a few
+                    // pixels. Use the press point so the note still begins
+                    // where the user put the pointer down.
+                    let press_pos = ui.input(|i| i.pointer.press_origin()).unwrap_or(pos);
+                    if layout.note_area.contains(press_pos) {
+                        if let Some((index, left_edge)) =
+                            self.note_edge_at_inside(press_pos, layout)
+                        {
+                            self.begin_edge_resize(index, left_edge);
+                        } else {
+                            self.push_history();
+                            let midi = self.midi_at_y(press_pos.y, layout);
+                            let start = self.snap_time(self.x_to_time(press_pos.x, layout));
+                            let index = self.notes.len();
+                            self.notes.push(Note {
+                                start,
+                                dur: MIN_NOTE_DURATION,
+                                midi,
+                                word: None,
+                                word_index: None,
+                                line: None,
+                                vel: None,
+                                ribbon: None,
+                            });
+                            self.selected.clear();
+                            self.selected_word = None;
+                            self.selected.insert(index);
+                            self.drag = Some(Drag::NewNote {
+                                index,
+                                anchor: start,
+                            });
+                            self.dirty = true;
+                        }
+                    }
                 } else if response.clicked_by(PointerButton::Primary)
                     && layout.note_area.contains(pos)
                 {
@@ -839,25 +901,7 @@ impl Editor {
                             grab_y,
                         });
                     } else if let Some((index, left_edge)) = self.note_edge_at(pos, layout) {
-                        self.selected.clear();
-                        self.selected.insert(index);
-                        self.selected_word = None;
-                        let (note_start, note_dur) = {
-                            let note = &self.notes[index];
-                            (note.start, note.dur)
-                        };
-                        self.push_history();
-                        self.drag = Some(if left_edge {
-                            Drag::ResizeLeft {
-                                index,
-                                end: note_start + note_dur,
-                            }
-                        } else {
-                            Drag::ResizeRight {
-                                index,
-                                start: note_start,
-                            }
-                        });
+                        self.begin_edge_resize(index, left_edge);
                     } else if let Some(index) = self.hit_note(pos, layout) {
                         self.selected.clear();
                         self.selected.insert(index);
@@ -946,18 +990,13 @@ impl Editor {
 
         // Continue an active drag with the current pointer position.
         match self.drag {
-            Some(Drag::NewNote { index, start }) => {
-                if response.dragged_by(PointerButton::Primary) {
-                    let end = self
-                        .snap_time(self.x_to_time(pos.x, layout))
-                        .max(start + 0.06);
-                    if let Some(note) = self.notes.get_mut(index) {
-                        note.dur = (end - start).clamp(0.06, 30.0);
-                    }
-                } else if response.drag_stopped_by(PointerButton::Primary) {
-                    if let Some(note) = self.notes.get_mut(index) {
-                        note.dur = note.dur.max(0.28);
-                    }
+            Some(Drag::NewNote { index, anchor }) => {
+                let stopped = response.drag_stopped_by(PointerButton::Primary);
+                if response.dragged_by(PointerButton::Primary) || stopped {
+                    let current = self.snap_time(self.x_to_time(pos.x, layout));
+                    self.update_new_note(index, anchor, current);
+                }
+                if stopped {
                     self.drag = None;
                     self.sort_notes();
                     self.status =
@@ -2657,6 +2696,22 @@ impl Editor {
     }
 
     fn note_edge_at(&self, pos: Pos2, layout: &Layout) -> Option<(usize, bool)> {
+        self.note_edge_at_with(pos, layout, false)
+    }
+
+    /// The Note tool only grabs an edge when the press starts inside the note.
+    /// Pressing exactly on the boundary therefore starts the next note instead
+    /// of resizing the previous one, which keeps notes truly end to end.
+    fn note_edge_at_inside(&self, pos: Pos2, layout: &Layout) -> Option<(usize, bool)> {
+        self.note_edge_at_with(pos, layout, true)
+    }
+
+    fn note_edge_at_with(
+        &self,
+        pos: Pos2,
+        layout: &Layout,
+        inside_only: bool,
+    ) -> Option<(usize, bool)> {
         if !layout.note_area.contains(pos) {
             return None;
         }
@@ -2670,6 +2725,9 @@ impl Editor {
             }
             let x0 = self.time_to_x(note.start, layout);
             let x1 = self.time_to_x(note.start + note.dur, layout);
+            if inside_only && (pos.x <= x0 || pos.x >= x1) {
+                continue;
+            }
             let width = (x1 - x0).max(1.0);
             let tolerance = 12.0f32.min(width * 0.4).max(4.0);
             let left = (pos.x - x0).abs();
@@ -3500,5 +3558,81 @@ fn paint_editor_icon(
                 Stroke::new(1.9f32, color),
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn editor() -> Editor {
+        let song: Song = serde_json::from_value(serde_json::json!({
+            "id": "test",
+            "title": "Test",
+            "low": 48,
+            "high": 72,
+            "audio": {"backing": "backing.mp3"}
+        }))
+        .expect("test song");
+        Editor::new(song, Vec::new(), Vec::new(), 30.0)
+    }
+
+    fn note(start: f64) -> Note {
+        Note {
+            start,
+            dur: MIN_NOTE_DURATION,
+            midi: 60,
+            word: None,
+            word_index: None,
+            line: None,
+            vel: None,
+            ribbon: None,
+        }
+    }
+
+    #[test]
+    fn a_new_note_can_be_dragged_right_to_left() {
+        let mut editor = editor();
+        editor.snap = false;
+        editor.notes.push(note(5.0));
+        editor.update_new_note(0, 5.0, 2.0);
+        assert!((editor.notes[0].start - 2.0).abs() < 1e-9);
+        assert!((editor.notes[0].dur - 3.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_new_note_keeps_the_pointer_span() {
+        let mut editor = editor();
+        editor.snap = false;
+        editor.notes.push(note(2.0));
+        editor.update_new_note(0, 2.0, 2.4);
+        assert!((editor.notes[0].start - 2.0).abs() < 1e-9);
+        assert!((editor.notes[0].dur - 0.4).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_new_note_has_a_tiny_minimum_not_a_full_beat() {
+        let mut editor = editor();
+        editor.snap = false;
+        editor.notes.push(note(2.0));
+        editor.update_new_note(0, 2.0, 2.0);
+        assert!((editor.notes[0].start - 2.0).abs() < 1e-9);
+        assert!((editor.notes[0].dur - MIN_NOTE_DURATION).abs() < 1e-9);
+    }
+
+    #[test]
+    fn the_note_tool_grabs_edges_from_inside_only() {
+        let mut editor = editor();
+        editor.notes.push(note(2.0));
+        editor.notes[0].dur = 1.0;
+        let layout = editor.layout(Rect::from_min_size(Pos2::ZERO, Vec2::new(1600.0, 980.0)));
+        let x1 = editor.time_to_x(3.0, &layout);
+        let y = editor.midi_to_y(60, &layout);
+        assert!(editor
+            .note_edge_at_inside(Pos2::new(x1 - 1.0, y), &layout)
+            .is_some());
+        assert!(editor
+            .note_edge_at_inside(Pos2::new(x1 + 1.0, y), &layout)
+            .is_none());
     }
 }

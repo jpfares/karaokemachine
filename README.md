@@ -89,14 +89,15 @@ it off. Nothing is reduced to note groups for that display; the mapper decides h
 simplify it. Hover it for a precise timestamp, raw pitch and cents,
 and vocal level, so word onsets can be placed exactly. A translucent gray line follows the
 mouse across the working area at all times. Click any note to audition its pitch. With the
-Select tool, drag either note edge to stretch or contract it. Hold right-click and drag to
-move the yellow now-playing line continuously.
+Select tool, or with the Note tool from just inside either end, drag a note edge to stretch
+or contract it. Hold right-click and drag to move the yellow now-playing line continuously.
 
 | Action | Control |
 | --- | --- |
 | Pan | Pan icon, or middle-drag from any tool |
 | Move the now-playing line | **Hold right-click and drag** in the lane, waveform, or ruler |
-| Draw a note | Note icon: click or drag on a pitch lane; drag sets length |
+| Draw a note | Note icon: click or drag either direction on a pitch lane; drag sets length |
+| Resize with the Note tool | Note icon: drag just inside either end of a note |
 | Make a ribbon | Ribbon icon: drag across notes, release over the last note |
 | Erase | Eraser icon: click or sweep over notes or words |
 | Select / move / resize | Select icon: drag a note body to move, drag either end to resize |
