@@ -32,8 +32,9 @@ pub fn pitch_color(t: f32) -> [u8; 3] {
 }
 
 pub fn note_name(midi: i32) -> String {
+    // ASCII sharps: the bundled UI font has no U+266F glyph and drew boxes.
     const NAMES: [&str; 12] = [
-        "C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B",
+        "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
     ];
     let n = midi.rem_euclid(12);
     format!("{}{}", NAMES[n as usize], midi / 12 - 1)

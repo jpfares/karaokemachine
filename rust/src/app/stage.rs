@@ -10,10 +10,26 @@ use crate::widgets::{click, glyph_button, pill_button, pill_toggle, round_button
 use eframe::egui::{
     self, Align2, Color32, FontId, Mesh, Pos2, Rect, Shape, Stroke, StrokeKind, Vec2,
 };
+use std::collections::VecDeque;
 use std::time::Duration;
 
 pub(super) const OCTAVE_TOLERANCE_CENTS: f32 = 50.0;
 pub(super) const IN_TUNE_TOLERANCE_CENTS: f32 = 85.0;
+/// Where the hit line sits across the lane area: notes approach from the
+/// right and stay visible for a moment after they are judged.
+const HIT_LINE_FRACTION: f32 = 0.22;
+/// How much sung-pitch history the trail behind the voice bubble keeps.
+const TRAIL_SECONDS: f64 = 4.0;
+/// How fast the active note's hit glow fades, in units per second.
+const GLOW_DECAY: f32 = 4.0;
+
+/// One sung pitch, kept for the trail that follows the voice bubble.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct TrailPoint {
+    pub(super) time: f64,
+    pub(super) midi: f32,
+    pub(super) color: Color32,
+}
 
 /// Fold a sung pitch into the octave of the target note.
 ///
@@ -104,6 +120,10 @@ pub(super) struct Stage {
     pub(super) play_when_loaded: bool,
     /// Wall-clock time of the previous tick, for the no-audio fallback clock.
     pub(super) last_tick: f64,
+    /// Recent sung pitches, newest last, in chart time.
+    pub(super) trail: VecDeque<TrailPoint>,
+    /// 1.0 on a frame where the active note was hit, fading to 0.
+    pub(super) hit_glow: f32,
     pub(super) octave_shift: i32,
 }
 
@@ -140,6 +160,8 @@ impl Stage {
             audio_loading: false,
             play_when_loaded: false,
             last_tick: 0.0,
+            trail: VecDeque::new(),
+            hit_glow: 0.0,
             octave_shift: shift,
         }
     }
@@ -174,6 +196,8 @@ impl Stage {
         self.active = -1;
         self.judgment = None;
         self.result = None;
+        self.trail.clear();
+        self.hit_glow = 0.0;
         for stat in &mut self.stats {
             *stat = NoteStat::default();
         }
@@ -204,6 +228,34 @@ impl Stage {
         self.started = false;
         self.count_in_until = None;
         self.reset_scoring(0.0);
+    }
+
+    /// Record what the singer is producing right now for the on-screen trail,
+    /// and light the active note when the reading is a hit.
+    fn record_reading(&mut self, chart_time: f64, reading: Option<PitchReading>) {
+        while self
+            .trail
+            .front()
+            .is_some_and(|point| point.time < chart_time - TRAIL_SECONDS)
+        {
+            self.trail.pop_front();
+        }
+        let Some(reading) = reading else {
+            return;
+        };
+        let target = usize::try_from(self.active)
+            .ok()
+            .and_then(|index| self.song.notes.get(index))
+            .map(|note| note.midi);
+        let (midi, color, hit) = reading_feedback(reading, target);
+        if hit {
+            self.hit_glow = 1.0;
+        }
+        self.trail.push_back(TrailPoint {
+            time: chart_time,
+            midi,
+            color,
+        });
     }
 
     pub(super) fn active_note_at(&self, time: f64) -> i32 {
@@ -422,7 +474,7 @@ impl Layout {
         let header_h = 64.0;
         let tray_h = 104.0;
         let left_w = (width * 0.07).clamp(96.0, 132.0);
-        let hit_x = left_w + 2.0;
+        let hit_x = left_w + (width - left_w) * HIT_LINE_FRACTION;
         let lane_top = header_h + 20.0;
         let lane_bottom = height - tray_h - 18.0;
         // Fit the lanes to this song's actual melody, not a fixed window.
@@ -481,6 +533,35 @@ impl Layout {
     pub(super) fn y_norm(&self, y: f32) -> f32 {
         ((y - self.lane_top) / (self.lane_bottom - self.lane_top).max(1.0)).clamp(0.0, 1.0)
     }
+
+    /// Vertical position of a fractional pitch, for the voice trail.
+    pub(super) fn pitch_y(&self, midi: f32) -> f32 {
+        self.lane_top + (self.high as f32 - midi) * self.lane_h + self.lane_h / 2.0
+    }
+}
+
+/// Where a sung pitch sits and what colour it earns against `target`: mint
+/// in tune, gold a little off, blue the right note in another octave, pink a
+/// miss. Without a target the pitch is shown as sung, uncoloured.
+fn reading_feedback(reading: PitchReading, target: Option<i32>) -> (f32, Color32, bool) {
+    let Some(target) = target else {
+        return (reading.midi, MUTED, false);
+    };
+    let (cents, octave_shift) = fold_octave(reading.midi, target);
+    if octave_shift != 0 {
+        return if cents.abs() <= OCTAVE_TOLERANCE_CENTS {
+            (target as f32 + cents / 100.0, OCTAVE_BLUE, true)
+        } else {
+            (reading.midi, PINK, false)
+        };
+    }
+    if cents.abs() <= 30.0 {
+        (reading.midi, MINT, true)
+    } else if cents.abs() <= IN_TUNE_TOLERANCE_CENTS {
+        (reading.midi, GOLD, true)
+    } else {
+        (reading.midi, PINK, false)
+    }
 }
 
 pub(super) fn stage_needs_input(stage: &Option<Stage>) -> bool {
@@ -507,14 +588,34 @@ pub(super) fn draw_melody(
     let use_links = !stage.song.ribbon_links.is_empty();
     let mut mesh = Mesh::default();
     let mut previous: Option<(f32, f32)> = None;
+    let mut active_body: Option<Rect> = None;
 
     for (i, note) in notes.iter().enumerate() {
         let x0 = layout.hit_x + (note.start - t) as f32 * layout.pps;
         let x1 = layout.hit_x + (note.start + note.dur - t) as f32 * layout.pps;
-        if x1 < layout.hit_x - 2.0 {
+        if x1 < layout.left_w - 2.0 {
             previous = None;
             continue;
         }
+        // A note that has passed the hit line keeps its colour if it was
+        // sung and fades if it was missed, so the singer sees the verdict.
+        let opacity = match stage.stats.get(i) {
+            Some(stat) if stat.judged => {
+                let ratio = if stat.total > 0 {
+                    stat.hit as f32 / stat.total as f32
+                } else {
+                    0.0
+                };
+                if ratio >= 0.55 {
+                    0.95
+                } else if ratio >= 0.28 {
+                    0.55
+                } else {
+                    0.28
+                }
+            }
+            _ => 0.95,
+        };
         if x0 > width + 60.0 {
             break;
         }
@@ -537,8 +638,14 @@ pub(super) fn draw_melody(
         // Each note keeps its own rounded body. A thin neck connects it to the
         // next note of the same word/phrase, so the word remains one ribbon but
         // every note is visible.
-        let sx = x0.max(layout.hit_x) + if group_prev { 0.6 } else { 2.0 };
+        let sx = x0.max(layout.left_w) + if group_prev { 0.6 } else { 2.0 };
         let ex = (x1 - if group_next { 0.6 } else { 2.0 }).max(sx + 1.0);
+        if i as i32 == active {
+            active_body = Some(Rect::from_min_max(
+                Pos2::new(sx, y - h / 2.0),
+                Pos2::new(ex, y + h / 2.0),
+            ));
+        }
 
         if let Some((prev_end, prev_y)) = previous {
             if group_prev && sx > prev_end + 0.5 {
@@ -560,7 +667,7 @@ pub(super) fn draw_melody(
                     layout.high,
                     layout.lane_top,
                     layout.lane_bottom,
-                    0.95,
+                    opacity,
                 );
             }
         }
@@ -573,7 +680,7 @@ pub(super) fn draw_melody(
             layout.high,
             layout.lane_top,
             layout.lane_bottom,
-            0.95,
+            opacity,
         );
         previous = Some((ex, y));
     }
@@ -619,6 +726,24 @@ pub(super) fn draw_melody(
         p.add(Shape::mesh(links_mesh));
     }
     p.add(Shape::mesh(mesh));
+    // The note being sung lights up while the voice is on it.
+    if let Some(body) = active_body {
+        let glow = stage.hit_glow;
+        if glow > 0.0 {
+            let outer = body.expand(4.0 + glow * 3.0);
+            p.rect_filled(
+                outer,
+                outer.height() / 2.0,
+                alpha(Color32::WHITE, (glow * 40.0) as u8),
+            );
+            p.rect_stroke(
+                body.expand(2.0),
+                body.height() / 2.0 + 2.0,
+                Stroke::new(2.0f32, alpha(Color32::WHITE, (glow * 220.0) as u8)),
+                StrokeKind::Outside,
+            );
+        }
+    }
     if active >= 0 {
         if let Some(note) = notes.get(active as usize) {
             let x0 = layout.hit_x + (note.start - t) as f32 * layout.pps;
@@ -722,7 +847,7 @@ pub(super) fn draw_placed_words(
             continue;
         }
         let x = layout.hit_x + (word.start - time) as f32 * layout.pps;
-        if x < layout.hit_x - 80.0 || x > width + 100.0 {
+        if x < layout.left_w - 80.0 || x > width + 100.0 {
             continue;
         }
         let y = (layout.lane_top
@@ -733,7 +858,7 @@ pub(super) fn draw_placed_words(
         let text_w = word.text.chars().count() as f32 * 7.4 + 14.0;
         let pill_w = text_w.min(190.0);
         let half = pill_w * 0.5 + 2.0;
-        let cx = x.max(layout.hit_x + half).min(width - half);
+        let cx = x.max(layout.left_w + half).min(width - half);
         let pill = Rect::from_center_size(Pos2::new(cx, y), Vec2::new(pill_w, 24.0));
         p.rect_filled(
             pill,
@@ -838,7 +963,7 @@ pub(super) fn draw_words(p: &egui::Painter, stage: &Stage, layout: &Layout, time
             (start + end) * 0.5
         };
         let x = layout.hit_x + (centre - time) as f32 * layout.pps;
-        if x < layout.hit_x + 4.0 || x > width + 80.0 {
+        if x < layout.left_w + 4.0 || x > width + 80.0 {
             continue;
         }
         let y = layout.lane_y(anchor.midi) - h / 2.0 - 17.0;
@@ -856,7 +981,7 @@ pub(super) fn draw_words(p: &egui::Painter, stage: &Stage, layout: &Layout, time
         let pill_w = width_est.min(170.0);
         // Keep the whole word readable while it passes the playhead.
         let half = pill_w * 0.5 + 2.0;
-        let cx = x.max(layout.hit_x + half).min(width - half);
+        let cx = x.max(layout.left_w + half).min(width - half);
         let pill = Rect::from_center_size(Pos2::new(cx, y), Vec2::new(pill_w, 24.0));
         p.rect_filled(
             pill,
@@ -1155,6 +1280,8 @@ impl KaraokeMachineApp {
             // against the note that was playing then.
             let heard_at = chart_time - self.settings.latency_ms as f64 / 1000.0;
             stage.score_tick(heard_at, self.reading, mic_ok);
+            stage.hit_glow = (stage.hit_glow - elapsed as f32 * GLOW_DECAY).max(0.0);
+            stage.record_reading(chart_time, self.reading);
         } else {
             stage.active = stage.active_note_at(chart_time);
         }
@@ -1257,7 +1384,7 @@ impl KaraokeMachineApp {
         } else {
             0
         };
-        let stats_x = rect.width() - 360.0;
+        let stats_x = rect.width() - 420.0;
         for (i, (label, value, color)) in [
             ("SCORE", stage.score.to_string(), INK),
             ("COMBO", format!("{}×", stage.combo), GOLD),
@@ -1274,19 +1401,19 @@ impl KaraokeMachineApp {
         .iter()
         .enumerate()
         {
-            let x = stats_x + i as f32 * 78.0;
+            let x = stats_x + i as f32 * 118.0;
             p.text(
-                Pos2::new(x, 15.0),
+                Pos2::new(x, 12.0),
                 Align2::LEFT_TOP,
                 *label,
-                FontId::monospace(7.0),
-                MUTED2,
+                FontId::monospace(9.0),
+                MUTED,
             );
             p.text(
-                Pos2::new(x, 28.0),
+                Pos2::new(x, 24.0),
                 Align2::LEFT_TOP,
                 value,
-                FontId::monospace(16.0),
+                FontId::monospace(26.0),
                 *color,
             );
         }
@@ -1298,7 +1425,7 @@ impl KaraokeMachineApp {
 
         // lanes
         let clip = Rect::from_min_max(
-            Pos2::new(layout.hit_x, layout.lane_top),
+            Pos2::new(layout.left_w, layout.lane_top),
             Pos2::new(rect.width(), layout.lane_bottom),
         );
         let painter = ui.painter().with_clip_rect(clip);
@@ -1309,8 +1436,8 @@ impl KaraokeMachineApp {
             if black {
                 painter.rect_filled(
                     Rect::from_min_size(
-                        Pos2::new(layout.hit_x, top),
-                        Vec2::new(rect.width() - layout.hit_x, layout.lane_h),
+                        Pos2::new(layout.left_w, top),
+                        Vec2::new(rect.width() - layout.left_w, layout.lane_h),
                     ),
                     0.0,
                     Color32::from_white_alpha(9),
@@ -1318,7 +1445,7 @@ impl KaraokeMachineApp {
             }
             let is_c = midi % 12 == 0;
             painter.line_segment(
-                [Pos2::new(layout.hit_x, y), Pos2::new(rect.width(), y)],
+                [Pos2::new(layout.left_w, y), Pos2::new(rect.width(), y)],
                 Stroke::new(
                     if is_c { 1.2f32 } else { 0.7f32 },
                     Color32::from_white_alpha(if is_c { 44 } else { 17 }),
@@ -1333,7 +1460,7 @@ impl KaraokeMachineApp {
         for tick in first..=last {
             let t = tick as f64 * interval;
             let x = layout.hit_x + (t - chart_time) as f32 * layout.pps;
-            if x < layout.hit_x || x > rect.width() {
+            if x < layout.left_w || x > rect.width() {
                 continue;
             }
             let bar = stage
@@ -1355,6 +1482,15 @@ impl KaraokeMachineApp {
                 ),
             );
         }
+        // What has already scrolled past the hit line sits in shadow.
+        painter.rect_filled(
+            Rect::from_min_max(
+                Pos2::new(layout.left_w, layout.lane_top),
+                Pos2::new(layout.hit_x, layout.lane_bottom),
+            ),
+            0.0,
+            Color32::from_black_alpha(70),
+        );
         let active = stage.active_note_at(chart_time);
         if active >= 0 {
             let note = &stage.song.notes[active as usize];
@@ -1362,13 +1498,29 @@ impl KaraokeMachineApp {
             let color = pitch_col(layout.y_norm(y));
             painter.rect_filled(
                 Rect::from_min_size(
-                    Pos2::new(layout.hit_x, y - layout.lane_h / 2.0),
-                    Vec2::new((rect.width() - layout.hit_x).min(430.0), layout.lane_h),
+                    Pos2::new(layout.left_w, y - layout.lane_h / 2.0),
+                    Vec2::new((rect.width() - layout.left_w).min(520.0), layout.lane_h),
                 ),
                 0.0,
                 alpha(color, 28),
             );
         }
+        // The hit line: notes are judged as they cross it.
+        painter.rect_filled(
+            Rect::from_min_max(
+                Pos2::new(layout.hit_x - 6.0, layout.lane_top),
+                Pos2::new(layout.hit_x + 6.0, layout.lane_bottom),
+            ),
+            0.0,
+            alpha(MINT, 14),
+        );
+        painter.line_segment(
+            [
+                Pos2::new(layout.hit_x, layout.lane_top),
+                Pos2::new(layout.hit_x, layout.lane_bottom),
+            ],
+            Stroke::new(2.0f32, alpha(MINT, 150)),
+        );
 
         // melody
         draw_melody(&painter, stage, &layout, active, chart_time, rect.width());
@@ -1439,6 +1591,33 @@ impl KaraokeMachineApp {
                 StrokeKind::Inside,
             );
         }
+        // The voice trail: where the singer has been over the last seconds.
+        let mut last: Option<(Pos2, Color32)> = None;
+        for point in &stage.trail {
+            let age = (chart_time - point.time).max(0.0);
+            let x = layout.hit_x + (point.time - chart_time) as f32 * layout.pps;
+            if x < layout.left_w {
+                last = None;
+                continue;
+            }
+            let y = layout
+                .pitch_y(point.midi)
+                .clamp(layout.lane_top + 4.0, layout.lane_bottom - 4.0);
+            let fade = (1.0 - age / TRAIL_SECONDS).clamp(0.0, 1.0) as f32;
+            let color = alpha(point.color, (60.0 + fade * 150.0) as u8);
+            let pos = Pos2::new(x, y);
+            // Join points that are close in time and pitch; an octave flip or a
+            // rest breaks the line rather than drawing a vertical bar.
+            if let Some((prev, _)) = last {
+                if (prev.x - x).abs() < layout.pps * 0.25
+                    && (prev.y - y).abs() < layout.lane_h * 2.5
+                {
+                    painter.line_segment([prev, pos], Stroke::new(3.0f32, color));
+                }
+            }
+            painter.circle_filled(pos, 2.5 + fade * 1.5, color);
+            last = Some((pos, color));
+        }
         if let Some(reading) = self.reading {
             let target = if active >= 0 {
                 Some(stage.song.notes[active as usize].midi)
@@ -1460,20 +1639,17 @@ impl KaraokeMachineApp {
             let y = layout
                 .lane_y(bubble_midi.round() as i32)
                 .clamp(layout.lane_top + 14.0, layout.lane_bottom - 14.0);
-            let color = if let Some(target) = target {
+            let color = if target.is_some() {
                 if octave_match {
                     OCTAVE_BLUE
+                } else if folded_cents.abs() <= 30.0 {
+                    MINT
+                } else if folded_cents.abs() <= 65.0 {
+                    GOLD
+                } else if folded_cents.abs() <= 120.0 {
+                    Color32::from_rgb(255, 161, 92)
                 } else {
-                    let cents = (reading.midi - target as f32) * 100.0;
-                    if cents.abs() <= 30.0 {
-                        MINT
-                    } else if cents.abs() <= 65.0 {
-                        GOLD
-                    } else if cents.abs() <= 120.0 {
-                        Color32::from_rgb(255, 161, 92)
-                    } else {
-                        PINK
-                    }
+                    PINK
                 }
             } else {
                 pitch_col(layout.y_norm(y))
@@ -1482,7 +1658,7 @@ impl KaraokeMachineApp {
             p.circle_filled(Pos2::new(layout.hit_x, y), 23.0, alpha(color, 190));
             p.circle_filled(Pos2::new(layout.hit_x, y), 16.0, color);
             p.circle_filled(Pos2::new(layout.hit_x - 4.0, y - 4.0), 5.0, Color32::WHITE);
-            let label = if let Some(target) = target {
+            let label = if target.is_some() {
                 if octave_match {
                     format!(
                         "{}   OCT {:+}",
@@ -1490,10 +1666,21 @@ impl KaraokeMachineApp {
                         octave_shift
                     )
                 } else {
+                    // Octave-folded, like the colours: a singer an octave off
+                    // is told sharp or flat within that octave, not "-1200".
+                    let verdict = if folded_cents.abs() <= 30.0 {
+                        "IN TUNE"
+                    } else if folded_cents.abs() > IN_TUNE_TOLERANCE_CENTS {
+                        "WAY OFF"
+                    } else if folded_cents > 0.0 {
+                        "SHARP"
+                    } else {
+                        "FLAT"
+                    };
                     format!(
-                        "{}   {:+.0}¢",
+                        "{}  {:+.0}¢  {verdict}",
                         note_name(reading.midi.round() as i32),
-                        (reading.midi - target as f32) * 100.0
+                        folded_cents
                     )
                 }
             } else {
@@ -1504,8 +1691,8 @@ impl KaraokeMachineApp {
                 )
             };
             let label_rect = Rect::from_min_size(
-                Pos2::new(layout.hit_x + 34.0, y - 12.0),
-                Vec2::new(98.0, 24.0),
+                Pos2::new(layout.hit_x + 34.0, y - 13.0),
+                Vec2::new(150.0, 26.0),
             );
             p.rect_filled(
                 label_rect,
@@ -1522,7 +1709,7 @@ impl KaraokeMachineApp {
                 label_rect.center(),
                 Align2::CENTER_CENTER,
                 label,
-                FontId::monospace(9.0),
+                FontId::monospace(10.0),
                 color,
             );
         } else if self.mic.is_some() {
@@ -1572,14 +1759,38 @@ impl KaraokeMachineApp {
                 MUTED,
             );
         }
+        // Combo grows beside the hit line so the streak is felt, not read.
+        if stage.combo >= 2 && stage.result.is_none() {
+            let size = 18.0 + stage.combo.min(40) as f32 * 0.45;
+            p.text(
+                Pos2::new(layout.hit_x + 16.0, layout.lane_top + 10.0),
+                Align2::LEFT_TOP,
+                format!("{}×", stage.combo),
+                FontId::proportional(size),
+                GOLD,
+            );
+            p.text(
+                Pos2::new(layout.hit_x + 16.0, layout.lane_top + 12.0 + size),
+                Align2::LEFT_TOP,
+                "COMBO",
+                FontId::monospace(9.0),
+                alpha(GOLD, 170),
+            );
+        }
         if let Some(judgment) = &stage.judgment {
-            if now - judgment.at < 0.65 {
+            let age = now - judgment.at;
+            if age < 0.7 {
+                let fade = (1.0 - age / 0.7) as f32;
+                let size = 34.0 + (1.0 - fade) * 10.0;
                 p.text(
-                    Pos2::new(rect.width() * 0.5, layout.lane_top + 80.0),
-                    Align2::CENTER_CENTER,
+                    Pos2::new(
+                        layout.hit_x + 24.0,
+                        layout.lane_top - 6.0 - (1.0 - fade) * 18.0,
+                    ),
+                    Align2::LEFT_BOTTOM,
                     &judgment.text,
-                    FontId::proportional(30.0),
-                    judgment.color,
+                    FontId::proportional(size),
+                    alpha(judgment.color, (fade * 255.0) as u8),
                 );
             }
         }
@@ -1764,17 +1975,17 @@ impl KaraokeMachineApp {
                 MINT,
             );
             let copy = match result.rank {
-                'S' => "Perfect pitch energy.",
-                'A' => "Delightfully in tune.",
-                'B' => "Solid pipes.",
-                'C' => "Finding the key.",
-                _ => "Warm-up first.",
+                'S' => "Flawless. Every note landed.",
+                'A' => "Great take. A few cents off here and there.",
+                'B' => "Solid. Tighten the long notes and this is an A.",
+                'C' => "Getting there. Hold each note a little longer.",
+                _ => "Keep going. A warm-up scale helps find the key.",
             };
             p.text(
                 card.center_top() + Vec2::new(0.0, 160.0),
                 Align2::CENTER_CENTER,
                 copy,
-                FontId::proportional(30.0),
+                FontId::proportional(22.0),
                 INK,
             );
             let stats = [
@@ -1788,19 +1999,19 @@ impl KaraokeMachineApp {
                 ("BEST COMBO", format!("{}×", result.combo)),
             ];
             for (i, (label, value)) in stats.iter().enumerate() {
-                let x = card.left() + 44.0 + i as f32 * 108.0;
+                let x = card.left() + 40.0 + i as f32 * 110.0;
                 p.text(
-                    Pos2::new(x, card.center().y + 60.0),
+                    Pos2::new(x, card.center().y + 56.0),
                     Align2::LEFT_TOP,
                     *label,
-                    FontId::monospace(7.0),
-                    MUTED2,
+                    FontId::monospace(9.0),
+                    MUTED,
                 );
                 p.text(
-                    Pos2::new(x, card.center().y + 76.0),
+                    Pos2::new(x, card.center().y + 74.0),
                     Align2::LEFT_TOP,
                     value,
-                    FontId::monospace(17.0),
+                    FontId::monospace(22.0),
                     INK,
                 );
             }
