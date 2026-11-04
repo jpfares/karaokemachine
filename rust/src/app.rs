@@ -699,7 +699,10 @@ impl eframe::App for KaraokeMachineApp {
                     if !editor.song.mapped {
                         match editor.save_draft(&self.root) {
                             Ok(()) => self.toast("Draft saved. The song remains UNMAPPED.", now),
-                            Err(error) => self.toast(error, now),
+                            Err(error) => {
+                                leaving = false;
+                                self.toast(format!("Could not save the draft: {error}"), now);
+                            }
                         }
                     } else if editor.is_dirty() {
                         // A mapped song only persists through Submit. Save the
