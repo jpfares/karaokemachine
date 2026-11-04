@@ -4,7 +4,7 @@ use super::stage::add_ribbon_mesh;
 use super::{ctx_pointer, pitch_col, Action, DrawerView, KaraokeMachineApp};
 use crate::automap;
 use crate::library::{build_albums, load_songs, read_songlist};
-use crate::model::{accuracy_label, format_time, next_rank, rank_for, ScoreRecord};
+use crate::model::{accuracy_label, format_time, next_rank, rank_for, ScoreRecord, Song};
 use crate::theme::{alpha, rank_colour, BG, GOLD, INK, LINE, MINT, MUTED, MUTED2, PANEL, PINK};
 use crate::widgets::{click, glyph_button, pill_button, pill_toggle};
 use eframe::egui::{
@@ -24,6 +24,11 @@ pub(super) fn paint_cover_fallback(p: &egui::Painter, rect: Rect, rounding: f32,
         FontId::proportional((rect.width() * 0.25).max(10.0)),
         INK,
     );
+}
+
+/// Any map file plays, draft or level, so the home offers every song with one.
+fn playable(song: &Song) -> bool {
+    !song.maps.is_empty()
 }
 
 /// Cover art at `rect`, or the generated fallback, with a hairline frame.
@@ -119,7 +124,7 @@ impl KaraokeMachineApp {
     /// The flag says whether it came from `last_song`.
     fn home_hero(&self) -> Option<(usize, bool)> {
         if let Some(id) = &self.settings.last_song {
-            if let Some(i) = self.songs.iter().position(|s| &s.id == id && s.mapped) {
+            if let Some(i) = self.songs.iter().position(|s| &s.id == id && playable(s)) {
                 return Some((i, true));
             }
         }
@@ -132,8 +137,8 @@ impl KaraokeMachineApp {
         }
         self.songs
             .iter()
-            .position(|s| s.mapped && s.source == "scale")
-            .or_else(|| self.songs.iter().position(|s| s.mapped))
+            .position(|s| playable(s) && s.source == "scale")
+            .or_else(|| self.songs.iter().position(playable))
             .map(|i| (i, false))
     }
 
@@ -144,7 +149,7 @@ impl KaraokeMachineApp {
             .filter_map(|(id, record)| {
                 self.songs
                     .iter()
-                    .position(|s| &s.id == id && s.mapped)
+                    .position(|s| &s.id == id && playable(s))
                     .map(|i| (i, record))
             })
             .collect()
@@ -227,12 +232,12 @@ impl KaraokeMachineApp {
             FontId::monospace(10.0),
             MUTED,
         );
-        let mapped = self.songs.iter().filter(|s| s.mapped).count();
+        let playable_count = self.songs.iter().filter(|s| playable(s)).count();
         p.text(
             Pos2::new(w - 40.0, h - 30.0),
             Align2::RIGHT_CENTER,
             format!(
-                "{} · {mapped} MAPPED · {}",
+                "{} · {playable_count} PLAYABLE · {}",
                 plural(self.songs.len(), "SONG"),
                 plural(self.albums.len(), "ALBUM")
             ),
@@ -413,14 +418,14 @@ impl KaraokeMachineApp {
         let first_scale = self
             .songs
             .iter()
-            .position(|s| s.mapped && s.source == "scale");
+            .position(|s| playable(s) && s.source == "scale");
         let hero_is_scale = hero_idx
             .map(|i| self.songs[i].source == "scale")
             .unwrap_or(false);
         let scale_count = self
             .songs
             .iter()
-            .filter(|s| s.mapped && s.source == "scale")
+            .filter(|s| playable(s) && s.source == "scale")
             .count();
         let card_w = (cw - 40.0) / 3.0;
         let narrow = card_w < 260.0;
@@ -447,9 +452,9 @@ impl KaraokeMachineApp {
                 "02",
                 "Upload a song",
                 if narrow {
-                    "Link or file · auto-mapped"
+                    "Link or file · optional auto-map"
                 } else {
-                    "YouTube link or audio file · auto-mapped"
+                    "YouTube link or audio file · optional auto-map"
                 },
                 "IMPORT",
             ),
@@ -541,7 +546,7 @@ impl KaraokeMachineApp {
             let mut pad: Vec<usize> = (0..self.songs.len())
                 .filter(|i| {
                     let song = &self.songs[*i];
-                    song.mapped && Some(*i) != hero_idx && !self.scores.contains_key(&song.id)
+                    playable(song) && Some(*i) != hero_idx && !self.scores.contains_key(&song.id)
                 })
                 .collect();
             pad.sort_by_key(|i| self.songs[*i].source != "scale");
@@ -882,7 +887,7 @@ impl KaraokeMachineApp {
         p.text(
             body.left_top() + Vec2::new(0.0, 31.0),
             Align2::LEFT_TOP,
-            "Unmapped songs open the editor, where AUTO-MAP charts them.",
+            "Unmapped songs pick a map file first; AUTO-MAP charts them in the editor.",
             FontId::proportional(11.0),
             MUTED,
         );

@@ -160,6 +160,9 @@ impl KaraokeMachineApp {
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
+            // Taller than the 700 pt minimum window: scroll rather than clip.
+            .max_height(ctx.screen_rect().height() - 60.0)
+            .vscroll(true)
             .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
             .show(ctx, |ui| {
                 ui.set_min_width(480.0);

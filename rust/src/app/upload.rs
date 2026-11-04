@@ -556,16 +556,20 @@ impl KaraokeMachineApp {
         self.upload.cover.update_preview(ctx);
         {
             let upload = &mut self.upload;
+            // The form is taller than the 700 pt minimum window; size it from
+            // the screen and keep the checkbox and IMPORT button below the
+            // scrolling part reachable.
+            let window_h = (ctx.screen_rect().height() - 60.0).min(850.0);
             egui::Window::new("Upload a song")
                 .open(&mut open)
                 .collapsible(false)
                 .resizable(false)
-                .fixed_size(Vec2::new(930.0, 850.0))
+                .fixed_size(Vec2::new(930.0, window_h))
                 .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
                 .show(ctx, |ui| {
                     ui.set_min_width(890.0);
                     ui.spacing_mut().interact_size.y = 28.0;
-                    egui::ScrollArea::vertical().max_height(700.0).show(ui, |ui| {
+                    egui::ScrollArea::vertical().max_height(window_h - 150.0).show(ui, |ui| {
                         ui.label(
                             RichText::new("Paste a YouTube, Spotify or SoundCloud link. Fetch fills in whatever it can; every field remains editable.")
                                 .size(11.0)
