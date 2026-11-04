@@ -10,7 +10,8 @@ pub const INK: Color32 = Color32::from_rgb(244, 247, 251);
 /// Secondary text.
 pub const MUTED: Color32 = Color32::from_rgb(142, 150, 170);
 /// Tertiary text, disabled controls.
-pub const MUTED2: Color32 = Color32::from_rgb(94, 102, 121);
+/// About 4.8:1 against BG, so small labels still pass AA contrast.
+pub const MUTED2: Color32 = Color32::from_rgb(120, 128, 148);
 /// Accent: primary buttons, active toggles, PERFECT judgments.
 pub const MINT: Color32 = Color32::from_rgb(124, 247, 196);
 /// Text drawn on top of a MINT fill.

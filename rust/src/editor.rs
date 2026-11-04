@@ -169,6 +169,8 @@ pub struct Editor {
     redo: Vec<Snapshot>,
     dirty: bool,
     audio_ready: bool,
+    /// A decode is in flight; cleared when it lands or fails.
+    audio_loading: bool,
     backing_on: bool,
     vocals_on: bool,
     show_suggestions: bool,
@@ -286,6 +288,7 @@ impl Editor {
             redo: Vec::new(),
             dirty: false,
             audio_ready: false,
+            audio_loading: false,
             backing_on: true,
             vocals_on: true,
             show_suggestions: true,
@@ -305,6 +308,11 @@ impl Editor {
 
     pub fn set_audio_ready(&mut self, ready: bool) {
         self.audio_ready = ready;
+        self.audio_loading = false;
+    }
+
+    pub fn set_audio_loading(&mut self, loading: bool) {
+        self.audio_loading = loading;
     }
 
     /// Bring a freshly installed engine in line with the editor's transport.
@@ -1263,7 +1271,7 @@ impl Editor {
             Pos2::new(70.0, 13.0),
             Align2::LEFT_TOP,
             "KARAOKEMACHINE · MANUAL LEVEL EDITOR",
-            FontId::monospace(8.0),
+            FontId::monospace(10.0),
             MUTED2,
         );
         p.text(
@@ -1283,7 +1291,7 @@ impl Editor {
                 self.notes.len(),
                 self.map_name
             ),
-            FontId::monospace(7.0),
+            FontId::monospace(10.0),
             MUTED,
         );
         let badge =
@@ -1311,7 +1319,7 @@ impl Editor {
             badge.center(),
             Align2::CENTER_CENTER,
             if self.map_draft { "DRAFT" } else { "LEVEL" },
-            FontId::monospace(8.0),
+            FontId::monospace(10.0),
             if self.map_draft { GOLD } else { MINT },
         );
         let progress = self.word_progress();
@@ -1329,7 +1337,7 @@ impl Editor {
             progress_rect.center(),
             Align2::CENTER_CENTER,
             format!("{}% WORDS", (progress * 100.0).round() as i32),
-            FontId::monospace(7.0),
+            FontId::monospace(10.0),
             INK,
         );
         let submit_rect =
@@ -1407,7 +1415,7 @@ impl Editor {
             hint.left_center(),
             Align2::LEFT_CENTER,
             self.tool.hint(),
-            FontId::monospace(7.0),
+            FontId::monospace(10.0),
             MUTED2,
         );
         let snap = Rect::from_min_size(
@@ -1474,7 +1482,7 @@ impl Editor {
             Pos2::new(bar.right() - 102.0, bar.center().y),
             Align2::LEFT_CENTER,
             format!("{:.0}px/s", self.zoom),
-            FontId::monospace(7.0),
+            FontId::monospace(10.0),
             MUTED2,
         );
     }
@@ -1850,9 +1858,15 @@ impl Editor {
             painter.text(
                 Pos2::new(area.left() + 12.0, center),
                 Align2::LEFT_CENTER,
-                "No isolated vocal waveform loaded",
+                if self.audio_loading {
+                    "Loading audio…"
+                } else if self.audio_ready {
+                    "This song has no isolated vocal stem"
+                } else {
+                    "Audio unavailable"
+                },
                 FontId::proportional(10.0),
-                MUTED2,
+                if self.audio_loading { GOLD } else { MUTED2 },
             );
         } else {
             let half = level_area.height() * 0.45;
@@ -1886,11 +1900,13 @@ impl Editor {
                 Align2::LEFT_CENTER,
                 if self.pitch_job.is_some() {
                     "Analyzing raw vocal pitch…"
+                } else if self.audio_loading {
+                    "Loading audio…"
                 } else {
-                    "Raw pitch unavailable"
+                    "No raw pitch for this song"
                 },
-                FontId::proportional(9.0),
-                if self.pitch_job.is_some() {
+                FontId::proportional(10.0),
+                if self.pitch_job.is_some() || self.audio_loading {
                     GOLD
                 } else {
                     MUTED2
@@ -1999,7 +2015,7 @@ impl Editor {
                     pitch,
                     level * 100.0
                 ),
-                FontId::monospace(7.0),
+                FontId::monospace(10.0),
                 INK,
             );
         }
@@ -2092,7 +2108,7 @@ impl Editor {
                 Pos2::new(x + 5.0, ruler.center().y + 1.0),
                 Align2::LEFT_CENTER,
                 format_time(time),
-                FontId::monospace(7.0),
+                FontId::monospace(10.0),
                 MUTED2,
             );
         }
@@ -2244,7 +2260,7 @@ impl Editor {
             } else {
                 "CHART PREVIEW"
             },
-            FontId::monospace(7.0),
+            FontId::monospace(10.0),
             if self.audio_ready { MINT } else { GOLD },
         );
         let _ = rect;
@@ -2268,7 +2284,7 @@ impl Editor {
             Pos2::new(bank.left() + 16.0, bank.top() + 10.0),
             Align2::LEFT_TOP,
             "WORD BANK",
-            FontId::monospace(8.0),
+            FontId::monospace(10.0),
             MUTED2,
         );
         p.text(
@@ -2543,7 +2559,7 @@ impl Editor {
             Pos2::new(x, y),
             Align2::LEFT_TOP,
             "MAPPING",
-            FontId::monospace(7.0),
+            FontId::monospace(10.0),
             MUTED2,
         );
         y += 18.0;
@@ -2566,7 +2582,7 @@ impl Editor {
                 self.ribbon_count(),
                 self.song.lines.len()
             ),
-            FontId::monospace(8.0),
+            FontId::monospace(10.0),
             MUTED,
         );
         y += 24.0;
@@ -2602,7 +2618,7 @@ impl Editor {
                     Pos2::new(x, y),
                     Align2::LEFT_TOP,
                     "WORD DECORATION",
-                    FontId::monospace(7.0),
+                    FontId::monospace(10.0),
                     MUTED2,
                 );
                 y += 18.0;
@@ -2622,7 +2638,7 @@ impl Editor {
                         format_time(word.start),
                         word.y.clamp(0.0, 1.0) * 100.0
                     ),
-                    FontId::monospace(8.0),
+                    FontId::monospace(10.0),
                     MUTED,
                 );
                 y += 18.0;
@@ -2703,7 +2719,7 @@ impl Editor {
                 } else {
                     "SELECTED NOTES"
                 },
-                FontId::monospace(7.0),
+                FontId::monospace(10.0),
                 MUTED2,
             );
             y += 16.0;
@@ -2722,7 +2738,7 @@ impl Editor {
                         Pos2::new(x, y),
                         Align2::LEFT_TOP,
                         format!("at {}", format_time(note.start)),
-                        FontId::monospace(8.0),
+                        FontId::monospace(10.0),
                         MUTED,
                     );
                     y += 18.0;
@@ -2801,7 +2817,7 @@ impl Editor {
             Pos2::new(x, y),
             Align2::LEFT_TOP,
             "STATUS",
-            FontId::monospace(7.0),
+            FontId::monospace(10.0),
             MUTED2,
         );
         y += 16.0;
@@ -2818,7 +2834,7 @@ impl Editor {
             Pos2::new(x, y),
             Align2::LEFT_TOP,
             "SHORTCUTS",
-            FontId::monospace(7.0),
+            FontId::monospace(10.0),
             MUTED2,
         );
         y += 16.0;
@@ -2836,7 +2852,7 @@ impl Editor {
                 Pos2::new(x, y),
                 Align2::LEFT_TOP,
                 line,
-                FontId::monospace(7.5),
+                FontId::monospace(10.0),
                 MUTED2,
             );
             y += 15.0;
@@ -2860,7 +2876,7 @@ impl Editor {
         };
         let ok = self.validate().is_ok();
         if let Err(reason) = self.validate() {
-            let galley = p.layout(reason, FontId::proportional(9.0), PINK, r.width() - 28.0);
+            let galley = p.layout(reason, FontId::proportional(10.0), PINK, r.width() - 28.0);
             let h = galley.size().y;
             p.galley(Pos2::new(x, top_action - h - 4.0), galley, PINK);
         } else {
@@ -2868,7 +2884,7 @@ impl Editor {
                 Pos2::new(x, top_action - 16.0),
                 Align2::LEFT_BOTTOM,
                 "Ready to submit.",
-                FontId::proportional(9.0),
+                FontId::proportional(10.0),
                 MINT,
             );
         }

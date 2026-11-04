@@ -164,7 +164,7 @@ impl KaraokeMachineApp {
             .show(ctx, |ui| {
                 ui.set_min_width(480.0);
                 ui.add_space(4.0);
-                ui.label(RichText::new("MICROPHONE").monospace().size(9.0).color(MUTED2));
+                ui.label(RichText::new("MICROPHONE").monospace().size(10.0).color(MUTED2));
                 let current_device = self.settings.mic_device.clone();
                 let mut pick = current_device.clone();
                 ui.horizontal(|ui| {
@@ -201,7 +201,7 @@ impl KaraokeMachineApp {
                 });
                 changed |= ui.add(egui::Slider::new(&mut self.settings.input_gain, 0.5..=3.0).text("Input gain")).changed();
                 ui.add_space(10.0);
-                ui.label(RichText::new("PLAYBACK").monospace().size(9.0).color(MUTED2));
+                ui.label(RichText::new("PLAYBACK").monospace().size(10.0).color(MUTED2));
                 if ui.checkbox(&mut self.settings.backing_enabled, "Play backing track").changed() {
                     if self.settings.backing_enabled && self.settings.backing_volume <= 0.01 {
                         self.settings.backing_volume = 0.9;
@@ -219,7 +219,7 @@ impl KaraokeMachineApp {
                     changed = true;
                 }
                 ui.add_space(10.0);
-                ui.label(RichText::new("VOCAL RANGE").monospace().size(9.0).color(MUTED2));
+                ui.label(RichText::new("VOCAL RANGE").monospace().size(10.0).color(MUTED2));
                 let range_text = match (self.settings.vocal_low, self.settings.vocal_high) {
                     (Some(low), Some(high)) => format!("{} – {} · {} semitones", note_name(low), note_name(high), high - low),
                     _ => "Not measured".into(),
@@ -241,11 +241,11 @@ impl KaraokeMachineApp {
                 }
                 ui.label(
                     RichText::new("Octave shift moves the chart only; the backing stays in the original key (octaves are equivalent).")
-                        .size(9.0)
+                        .size(10.0)
                         .color(MUTED2),
                 );
                 ui.add_space(10.0);
-                ui.label(RichText::new("STAGE").monospace().size(9.0).color(MUTED2));
+                ui.label(RichText::new("STAGE").monospace().size(10.0).color(MUTED2));
                 changed |= ui.add(egui::Slider::new(&mut self.settings.lead_time, 4.0..=10.0).text("Notes arrive (s)")).changed();
                 changed |= ui.add(egui::Slider::new(&mut self.settings.sync_ms, -150.0..=150.0).text("Sync trim (ms)")).changed();
                 changed |= ui.add(egui::Slider::new(&mut self.settings.latency_ms, -150.0..=300.0).text("Mic latency (ms)")).changed();
@@ -253,15 +253,29 @@ impl KaraokeMachineApp {
                     changed = true;
                 }
                 ui.add_space(12.0);
-                if ui.button("Clear high scores").clicked() {
-                    self.scores.clear();
-                    save_scores(&self.scores);
+                if self.clear_scores_armed {
+                    ui.horizontal(|ui| {
+                        if ui
+                            .button(RichText::new("Yes, clear every high score").color(PINK))
+                            .clicked()
+                        {
+                            self.scores.clear();
+                            save_scores(&self.scores);
+                            self.clear_scores_armed = false;
+                        }
+                        if ui.button("Keep them").clicked() {
+                            self.clear_scores_armed = false;
+                        }
+                    });
+                } else if ui.button("Clear high scores…").clicked() {
+                    self.clear_scores_armed = true;
                 }
                 ui.add_space(6.0);
                 ui.label(RichText::new("Headphones recommended — speaker bleed can register as pitch.").size(10.0).color(MUTED2));
             });
         if open != self.settings_open {
             self.settings_open = open;
+            self.clear_scores_armed = false;
         }
         if self.settings.octave_shift != octave_before {
             self.apply_octave_shift();

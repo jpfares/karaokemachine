@@ -197,7 +197,7 @@ impl CoverPicker {
             ui.label(
                 RichText::new("COVER ART")
                     .monospace()
-                    .size(8.0)
+                    .size(10.0)
                     .color(MUTED2),
             );
             if self.fetching() {
@@ -277,7 +277,7 @@ impl CoverPicker {
                         ui.label(
                             RichText::new("PASTE AN IMAGE LINK")
                                 .monospace()
-                                .size(8.0)
+                                .size(10.0)
                                 .color(MUTED2),
                         );
                         ui.horizontal(|ui| {
@@ -301,7 +301,7 @@ impl CoverPicker {
                         ui.label(
                             RichText::new("UPLOAD A FILE")
                                 .monospace()
-                                .size(8.0)
+                                .size(10.0)
                                 .color(MUTED2),
                         );
                         if ui.button("SELECT AN IMAGE FILE").clicked() {
@@ -311,7 +311,7 @@ impl CoverPicker {
                         ui.label(
                             RichText::new("PASTE FROM CLIPBOARD")
                                 .monospace()
-                                .size(8.0)
+                                .size(10.0)
                                 .color(MUTED2),
                         );
                         if ui.button("PASTE IMAGE").clicked() {
@@ -415,7 +415,7 @@ fn paint_cover_preview(
             label.center(),
             Align2::CENTER_CENTER,
             "CHANGE COVER",
-            FontId::monospace(7.0),
+            FontId::monospace(10.0),
             MINT,
         );
     } else {
@@ -466,7 +466,7 @@ fn paint_cover_preview(
             center + Vec2::new(0.0, 68.0),
             Align2::CENTER_CENTER,
             "PNG, JPG, image link, or clipboard paste",
-            FontId::monospace(8.0),
+            FontId::monospace(10.0),
             MUTED2,
         );
     }

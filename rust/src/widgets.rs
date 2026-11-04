@@ -86,7 +86,7 @@ pub fn pill_toggle(ui: &mut Ui, rect: Rect, text: &str, active: bool) -> bool {
         rect.center(),
         Align2::CENTER_CENTER,
         text,
-        FontId::monospace(8.0),
+        FontId::monospace(10.0),
         if active { MINT } else { MUTED },
     );
     clicked
@@ -99,7 +99,11 @@ pub fn glyph_button(ui: &mut Ui, rect: Rect, glyph: &str) -> bool {
         .clicked();
     let p = ui.painter();
     p.rect_filled(rect, 8.0, Color32::from_rgba_unmultiplied(255, 255, 255, 8));
-    let size = if glyph.len() <= 1 { 15.0 } else { 8.0 };
+    let size = if glyph.chars().count() <= 1 {
+        15.0
+    } else {
+        10.0
+    };
     p.text(
         rect.center(),
         Align2::CENTER_CENTER,
@@ -196,7 +200,7 @@ pub fn button(ui: &mut Ui, rect: Rect, text: &str, primary: bool, enabled: bool)
         rect.center(),
         Align2::CENTER_CENTER,
         text,
-        FontId::monospace(if text.len() > 8 { 7.5 } else { 9.0 }),
+        FontId::monospace(if text.len() > 8 { 9.0 } else { 10.0 }),
         if !enabled {
             MUTED2
         } else if primary {
@@ -235,7 +239,7 @@ pub fn toggle(ui: &mut Ui, rect: Rect, text: &str, active: bool) -> bool {
         rect.center(),
         Align2::CENTER_CENTER,
         text,
-        FontId::monospace(if text.len() > 10 { 6.5 } else { 8.0 }),
+        FontId::monospace(if text.len() > 10 { 8.5 } else { 10.0 }),
         if active { MINT } else { MUTED },
     );
     response.clicked()

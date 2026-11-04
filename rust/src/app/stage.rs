@@ -1351,14 +1351,14 @@ impl KaraokeMachineApp {
             Stroke::new(1.0f32, LINE),
         );
         let back = Rect::from_min_size(Pos2::new(16.0, 15.0), Vec2::new(36.0, 34.0));
-        if glyph_button(ui, back, "BACK") {
+        if glyph_button(ui, back, "←") {
             actions.push(Action::OpenMenu);
         }
         p.text(
             Pos2::new(66.0, 17.0),
             Align2::LEFT_TOP,
             "NOW SINGING",
-            FontId::monospace(8.0),
+            FontId::monospace(10.0),
             MUTED2,
         );
         p.text(
@@ -1384,7 +1384,7 @@ impl KaraokeMachineApp {
         } else {
             0
         };
-        let stats_x = rect.width() - 420.0;
+        let stats_x = rect.width() - 400.0;
         for (i, (label, value, color)) in [
             ("SCORE", stage.score.to_string(), INK),
             ("COMBO", format!("{}×", stage.combo), GOLD),
@@ -1406,7 +1406,7 @@ impl KaraokeMachineApp {
                 Pos2::new(x, 12.0),
                 Align2::LEFT_TOP,
                 *label,
-                FontId::monospace(9.0),
+                FontId::monospace(10.0),
                 MUTED,
             );
             p.text(
@@ -1417,12 +1417,6 @@ impl KaraokeMachineApp {
                 *color,
             );
         }
-        let settings_btn =
-            Rect::from_min_size(Pos2::new(rect.width() - 50.0, 14.0), Vec2::new(34.0, 34.0));
-        if glyph_button(ui, settings_btn, "SET") {
-            actions.push(Action::OpenSettings);
-        }
-
         // lanes
         let clip = Rect::from_min_max(
             Pos2::new(layout.left_w, layout.lane_top),
@@ -1720,7 +1714,7 @@ impl KaraokeMachineApp {
                 ),
                 Align2::LEFT_CENTER,
                 "LISTENING",
-                FontId::monospace(8.0),
+                FontId::monospace(10.0),
                 alpha(INK, 45),
             );
         } else if let Some(error) = &self.mic_error {
@@ -1773,7 +1767,7 @@ impl KaraokeMachineApp {
                 Pos2::new(layout.hit_x + 16.0, layout.lane_top + 12.0 + size),
                 Align2::LEFT_TOP,
                 "COMBO",
-                FontId::monospace(9.0),
+                FontId::monospace(10.0),
                 alpha(GOLD, 170),
             );
         }
@@ -1782,12 +1776,13 @@ impl KaraokeMachineApp {
             if age < 0.7 {
                 let fade = (1.0 - age / 0.7) as f32;
                 let size = 34.0 + (1.0 - fade) * 10.0;
+                // Inside the lane area so the flash never crosses the header.
                 p.text(
                     Pos2::new(
                         layout.hit_x + 24.0,
-                        layout.lane_top - 6.0 - (1.0 - fade) * 18.0,
+                        layout.lane_top + 14.0 - (1.0 - fade) * 12.0,
                     ),
-                    Align2::LEFT_BOTTOM,
+                    Align2::LEFT_TOP,
                     &judgment.text,
                     FontId::proportional(size),
                     alpha(judgment.color, (fade * 255.0) as u8),
@@ -1823,14 +1818,14 @@ impl KaraokeMachineApp {
             Pos2::new(layout.hit_x + 12.0, tray_top - 19.0),
             Align2::LEFT_TOP,
             format_time(stage.time),
-            FontId::monospace(8.0),
+            FontId::monospace(10.0),
             MUTED2,
         );
         p.text(
             Pos2::new(rect.width() - 24.0, tray_top - 19.0),
             Align2::RIGHT_TOP,
             format_time(stage.duration),
-            FontId::monospace(8.0),
+            FontId::monospace(10.0),
             MUTED2,
         );
         if click(ui, timeline, "timeline_click") {
@@ -1867,11 +1862,11 @@ impl KaraokeMachineApp {
         if round_button(ui, play_rect, transport_label, true) {
             actions.push(Action::TogglePlay);
         }
-        let restart = Rect::from_center_size(
-            Pos2::new(play_rect.left() - 46.0, tray.center().y),
-            Vec2::new(38.0, 38.0),
+        let restart = Rect::from_min_size(
+            Pos2::new(play_rect.left() - 126.0, tray.center().y - 17.0),
+            Vec2::new(96.0, 34.0),
         );
-        if round_button(ui, restart, "R", false) {
+        if pill_toggle(ui, restart, "RESTART", false) {
             actions.push(Action::Restart);
         }
         let lyrics = Rect::from_min_size(
@@ -1946,7 +1941,7 @@ impl KaraokeMachineApp {
                 card.center_top() + Vec2::new(0.0, 28.0),
                 Align2::CENTER_CENTER,
                 "SESSION COMPLETE",
-                FontId::monospace(9.0),
+                FontId::monospace(10.0),
                 MUTED2,
             );
             if result.new_best {
@@ -1963,7 +1958,7 @@ impl KaraokeMachineApp {
                     badge.center(),
                     Align2::CENTER_CENTER,
                     "NEW BEST",
-                    FontId::monospace(7.0),
+                    FontId::monospace(10.0),
                     GOLD,
                 );
             }
@@ -2004,7 +1999,7 @@ impl KaraokeMachineApp {
                     Pos2::new(x, card.center().y + 56.0),
                     Align2::LEFT_TOP,
                     *label,
-                    FontId::monospace(9.0),
+                    FontId::monospace(10.0),
                     MUTED,
                 );
                 p.text(

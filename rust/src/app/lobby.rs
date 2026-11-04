@@ -98,7 +98,7 @@ impl KaraokeMachineApp {
                 Pos2::new(left_w - 9.0, y),
                 Align2::RIGHT_CENTER,
                 note_name(midi),
-                FontId::monospace(9.0),
+                FontId::monospace(10.0),
                 alpha(INK, 60),
             );
         }
@@ -135,7 +135,7 @@ impl KaraokeMachineApp {
             Pos2::new(28.0, 50.0),
             Align2::LEFT_CENTER,
             "MUSIC LIBRARY",
-            FontId::monospace(8.0),
+            FontId::monospace(10.0),
             MUTED2,
         );
         let brand = Rect::from_min_size(
@@ -191,7 +191,7 @@ impl KaraokeMachineApp {
             panel.left_top() + Vec2::new(20.0, 22.0),
             Align2::LEFT_TOP,
             "KARAOKEMACHINE · LIBRARY",
-            FontId::monospace(8.0),
+            FontId::monospace(10.0),
             MUTED2,
         );
         let drawer_title = if self.drawer_view == DrawerView::Imports {
@@ -308,18 +308,25 @@ impl KaraokeMachineApp {
         body: Rect,
         actions: &mut Vec<Action>,
     ) {
-        let intro_h = 48.0;
+        let intro_h = 62.0;
         p.text(
             body.left_top(),
             Align2::LEFT_TOP,
             "SELECT A RECORD",
-            FontId::monospace(8.0),
+            FontId::monospace(10.0),
             MUTED2,
         );
         p.text(
             body.left_top() + Vec2::new(0.0, 16.0),
             Align2::LEFT_TOP,
-            "Every track needs a manual mapping. Pick an album, then a song.",
+            "Pick an album, then a song.",
+            FontId::proportional(11.0),
+            MUTED,
+        );
+        p.text(
+            body.left_top() + Vec2::new(0.0, 31.0),
+            Align2::LEFT_TOP,
+            "Unmapped songs open the editor, where AUTO-MAP charts them.",
             FontId::proportional(11.0),
             MUTED,
         );
@@ -401,7 +408,7 @@ impl KaraokeMachineApp {
                 art_rect.left_bottom() + Vec2::new(2.0, 26.0),
                 Align2::LEFT_TOP,
                 format!("{} · {} tracks", album.artist, album.songs.len()),
-                FontId::monospace(8.0),
+                FontId::monospace(10.0),
                 MUTED2,
             );
             let hit = Rect::from_min_size(Pos2::new(x, y), Vec2::new(art, cell_h));
@@ -455,7 +462,7 @@ impl KaraokeMachineApp {
             } else {
                 "ALBUM"
             },
-            FontId::monospace(8.0),
+            FontId::monospace(10.0),
             MUTED2,
         );
         p.text(
@@ -477,7 +484,7 @@ impl KaraokeMachineApp {
             art.right_top() + Vec2::new(16.0, 54.0),
             Align2::LEFT_TOP,
             meta,
-            FontId::monospace(9.0),
+            FontId::monospace(10.0),
             MUTED,
         );
         let unmapped = album
@@ -510,7 +517,7 @@ impl KaraokeMachineApp {
                 row.left_center() + Vec2::new(2.0, -8.0),
                 Align2::LEFT_CENTER,
                 format!("{:02}", i + 1),
-                FontId::monospace(8.0),
+                FontId::monospace(10.0),
                 MUTED2,
             );
             p.text(
@@ -522,9 +529,9 @@ impl KaraokeMachineApp {
             );
             let map_count = song.maps.len();
             let sub = if map_count == 0 {
-                "NO MAP · choose a map file to edit".to_string()
+                "NO MAP · EDIT to map it".to_string()
             } else if map_count > 1 {
-                format!("{map_count} MAPS · choose one to play")
+                format!("{map_count} MAPS · PLAY to choose")
             } else if song.maps[0].draft {
                 "DRAFT · playable preview".to_string()
             } else if automap::is_auto_mapped(song) {
@@ -540,28 +547,25 @@ impl KaraokeMachineApp {
                 row.left_center() + Vec2::new(30.0, 9.0),
                 Align2::LEFT_CENTER,
                 sub,
-                FontId::monospace(7.0),
+                FontId::monospace(10.0),
                 if map_count == 0 { PINK } else { MUTED2 },
             );
-            let meta = format!(
-                "{} · {}",
-                song.bpm
-                    .map(|b| format!("{b:.0} BPM · "))
-                    .unwrap_or_default(),
-                format_time(song.duration())
-            );
+            let meta = match song.bpm {
+                Some(bpm) => format!("{bpm:.0} BPM · {}", format_time(song.duration())),
+                None => format_time(song.duration()),
+            };
             p.text(
                 Pos2::new(row.right() - 104.0, row.center().y),
                 Align2::RIGHT_CENTER,
                 meta,
-                FontId::monospace(7.0),
+                FontId::monospace(10.0),
                 MUTED2,
             );
             p.text(
                 Pos2::new(row.right() - 66.0, row.center().y),
                 Align2::RIGHT_CENTER,
                 if map_count > 0 { "PLAY" } else { "MAP" },
-                FontId::monospace(7.0),
+                FontId::monospace(10.0),
                 if map_count > 0 { MINT } else { PINK },
             );
             let edit = Rect::from_min_size(
@@ -589,7 +593,7 @@ impl KaraokeMachineApp {
             body.left_top(),
             Align2::LEFT_TOP,
             "IMPORT QUEUE",
-            FontId::monospace(8.0),
+            FontId::monospace(10.0),
             MUTED2,
         );
         p.text(
@@ -603,7 +607,7 @@ impl KaraokeMachineApp {
             body.left_top() + Vec2::new(0.0, 52.0),
             Align2::LEFT_TOP,
             &self.songlist_path,
-            FontId::monospace(8.0),
+            FontId::monospace(10.0),
             MUTED2,
         );
         let ready = self
@@ -619,7 +623,7 @@ impl KaraokeMachineApp {
             body.left_top() + Vec2::new(0.0, 76.0),
             Align2::LEFT_TOP,
             format!("{ready}/{} ready", self.songlist.len()),
-            FontId::monospace(8.0),
+            FontId::monospace(10.0),
             MUTED,
         );
         let reload = Rect::from_min_size(
@@ -658,7 +662,7 @@ impl KaraokeMachineApp {
                 Pos2::new(row.left() + 2.0, row.center().y),
                 Align2::LEFT_CENTER,
                 format!("{:02}", i + 1),
-                FontId::monospace(7.0),
+                FontId::monospace(10.0),
                 MUTED2,
             );
             let title = song
@@ -675,7 +679,7 @@ impl KaraokeMachineApp {
                 Pos2::new(row.left() + 28.0, row.center().y + 8.0),
                 Align2::LEFT_CENTER,
                 url.split("v=").nth(1).unwrap_or(url),
-                FontId::monospace(7.0),
+                FontId::monospace(10.0),
                 MUTED2,
             );
             let status = if let Some(song) = song {
@@ -691,7 +695,7 @@ impl KaraokeMachineApp {
                 Pos2::new(row.right() - 10.0, row.center().y),
                 Align2::RIGHT_CENTER,
                 status,
-                FontId::monospace(7.0),
+                FontId::monospace(10.0),
                 match song {
                     Some(song) if !song.maps.is_empty() => MINT,
                     Some(_) => PINK,
@@ -712,7 +716,7 @@ impl KaraokeMachineApp {
             body.left_bottom() + Vec2::new(0.0, -24.0),
             Align2::LEFT_BOTTOM,
             "Audio stays local. Vocals are optional.",
-            FontId::monospace(8.0),
+            FontId::monospace(10.0),
             MUTED2,
         );
     }
