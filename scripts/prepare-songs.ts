@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { importUrl } from '../src/main/pipeline';
 import type { ImportProgress } from '../src/shared/types';
@@ -10,7 +11,7 @@ function arg(name: string): string | undefined {
 
 async function main() {
   const root = process.cwd();
-  const file = arg('--file') ?? path.join(process.env.HOME ?? '/home/deanp', 'Downloads/karaoke-songs.txt');
+  const file = arg('--file') ?? path.join(os.homedir(), 'Downloads', 'karaoke-songs.txt');
   const limit = Number(arg('--limit') ?? 0);
   const force = process.argv.includes('--force');
   const only = arg('--url');

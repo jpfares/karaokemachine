@@ -5,6 +5,7 @@ import path from 'node:path';
 import type { ImportProgress, LyricLine, MelodyNote, Song } from '../shared/types';
 import { alignLyrics, fetchLyrics, layoutPlainLyrics } from './lyrics';
 import { enrichCover } from './metadata';
+import { exists, resolvePython, resolveTool, ytDlpCommand } from './tools';
 
 export interface SongOverrides {
   audioUrl?: string;
@@ -27,14 +28,6 @@ export interface PipelineOptions {
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-const exists = async (file: string) => {
-  try {
-    await fs.access(file);
-    return true;
-  } catch {
-    return false;
-  }
-};
 
 function run(
   command: string,
@@ -237,10 +230,8 @@ export async function importUrl(url: string, options: PipelineOptions = {}): Pro
   await fs.mkdir(work, { recursive: true });
   await fs.mkdir(finalDir, { recursive: true });
 
-  const demucs = path.join(root, '.venv/bin/demucs');
-  const venvPython = path.join(root, '.venv/bin/python');
-  const venvYtdlp = path.join(root, '.venv/bin/yt-dlp');
-  const deno = path.join(process.env.HOME ?? '/home/deanp', '.deno/bin/deno');
+  const demucs = await resolveTool(root, 'demucs');
+  const python = await resolvePython(root);
   const analyzeScript = path.join(root, 'tools/analyze_vocals.py');
   const sourceWav = path.join(work, 'source.wav');
   const infoFile = path.join(work, 'source.info.json');
@@ -250,12 +241,11 @@ export async function importUrl(url: string, options: PipelineOptions = {}): Pro
   // 1. Download -------------------------------------------------------------
   if (!(await exists(sourceWav))) {
     emit({ stage: 'download', percent: 3, message: 'Fetching audio…' });
-    const ytdlp = (await exists(venvYtdlp)) ? venvYtdlp : 'yt-dlp';
-    const jsArgs = (await exists(deno)) ? ['--js-runtimes', `deno:${deno}`] : [];
+    const [ytdlp, ...ytdlpArgs] = await ytDlpCommand(root);
     await run(
       ytdlp,
       [
-        ...jsArgs,
+        ...ytdlpArgs,
         '--no-update',
         '-f', 'bestaudio/best',
         '-x', '--audio-format', 'wav', '--audio-quality', '0',
@@ -370,8 +360,8 @@ export async function importUrl(url: string, options: PipelineOptions = {}): Pro
   // 4. Extract the melody ---------------------------------------------------
   emit({ stage: 'analyze', percent: 74, message: 'Tracing the vocal melody…' });
   const notesJson = path.join(work, 'notes.json');
-  const python = (await exists(venvPython)) ? venvPython : 'python3';
-  await run(python, [analyzeScript, analysisWav, notesJson], {
+  const [pythonCommand, ...pythonArgs] = python;
+  await run(pythonCommand, [...pythonArgs, analyzeScript, analysisWav, notesJson], {
     onLine: (line) => {
       if (line.includes('analyzed')) {
         emit({ stage: 'analyze', percent: 82, message: line.replace(/^analyzed\s*/, 'Melody: ') });
@@ -480,7 +470,7 @@ export async function importUrl(url: string, options: PipelineOptions = {}): Pro
   const cleanScript = path.join(root, 'tools/clean_charts.py');
   if (await exists(cleanScript)) {
     try {
-      await run(venvPython, [cleanScript, finalDir], {});
+      await run(pythonCommand, [...pythonArgs, cleanScript, finalDir], {});
     } catch (error) {
       console.warn('[karaokemachine] chart cleanup failed', error);
     }

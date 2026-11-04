@@ -164,7 +164,8 @@ cargo build --release --manifest-path rust/Cargo.toml
 ./launch.sh
 ```
 
-For development:
+`launch.sh` is a Linux launcher. On Windows and macOS run the binary directly, or use
+the development command below, which works everywhere:
 
 ```bash
 cargo run --release --manifest-path rust/Cargo.toml
@@ -184,8 +185,16 @@ python3 -m venv .venv
 # ffmpeg must also be available on PATH
 ```
 
-The app looks for `.venv/bin/yt-dlp` and `.venv/bin/demucs` first, then falls back to
-commands on `PATH`.
+On Windows:
+
+```bat
+py -3 -m venv .venv
+.venv\Scripts\pip install -U demucs yt-dlp
+```
+
+The import tools look for `yt-dlp`, `demucs` and `python` in the repo's `.venv` first
+(`.venv/bin` on Linux and macOS, `.venv\Scripts` on Windows), then fall back to the
+commands on `PATH` (`python3` on Linux and macOS, `python` on Windows).
 
 ## Import pipeline
 

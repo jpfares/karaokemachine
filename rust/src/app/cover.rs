@@ -4,11 +4,11 @@
 
 use crate::jobs::Job;
 use crate::theme::{alpha, GOLD, MINT, MUTED, MUTED2, PINK};
+use crate::tools::node_command;
 use super::lobby::load_texture;
 use super::upload::paint_placeholder;
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, RichText, Sense, Stroke, StrokeKind, TextureHandle, Vec2};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 #[derive(Default)]
 pub(super) struct CoverPicker {
@@ -309,13 +309,11 @@ fn run_cover_download(root: &Path, url: &str, out: &Path) -> Result<PathBuf, Str
     if !script.exists() {
         return Err("Cover preview tools are not built. Run `npm install && npm run assets`.".into());
     }
-    let output = Command::new("node")
-        .arg(&script)
+    let output = node_command(root, &script)
         .arg("--url")
         .arg(url)
         .arg("--out")
         .arg(out)
-        .current_dir(root)
         .output()
         .map_err(|error| format!("Could not start the cover downloader: {error}"))?;
     if !output.status.success() {

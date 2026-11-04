@@ -9,6 +9,7 @@ mod map_package;
 mod model;
 mod pitch;
 mod theme;
+mod tools;
 mod widgets;
 
 use app::KaraokeMachineApp;

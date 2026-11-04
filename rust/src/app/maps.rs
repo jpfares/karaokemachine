@@ -5,41 +5,19 @@ use crate::library::{backup_song_file, song_audio_path, write_json_atomic};
 use crate::map_package::{MapIndex, MapIndexEntry, MapPackage};
 use crate::model::{format_time, Song};
 use crate::theme::{INK, MUTED};
+use crate::tools::http_get_text;
 use crate::widgets::{click, pill_button, pill_toggle};
 use super::{Action, KaraokeMachineApp};
 use super::lobby::paint_cover_fallback;
 use base64::Engine;
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Stroke, TextureHandle, TextureOptions, Vec2};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 pub(super) const MAPS_BASE_URL: &str = "https://rgbeans.github.io/karaokemachine/maps/";
-
-pub(super) fn http_get_text(url: &str) -> Result<String, String> {
-    let script = "fetch(process.argv[1],{headers:{'user-agent':'KaraokeMachine/2.0'}}).then(async r=>{if(!r.ok)throw new Error('HTTP '+r.status);process.stdout.write(await r.text())}).catch(e=>{console.error(e.message);process.exit(1)})";
-    let node_error = match Command::new("node")
-        .arg("-e")
-        .arg(script)
-        .arg(url)
-        .output()
-    {
-        Ok(output) if output.status.success() => {
-            return Ok(String::from_utf8_lossy(&output.stdout).to_string());
-        }
-        Ok(output) => String::from_utf8_lossy(&output.stderr).trim().to_string(),
-        Err(error) => error.to_string(),
-    };
-
-    let output = Command::new("curl")
-        .args(["-fsSL", url])
-        .output()
-        .map_err(|error| format!("Could not download {url}: {error}"))?;
-    if !output.status.success() {
-        let message = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(if message.is_empty() { node_error } else { message });
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
-}
+/// The shared index lists every map with its cover inline.
+const MAP_INDEX_LIMIT: u64 = 8 * 1024 * 1024;
+/// One map package, cover included.
+const MAP_FILE_LIMIT: u64 = 16 * 1024 * 1024;
 
 pub(super) fn encode_path_segment(value: &str) -> String {
     let mut output = String::new();
@@ -206,7 +184,7 @@ impl KaraokeMachineApp {
         self.map_index_job = Some(Job::run("The map browser", &self.ctx, || {
             let base = std::env::var("KARAOKEMACHINE_MAPS_BASE_URL")
                 .unwrap_or_else(|_| MAPS_BASE_URL.to_string());
-            http_get_text(&format!("{base}index.json"))
+            http_get_text(&format!("{base}index.json"), MAP_INDEX_LIMIT)
                 .and_then(|raw| serde_json::from_str::<MapIndex>(&raw).map_err(|error| format!("Could not parse map index: {error}")))
         }));
     }
@@ -219,7 +197,7 @@ impl KaraokeMachineApp {
             .unwrap_or_else(|_| MAPS_BASE_URL.to_string());
         let url = format!("{base}{}", encode_path_segment(&entry.file));
         let job = Job::run("The map download", &self.ctx, move || {
-            http_get_text(&url).and_then(|raw| MapPackage::from_json(&raw))
+            http_get_text(&url, MAP_FILE_LIMIT).and_then(|raw| MapPackage::from_json(&raw))
         });
         self.map_download = Some((entry.id.clone(), job));
     }

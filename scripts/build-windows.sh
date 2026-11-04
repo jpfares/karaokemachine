@@ -55,6 +55,12 @@ if [[ ! -f "$PACKAGING_README" ]]; then
   exit 1
 fi
 
+if [[ ! -f "$ROOT/dist-tools/import-song.js" ]]; then
+  echo "error: dist-tools/ is not built, so the package could not import songs or maps." >&2
+  echo "Run: npm install && npm run assets" >&2
+  exit 1
+fi
+
 echo "Building $TARGET..."
 "$CARGO" build --release --manifest-path rust/Cargo.toml --target "$TARGET"
 
@@ -69,6 +75,13 @@ mkdir -p "$DIST_DIR"
 
 install -m 755 "$BUILT" "$DIST_EXE"
 cp "$PACKAGING_README" "$DIST_DIR/README-WINDOWS.txt"
+
+# The import tools are self-contained esbuild bundles plus two Python
+# scripts; the app looks for them next to the exe, so no npm project is
+# needed on the user's machine.
+mkdir -p "$DIST_DIR/dist-tools" "$DIST_DIR/tools"
+cp "$ROOT"/dist-tools/*.js "$DIST_DIR/dist-tools/"
+cp "$ROOT"/tools/*.py "$DIST_DIR/tools/"
 
 # Ship the app and the generated warm-ups only. Commercial audio and the local
 # library must never be included in a distributed package. Users obtain songs

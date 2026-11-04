@@ -5,6 +5,7 @@ use crate::library::backup_song_file;
 use crate::map_package::MapPackage;
 use crate::model::{format_time, Song};
 use crate::theme::{alpha, GOLD, MINT, MUTED, MUTED2, PINK};
+use crate::tools::node_command;
 use super::KaraokeMachineApp;
 use super::cover::CoverPicker;
 use super::maps::{has_hand_mapping, write_song_file};
@@ -12,7 +13,7 @@ use eframe::egui::{self, Align2, Color32, FontId, Rect, RichText, Vec2};
 use serde::Deserialize;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 #[derive(Clone, Debug, Default, Deserialize)]
 pub(super) struct TrackInfo {
@@ -110,11 +111,9 @@ pub(super) fn paint_placeholder(ui: &egui::Ui, rect: Rect, text: &str, multiline
 
 pub(super) fn run_song_info(root: &Path, url: &str) -> Result<TrackInfo, String> {
     let script = root.join("dist-tools/song-info.js");
-    let output = Command::new("node")
-        .arg(&script)
+    let output = node_command(root, &script)
         .arg("--url")
         .arg(url)
-        .current_dir(root)
         .output()
         .map_err(|error| format!("Could not run Node: {error}"))?;
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -368,13 +367,11 @@ impl KaraokeMachineApp {
         self.upload.message = "Downloading and separating the audio. This can take several minutes.".into();
         let _ = now;
         self.upload.import = Some(StreamJob::run("The importer", &self.ctx, move |sender| {
-            let child = Command::new("node")
-                .arg(&script)
+            let child = node_command(&root, &script)
                 .arg("--url")
                 .arg(&url)
                 .arg("--meta")
                 .arg(&meta_path)
-                .current_dir(&root)
                 .stdout(Stdio::piped())
                 .stderr(Stdio::from(log))
                 .spawn();
