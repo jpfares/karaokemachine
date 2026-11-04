@@ -3,7 +3,7 @@
 use super::{ctx_pointer, pitch_col, Action, KaraokeMachineApp};
 use crate::audio::Microphone;
 use crate::library::{save_score, save_settings, song_audio_path};
-use crate::model::{format_time, note_name, Note, ScoreRecord, Scores, Settings, Song};
+use crate::model::{format_time, note_name, Note, RibbonSide, ScoreRecord, Scores, Settings, Song};
 use crate::pitch::{detect_pitch, PitchReading};
 use crate::theme::{alpha, BG, GOLD, INK, LINE, MINT, MUTED, MUTED2, OCTAVE_BLUE, PINK};
 use crate::widgets::{click, glyph_button, pill_button, pill_toggle, round_button};
@@ -504,6 +504,7 @@ pub(super) fn draw_melody(
     }
     let t = chart_time;
     let h = layout.note_height();
+    let use_links = !stage.song.ribbon_links.is_empty();
     let mut mesh = Mesh::default();
     let mut previous: Option<(f32, f32)> = None;
 
@@ -518,20 +519,21 @@ pub(super) fn draw_melody(
             break;
         }
         let y = layout.lane_y(note.midi);
-        let group_prev = i > 0 && {
+        let group_prev = !use_links && i > 0 && {
             let prev = &notes[i - 1];
             let gap = note.start - (prev.start + prev.dur);
             let limit = if note.ribbon.is_some() { 3.0 } else { 0.85 };
             gap <= limit && prev.shares_ribbon(note)
         };
-        let group_next = notes
-            .get(i + 1)
-            .map(|next| {
-                let gap = next.start - (note.start + note.dur);
-                let limit = if note.ribbon.is_some() { 3.0 } else { 0.85 };
-                gap <= limit && note.shares_ribbon(next)
-            })
-            .unwrap_or(false);
+        let group_next = !use_links
+            && notes
+                .get(i + 1)
+                .map(|next| {
+                    let gap = next.start - (note.start + note.dur);
+                    let limit = if note.ribbon.is_some() { 3.0 } else { 0.85 };
+                    gap <= limit && note.shares_ribbon(next)
+                })
+                .unwrap_or(false);
         // Each note keeps its own rounded body. A thin neck connects it to the
         // next note of the same word/phrase, so the word remains one ribbon but
         // every note is visible.
@@ -574,6 +576,47 @@ pub(super) fn draw_melody(
             0.95,
         );
         previous = Some((ex, y));
+    }
+    if use_links {
+        let mut links_mesh = Mesh::default();
+        for link in &stage.song.ribbon_links {
+            let (Some(from), Some(to)) = (notes.get(link.from), notes.get(link.to)) else {
+                continue;
+            };
+            let from_time = match link.from_side {
+                RibbonSide::Left => from.start,
+                RibbonSide::Right => from.start + from.dur,
+            };
+            let to_time = match link.to_side {
+                RibbonSide::Left => to.start,
+                RibbonSide::Right => to.start + to.dur,
+            };
+            let ax = layout.hit_x + (from_time - t) as f32 * layout.pps;
+            let bx = layout.hit_x + (to_time - t) as f32 * layout.pps;
+            let ay = layout.lane_y(from.midi);
+            let by = layout.lane_y(to.midi);
+            if ax.max(bx) < layout.hit_x - 4.0 || ax.min(bx) > width + 60.0 {
+                continue;
+            }
+            let steps = 8usize;
+            let mut bridge = Vec::with_capacity(steps + 1);
+            for step in 0..=steps {
+                let f = step as f32 / steps as f32;
+                let smooth = f * f * (3.0 - 2.0 * f);
+                bridge.push(Pos2::new(ax + (bx - ax) * f, ay + (by - ay) * smooth));
+            }
+            add_ribbon_mesh(
+                &mut links_mesh,
+                &bridge,
+                (h * 0.38).max(3.0),
+                layout.low,
+                layout.high,
+                layout.lane_top,
+                layout.lane_bottom,
+                0.95,
+            );
+        }
+        p.add(Shape::mesh(links_mesh));
     }
     p.add(Shape::mesh(mesh));
     if active >= 0 {

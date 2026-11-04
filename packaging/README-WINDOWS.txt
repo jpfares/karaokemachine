@@ -51,7 +51,8 @@ EDITOR QUICK REFERENCE
                            contour, auto-scaled across the full vocal track, and a hover
                            readout with exact time, raw pitch, and level.
   Note tool                Click or drag on a lane. Pitch is fixed; drag sets length.
-  Ribbon tool              Drag across notes and release over the last note to connect them.
+  Ribbon tool              Drag from a dot on one note to a dot on another to connect them.
+                           Click a connector, then Delete, to remove only that connector.
   Eraser                   Click or sweep over notes or word decorations to delete them.
   Select tool              Select notes or words. Drag note bodies to move, note ends to resize.
   Click a note             Audition that note's pitch (Note/Select/Ribbon/Pan tools).

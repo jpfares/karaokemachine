@@ -17,8 +17,17 @@ export interface MelodyNote {
   vel?: number;
   /** cents offset from equal temperament, for synthesized charts */
   cents?: number;
-  /** manual ribbon group; notes with the same value are one visual ribbon */
+  /** legacy ribbon group; new mappings use Song.ribbonLinks */
   ribbon?: number;
+}
+
+export type RibbonSide = 'left' | 'right';
+
+export interface RibbonLink {
+  from: number;
+  to: number;
+  fromSide?: RibbonSide;
+  toSide?: RibbonSide;
 }
 
 export interface PlacedWord {
@@ -85,6 +94,8 @@ export interface Song {
   suggestedNotes?: MelodyNote[];
   /** an in-progress manual mapping */
   draftNotes?: MelodyNote[];
+  /** explicit note-to-note ribbon connectors */
+  ribbonLinks?: RibbonLink[];
   releaseDate?: string;
   artistBio?: string;
   albumBio?: string;

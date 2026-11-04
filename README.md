@@ -68,7 +68,7 @@ exception: they ship pre-mapped, playable, and listed in **Library → Maps**.
 
 1. Click an UNMAPPED imported song in the library.
 2. Draw or correct the vocal notes over the suggestion.
-3. Connect notes into ribbons where a word or vocal run should glide.
+3. With the Ribbon tool, drag from a dot on one note to a dot on another to connect them.
 4. Drag lyric words anywhere onto the level as decorations.
 5. Place every word, then press **SUBMIT MAPPING**.
 6. The song becomes playable in the normal singing stage.
@@ -98,7 +98,8 @@ or contract it. Hold right-click and drag to move the yellow now-playing line co
 | Move the now-playing line | **Hold right-click and drag** in the lane, waveform, or ruler |
 | Draw a note | Note icon: click or drag either direction on a pitch lane; drag sets length |
 | Resize with the Note tool | Note icon: drag just inside either end of a note |
-| Make a ribbon | Ribbon icon: drag across notes, release over the last note |
+| Connect two notes | Ribbon icon: drag from a dot on one note to a dot on another |
+| Select a connector | Ribbon or Select icon: click the line between two notes; Delete removes it |
 | Erase | Eraser icon: click or sweep over notes or words |
 | Select / move / resize | Select icon: drag a note body to move, drag either end to resize |
 | Audition a note | Click a mapped note with the Note, Select, Ribbon, or Pan tool, or click a pitch on the piano rail |

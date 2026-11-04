@@ -1,7 +1,8 @@
 use crate::audio::AudioEngine;
 use crate::jobs::Job;
 use crate::model::{
-    format_time, note_name, pitch_color, CustomWord, LyricLine, Note, PlacedWord, Song,
+    format_time, note_name, pitch_color, CustomWord, LyricLine, Note, PlacedWord, RibbonLink,
+    RibbonSide, Song,
 };
 use crate::theme::{alpha, BG, GOLD, INK, MINT, MUTED, MUTED2, PANEL, PANEL2, PINK};
 use crate::widgets::{button, toggle};
@@ -36,9 +37,13 @@ impl EditorTool {
             EditorTool::Note => {
                 "Click or drag on the lane to draw one pitch in either direction. Drag a note edge from inside to resize."
             }
-            EditorTool::Ribbon => "Drag across notes to connect them into one visual ribbon.",
+            EditorTool::Ribbon => {
+                "Drag from a dot on one note to a dot on another to connect them. Click a connector to select it."
+            }
             EditorTool::Eraser => "Click or sweep over notes and word decorations to erase them.",
-            EditorTool::Select => "Select notes, ribbons, or word decorations. Drag note ends to resize.",
+            EditorTool::Select => {
+                "Select notes, connectors, or word decorations. Drag note ends to resize."
+            }
         }
     }
 }
@@ -84,6 +89,7 @@ struct Snapshot {
     notes: Vec<Note>,
     words: Vec<PlacedWord>,
     custom_words: Vec<CustomWord>,
+    ribbon_links: Vec<RibbonLink>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -110,8 +116,9 @@ enum Drag {
         grab_time: f64,
         grab_y: f32,
     },
-    Ribbon {
-        anchor_start: f64,
+    RibbonConnect {
+        from_note: usize,
+        from_side: RibbonSide,
     },
     Erase,
 }
@@ -146,6 +153,8 @@ pub struct Editor {
     high: i32,
     selected: BTreeSet<usize>,
     selected_word: Option<usize>,
+    selected_ribbon: Option<usize>,
+    ribbon_links: Vec<RibbonLink>,
     drag: Option<Drag>,
     word_drag: Option<usize>,
     pending_word: Option<usize>,
@@ -160,7 +169,6 @@ pub struct Editor {
     snap: bool,
     duration: f64,
     right_scrubbing: bool,
-    next_ribbon_id: u32,
     next_custom_id: u32,
     custom_word_open: bool,
     custom_word_input: String,
@@ -191,6 +199,17 @@ impl Editor {
             migrate_legacy_notes(&song, &mut initial_notes, &mut words, &mut next_ribbon_id);
         } else {
             migrate_legacy_ribbons(&mut initial_notes, &mut next_ribbon_id);
+        }
+        let mut ribbon_links = if song.ribbon_links.is_empty() {
+            links_from_legacy_notes(&initial_notes)
+        } else {
+            song.ribbon_links.clone()
+        };
+        ribbon_links.retain(|link| {
+            link.from < initial_notes.len() && link.to < initial_notes.len() && link.from != link.to
+        });
+        for note in &mut initial_notes {
+            note.ribbon = None;
         }
         let next_custom_id = custom_words.iter().map(|word| word.id).max().unwrap_or(0) + 1;
         let word_bank = build_word_bank(&song.lines, &custom_words, &words);
@@ -251,6 +270,8 @@ impl Editor {
             high,
             selected: BTreeSet::new(),
             selected_word: None,
+            selected_ribbon: None,
+            ribbon_links,
             drag: None,
             word_drag: None,
             pending_word: None,
@@ -265,7 +286,6 @@ impl Editor {
             snap: true,
             duration,
             right_scrubbing: false,
-            next_ribbon_id,
             next_custom_id,
             custom_word_open: false,
             custom_word_input: String::new(),
@@ -337,9 +357,10 @@ impl Editor {
         if self.song.mapped {
             return Err("This song is already mapped. Use Submit Mapping to save edits.".into());
         }
-        self.notes.sort_by(note_order);
+        self.sort_notes();
         self.sync_words_to_song();
         self.song.notes.clear();
+        self.song.ribbon_links = self.ribbon_links.clone();
         self.song.draft_notes = self.notes.clone();
         self.song.suggested_notes = self.suggestions.clone();
         self.song.mapped = false;
@@ -350,7 +371,7 @@ impl Editor {
 
     pub fn submit(&mut self, root: &Path) -> Result<(), String> {
         self.validate()?;
-        self.notes.sort_by(note_order);
+        self.sort_notes();
         let midis: Vec<i32> = self.notes.iter().map(|n| n.midi).collect();
         if let (Some(lo), Some(hi)) = (midis.iter().min(), midis.iter().max()) {
             self.song.low = (*lo - 2).clamp(0, 108);
@@ -363,6 +384,7 @@ impl Editor {
         }
         self.sync_words_to_song();
         self.song.notes = self.notes.clone();
+        self.song.ribbon_links = self.ribbon_links.clone();
         self.song.draft_notes.clear();
         self.song.suggested_notes = self.suggestions.clone();
         self.song.mapped = true;
@@ -741,6 +763,7 @@ impl Editor {
         self.selected.clear();
         self.selected.insert(index);
         self.selected_word = None;
+        self.selected_ribbon = None;
         let (note_start, note_dur) = {
             let note = &self.notes[index];
             (note.start, note.dur)
@@ -845,6 +868,7 @@ impl Editor {
                             });
                             self.selected.clear();
                             self.selected_word = None;
+                            self.selected_ribbon = None;
                             self.selected.insert(index);
                             self.drag = Some(Drag::NewNote {
                                 index,
@@ -860,6 +884,7 @@ impl Editor {
                         self.selected.clear();
                         self.selected.insert(index);
                         self.selected_word = None;
+                        self.selected_ribbon = None;
                         self.preview_note(index, audio);
                     } else {
                         self.push_history();
@@ -877,6 +902,7 @@ impl Editor {
                         });
                         self.selected.clear();
                         self.selected_word = None;
+                        self.selected_ribbon = None;
                         self.selected.insert(self.notes.len() - 1);
                         self.dirty = true;
                         self.status =
@@ -889,6 +915,7 @@ impl Editor {
                     if let Some(word_index) = self.hit_word(pos, layout) {
                         self.selected.clear();
                         self.selected_word = Some(word_index);
+                        self.selected_ribbon = None;
                         let word = &self.words[word_index];
                         let grab_time = self.x_to_time(pos.x, layout) - word.start;
                         let grab_y = (pos.y - layout.note_area.top())
@@ -906,6 +933,7 @@ impl Editor {
                         self.selected.clear();
                         self.selected.insert(index);
                         self.selected_word = None;
+                        self.selected_ribbon = None;
                         let (note_start, note_midi) = {
                             let note = &self.notes[index];
                             (note.start, note.midi)
@@ -919,13 +947,16 @@ impl Editor {
                     } else {
                         self.selected.clear();
                         self.selected_word = None;
+                        self.selected_ribbon = None;
                     }
                 } else if response.clicked_by(PointerButton::Primary) {
                     if let Some(word_index) = self.hit_word(pos, layout) {
                         self.selected.clear();
                         self.selected_word = Some(word_index);
+                        self.selected_ribbon = None;
                     } else if let Some(index) = self.hit_note(pos, layout) {
                         self.selected_word = None;
+                        self.selected_ribbon = None;
                         if ui.input(|i| i.modifiers.shift) {
                             if !self.selected.insert(index) {
                                 self.selected.remove(&index);
@@ -935,38 +966,47 @@ impl Editor {
                             self.selected.insert(index);
                         }
                         self.preview_note(index, audio);
+                    } else if let Some(index) = self.hit_ribbon(pos, layout) {
+                        self.selected.clear();
+                        self.selected_word = None;
+                        self.selected_ribbon = Some(index);
+                        self.status = "Connector selected. Press Delete to remove it.".into();
                     } else {
                         self.selected.clear();
                         self.selected_word = None;
+                        self.selected_ribbon = None;
                     }
                 }
             }
             EditorTool::Ribbon => {
                 if response.drag_started_by(PointerButton::Primary) {
-                    if let Some(index) = self.hit_note(pos, layout) {
+                    let press_pos = ui.input(|i| i.pointer.press_origin()).unwrap_or(pos);
+                    if let Some((note, side)) = self.ribbon_dot_at(press_pos, layout) {
                         self.selected.clear();
-                        self.selected.insert(index);
                         self.selected_word = None;
-                        self.drag = Some(Drag::Ribbon {
-                            anchor_start: self.notes[index].start,
+                        self.selected_ribbon = None;
+                        self.drag = Some(Drag::RibbonConnect {
+                            from_note: note,
+                            from_side: side,
                         });
-                        self.status =
-                            "Ribbon selection — release over the last note to connect the run."
-                                .into();
+                        self.status = "Drag to another note's dot to connect the two notes.".into();
                     }
                 } else if response.clicked_by(PointerButton::Primary) {
-                    if let Some(index) = self.hit_note(pos, layout) {
+                    if let Some(index) = self.hit_ribbon(pos, layout) {
+                        self.selected.clear();
                         self.selected_word = None;
-                        if !ui.input(|i| i.modifiers.shift) {
-                            self.selected.clear();
-                        }
-                        if !self.selected.insert(index) {
-                            self.selected.remove(&index);
-                        }
-                        self.preview_note(index, audio);
+                        self.selected_ribbon = Some(index);
+                        self.status = "Connector selected. Press Delete to remove it.".into();
+                    } else if let Some((note, _)) = self.ribbon_dot_at(pos, layout) {
+                        self.selected.clear();
+                        self.selected_word = None;
+                        self.selected_ribbon = None;
+                        self.selected.insert(note);
+                        self.preview_note(note, audio);
                     } else {
                         self.selected.clear();
                         self.selected_word = None;
+                        self.selected_ribbon = None;
                     }
                 }
             }
@@ -1064,36 +1104,44 @@ impl Editor {
                     self.status = "Word moved. Words are decorative and can float anywhere.".into();
                 }
             }
-            Some(Drag::Ribbon { anchor_start }) => {
-                if response.dragged_by(PointerButton::Primary) {
-                    let end = self.x_to_time(pos.x, layout);
-                    let (lo, hi) = if anchor_start <= end {
-                        (anchor_start, end)
-                    } else {
-                        (end, anchor_start)
-                    };
-                    self.selected.clear();
-                    for (i, note) in self.notes.iter().enumerate() {
-                        if note.start >= lo - 0.02 && note.start <= hi + 0.02 {
-                            self.selected.insert(i);
-                        }
-                    }
-                } else if response.drag_stopped_by(PointerButton::Primary) {
+            Some(Drag::RibbonConnect {
+                from_note,
+                from_side,
+            }) => {
+                if response.drag_stopped_by(PointerButton::Primary) {
                     self.drag = None;
-                    if self.selected.len() > 1 {
-                        self.push_history();
-                        let ribbon = self.next_ribbon_id;
-                        self.next_ribbon_id = self.next_ribbon_id.saturating_add(1);
-                        for index in self.selected.iter().copied() {
-                            if let Some(note) = self.notes.get_mut(index) {
-                                note.ribbon = Some(ribbon);
+                    let target = self.ribbon_dot_at(pos, layout);
+                    match target {
+                        Some((to_note, to_side)) if to_note != from_note => {
+                            if let Some(index) = self.ribbon_links.iter().position(|link| {
+                                (link.from == from_note && link.to == to_note)
+                                    || (link.from == to_note && link.to == from_note)
+                            }) {
+                                self.selected_ribbon = Some(index);
+                                self.status = "Those notes are already connected.".into();
+                            } else {
+                                self.push_history();
+                                self.ribbon_links.push(RibbonLink {
+                                    from: from_note,
+                                    to: to_note,
+                                    from_side,
+                                    to_side,
+                                });
+                                self.selected.clear();
+                                self.selected_word = None;
+                                self.selected_ribbon = Some(self.ribbon_links.len() - 1);
+                                self.dirty = true;
+                                self.status =
+                                    "Notes connected. Press Delete to remove the connector.".into();
                             }
                         }
-                        self.status =
-                            format!("{} notes connected into one ribbon.", self.selected.len());
-                        self.dirty = true;
-                    } else if self.selected.len() == 1 {
-                        self.status = "Select at least two notes to make a ribbon.".into();
+                        Some(_) => {
+                            self.status = "Choose a dot on a different note.".into();
+                        }
+                        None => {
+                            self.status =
+                                "Release on another note's dot to connect the two notes.".into();
+                        }
                     }
                 }
             }
@@ -1422,30 +1470,46 @@ impl Editor {
             }
         }
 
-        // Mapped notes, including the thin neck that makes a word one ribbon.
+        // Explicit note-to-note connectors.
         let h = (lane_h * 0.62).clamp(6.0, 22.0);
-        let mut previous: Option<(usize, f32, f32)> = None;
+        for (link_index, link) in self.ribbon_links.iter().enumerate() {
+            let Some((start, end)) = self.ribbon_line(link, layout) else {
+                continue;
+            };
+            if start.x.max(end.x) < area.left() - 4.0 || start.x.min(end.x) > area.right() + 4.0 {
+                continue;
+            }
+            let selected = self.selected_ribbon == Some(link_index);
+            if selected {
+                painter.line_segment(
+                    [start, end],
+                    Stroke::new((h * 0.58).max(5.0), alpha(MINT, 60)),
+                );
+            }
+            painter.line_segment(
+                [start, end],
+                Stroke::new(
+                    (h * 0.34).max(2.5),
+                    if selected {
+                        MINT
+                    } else {
+                        Color32::from_white_alpha(105)
+                    },
+                ),
+            );
+        }
+
+        // Mapped note bodies.
         for (i, note) in self.notes.iter().enumerate() {
             let x0 = self.time_to_x(note.start, layout);
             let x1 = self.time_to_x(note.start + note.dur, layout);
             if x1 < area.left() - 4.0 || x0 > area.right() + 4.0 {
-                previous = None;
                 continue;
             }
             let y = self.midi_to_y(note.midi, layout);
             let t = ((y - area.top()) / area.height().max(1.0)).clamp(0.0, 1.0);
             let c = pitch_color(t);
             let color = Color32::from_rgb(c[0], c[1], c[2]);
-            if let Some((prev_i, prev_x1, prev_y)) = previous {
-                if self.notes[prev_i].shares_ribbon(note)
-                    && note.start - (self.notes[prev_i].start + self.notes[prev_i].dur) <= 3.0
-                {
-                    painter.line_segment(
-                        [Pos2::new(prev_x1, prev_y), Pos2::new(x0, y)],
-                        Stroke::new((h * 0.34).max(2.0), alpha(color, 150)),
-                    );
-                }
-            }
             let r = Rect::from_min_max(
                 Pos2::new(x0.max(area.left()), y - h / 2.0),
                 Pos2::new(x1.max(x0 + 2.0).min(area.right()), y + h / 2.0),
@@ -1478,7 +1542,58 @@ impl Editor {
                     }
                 }
             }
-            previous = Some((i, x1, y));
+        }
+
+        // Ribbon-tool handles and a live preview while connecting two notes.
+        if self.tool == EditorTool::Ribbon {
+            let radius = self.ribbon_dot_radius(layout);
+            let drag_start = match self.drag {
+                Some(Drag::RibbonConnect {
+                    from_note,
+                    from_side,
+                }) => Some((from_note, from_side)),
+                _ => None,
+            };
+            let pointer = ui.input(|i| i.pointer.interact_pos());
+            let hovered = pointer.and_then(|pos| self.ribbon_dot_at(pos, layout));
+            if let Some((from_note, from_side)) = drag_start {
+                if let (Some(start), Some(pointer)) = (
+                    self.ribbon_dot_center(from_note, from_side, layout),
+                    pointer,
+                ) {
+                    let end = hovered
+                        .filter(|(note, _)| *note != from_note)
+                        .and_then(|(note, side)| self.ribbon_dot_center(note, side, layout))
+                        .unwrap_or(pointer);
+                    painter.line_segment(
+                        [start, end],
+                        Stroke::new((h * 0.34).max(2.5), alpha(MINT, 160)),
+                    );
+                }
+            }
+            for (index, _) in self.notes.iter().enumerate() {
+                for side in [RibbonSide::Left, RibbonSide::Right] {
+                    let Some(center) = self.ribbon_dot_center(index, side, layout) else {
+                        continue;
+                    };
+                    if center.x < area.left() - radius || center.x > area.right() + radius {
+                        continue;
+                    }
+                    let source = drag_start == Some((index, side));
+                    let target = hovered == Some((index, side))
+                        && drag_start.map(|(note, _)| note != index).unwrap_or(false);
+                    painter.circle_filled(
+                        center,
+                        radius,
+                        if source || target { GOLD } else { MINT },
+                    );
+                    painter.circle_stroke(
+                        center,
+                        radius,
+                        Stroke::new(1.5f32, Color32::from_rgb(5, 18, 13)),
+                    );
+                }
+            }
         }
 
         // Decorative words are not attached to notes. They are drawn on top of
@@ -2423,6 +2538,58 @@ impl Editor {
                 }
                 y += 40.0;
             }
+        } else if let Some(index) = self.selected_ribbon {
+            if let Some(link) = self.ribbon_links.get(index).copied() {
+                p.text(
+                    Pos2::new(x, y),
+                    Align2::LEFT_TOP,
+                    "CONNECTOR",
+                    FontId::monospace(7.0),
+                    MUTED2,
+                );
+                y += 16.0;
+                let from = self
+                    .notes
+                    .get(link.from)
+                    .map(|note| format!("{} at {}", note_name(note.midi), format_time(note.start)))
+                    .unwrap_or_else(|| format!("note {}", link.from + 1));
+                let to = self
+                    .notes
+                    .get(link.to)
+                    .map(|note| format!("{} at {}", note_name(note.midi), format_time(note.start)))
+                    .unwrap_or_else(|| format!("note {}", link.to + 1));
+                p.text(
+                    Pos2::new(x, y),
+                    Align2::LEFT_TOP,
+                    format!("{from}  ↔  {to}"),
+                    FontId::proportional(12.0),
+                    GOLD,
+                );
+                y += 26.0;
+                p.text(
+                    Pos2::new(x, y),
+                    Align2::LEFT_TOP,
+                    "Click the line to select it; Delete removes it.",
+                    FontId::proportional(10.0),
+                    MUTED2,
+                );
+                y += 24.0;
+                let delete =
+                    Rect::from_min_size(Pos2::new(x, y), Vec2::new(r.width() - 28.0, 30.0));
+                if button(ui, delete, "DELETE CONNECTOR", false, true) {
+                    self.delete_selected();
+                }
+                y += 42.0;
+            } else {
+                p.text(
+                    Pos2::new(x, y),
+                    Align2::LEFT_TOP,
+                    "Select a note, connector, or word.",
+                    FontId::proportional(11.0),
+                    MUTED,
+                );
+                y += 34.0;
+            }
         } else if !self.selected.is_empty() {
             let count = self.selected.len();
             p.text(
@@ -2456,16 +2623,22 @@ impl Editor {
                         MUTED,
                     );
                     y += 18.0;
-                    let ribbon = note
-                        .ribbon
-                        .map(|id| format!("ribbon {id}"))
-                        .unwrap_or_else(|| "no ribbon".into());
+                    let connectors = self
+                        .ribbon_links
+                        .iter()
+                        .filter(|link| link.from == index || link.to == index)
+                        .count();
+                    let label = match connectors {
+                        0 => "no connectors".to_string(),
+                        1 => "1 connector".to_string(),
+                        count => format!("{count} connectors"),
+                    };
                     p.text(
                         Pos2::new(x, y),
                         Align2::LEFT_TOP,
-                        ribbon,
+                        label,
                         FontId::proportional(13.0),
-                        if note.ribbon.is_some() { MINT } else { MUTED2 },
+                        if connectors > 0 { MINT } else { MUTED2 },
                     );
                     y += 24.0;
                 }
@@ -2491,13 +2664,12 @@ impl Editor {
             }
             y += 38.0;
             let detach = Rect::from_min_size(Pos2::new(x, y), Vec2::new(r.width() - 28.0, 28.0));
-            let has_ribbon = self.selected.iter().any(|index| {
-                self.notes
-                    .get(*index)
-                    .and_then(|note| note.ribbon)
-                    .is_some()
+            let has_connectors = self.selected.iter().any(|index| {
+                self.ribbon_links
+                    .iter()
+                    .any(|link| link.from == *index || link.to == *index)
             });
-            if button(ui, detach, "DETACH RIBBON", false, has_ribbon) && has_ribbon {
+            if button(ui, detach, "DETACH CONNECTORS", false, has_connectors) && has_connectors {
                 self.detach_selected_ribbons();
             }
             y += 36.0;
@@ -2510,7 +2682,7 @@ impl Editor {
             p.text(
                 Pos2::new(x, y),
                 Align2::LEFT_TOP,
-                "Select a note, ribbon, or word.",
+                "Select a note, connector, or word.",
                 FontId::proportional(11.0),
                 MUTED,
             );
@@ -2609,11 +2781,7 @@ impl Editor {
     }
 
     fn ribbon_count(&self) -> usize {
-        self.notes
-            .iter()
-            .filter_map(|note| note.ribbon)
-            .collect::<BTreeSet<_>>()
-            .len()
+        self.ribbon_links.len()
     }
 
     fn word_progress(&self) -> f32 {
@@ -2748,6 +2916,66 @@ impl Editor {
         best.map(|(_, index, left)| (index, left))
     }
 
+    fn ribbon_dot_radius(&self, layout: &Layout) -> f32 {
+        let lane_h = layout.note_area.height() / (self.high - self.low + 1) as f32;
+        (lane_h * 0.62).clamp(6.0, 22.0) * 0.6
+    }
+
+    fn ribbon_dot_center(&self, index: usize, side: RibbonSide, layout: &Layout) -> Option<Pos2> {
+        let note = self.notes.get(index)?;
+        let time = match side {
+            RibbonSide::Left => note.start,
+            RibbonSide::Right => note.start + note.dur,
+        };
+        Some(Pos2::new(
+            self.time_to_x(time, layout),
+            self.midi_to_y(note.midi, layout),
+        ))
+    }
+
+    fn ribbon_dot_at(&self, pos: Pos2, layout: &Layout) -> Option<(usize, RibbonSide)> {
+        let radius = self.ribbon_dot_radius(layout);
+        if !layout.note_area.expand(radius).contains(pos) {
+            return None;
+        }
+        let mut best: Option<(f32, usize, RibbonSide)> = None;
+        for (index, _) in self.notes.iter().enumerate().rev() {
+            for side in [RibbonSide::Left, RibbonSide::Right] {
+                let Some(center) = self.ribbon_dot_center(index, side, layout) else {
+                    continue;
+                };
+                let distance = pos.distance(center);
+                if distance <= radius + 2.0
+                    && best
+                        .map(|(best_distance, _, _)| distance < best_distance)
+                        .unwrap_or(true)
+                {
+                    best = Some((distance, index, side));
+                }
+            }
+        }
+        best.map(|(_, index, side)| (index, side))
+    }
+
+    fn ribbon_line(&self, link: &RibbonLink, layout: &Layout) -> Option<(Pos2, Pos2)> {
+        let start = self.ribbon_dot_center(link.from, link.from_side, layout)?;
+        let end = self.ribbon_dot_center(link.to, link.to_side, layout)?;
+        Some((start, end))
+    }
+
+    fn hit_ribbon(&self, pos: Pos2, layout: &Layout) -> Option<usize> {
+        let tolerance = (self.ribbon_dot_radius(layout) * 0.9).max(6.0);
+        for (index, link) in self.ribbon_links.iter().enumerate().rev() {
+            let Some((start, end)) = self.ribbon_line(link, layout) else {
+                continue;
+            };
+            if distance_to_segment(pos, start, end) <= tolerance {
+                return Some(index);
+            }
+        }
+        None
+    }
+
     fn hit_note(&self, pos: Pos2, layout: &Layout) -> Option<usize> {
         if !layout.note_area.contains(pos) {
             return None;
@@ -2769,14 +2997,24 @@ impl Editor {
         if let Some(index) = self.hit_word(pos, layout) {
             self.words.remove(index);
             self.selected_word = None;
+            self.selected_ribbon = None;
             self.refresh_word_bank();
             self.dirty = true;
             self.status = "Word decoration erased and returned to the bank.".into();
             return;
         }
         if let Some(index) = self.hit_note(pos, layout) {
+            let mut remap = vec![None; self.notes.len()];
             self.notes.remove(index);
+            for (old, slot) in remap.iter_mut().enumerate() {
+                if old == index {
+                    continue;
+                }
+                *slot = Some(if old < index { old } else { old - 1 });
+            }
+            self.remap_ribbon_links(&remap);
             self.selected.clear();
+            self.selected_ribbon = None;
             self.refresh_word_bank();
             self.dirty = true;
             self.status = "Note erased.".into();
@@ -2823,6 +3061,7 @@ impl Editor {
             notes: self.notes.clone(),
             words: self.words.clone(),
             custom_words: self.custom_words.clone(),
+            ribbon_links: self.ribbon_links.clone(),
         }
     }
 
@@ -2830,8 +3069,10 @@ impl Editor {
         self.notes = snapshot.notes;
         self.words = snapshot.words;
         self.custom_words = snapshot.custom_words;
+        self.ribbon_links = snapshot.ribbon_links;
         self.selected.clear();
         self.selected_word = None;
+        self.selected_ribbon = None;
         self.rebuild_word_bank();
         self.refresh_word_bank();
     }
@@ -2864,6 +3105,15 @@ impl Editor {
     }
 
     fn delete_selected(&mut self) {
+        if let Some(index) = self.selected_ribbon.take() {
+            if index < self.ribbon_links.len() {
+                self.push_history();
+                self.ribbon_links.remove(index);
+                self.dirty = true;
+                self.status = "Connector deleted.".into();
+            }
+            return;
+        }
         if let Some(index) = self.selected_word {
             self.push_history();
             if index < self.words.len() {
@@ -2880,13 +3130,17 @@ impl Editor {
         }
         self.push_history();
         let targets = self.selected.clone();
-        self.notes = self
-            .notes
-            .iter()
-            .enumerate()
-            .filter(|(i, _)| !targets.contains(i))
-            .map(|(_, note)| note.clone())
-            .collect();
+        let mut remap = vec![None; self.notes.len()];
+        let mut notes = Vec::with_capacity(self.notes.len());
+        for (old_index, note) in self.notes.iter().enumerate() {
+            if targets.contains(&old_index) {
+                continue;
+            }
+            remap[old_index] = Some(notes.len());
+            notes.push(note.clone());
+        }
+        self.notes = notes;
+        self.remap_ribbon_links(&remap);
         self.selected.clear();
         self.refresh_word_bank();
         self.dirty = true;
@@ -2912,13 +3166,12 @@ impl Editor {
             return;
         }
         self.push_history();
-        for index in self.selected.iter().copied() {
-            if let Some(note) = self.notes.get_mut(index) {
-                note.ribbon = None;
-            }
-        }
+        let selected = self.selected.clone();
+        self.ribbon_links
+            .retain(|link| !selected.contains(&link.from) && !selected.contains(&link.to));
+        self.selected_ribbon = None;
         self.dirty = true;
-        self.status = "Selected notes detached from their ribbon.".into();
+        self.status = "Selected notes detached from their connectors.".into();
     }
 
     fn place_word(
@@ -2932,6 +3185,7 @@ impl Editor {
             return;
         };
         self.push_history();
+        self.selected_ribbon = None;
         let (start, y) = if let Some(index) = self.hit_note(pos, layout) {
             let note = &self.notes[index];
             let y = ((self.midi_to_y(note.midi, layout) - layout.note_area.top())
@@ -3008,21 +3262,50 @@ impl Editor {
     }
 
     fn sort_notes(&mut self) {
-        let selected_keys: Vec<(u64, i32)> = self
+        let mut order: Vec<usize> = (0..self.notes.len()).collect();
+        order.sort_by(|&a, &b| note_order(&self.notes[a], &self.notes[b]));
+        let mut remap = vec![None; self.notes.len()];
+        for (new_index, &old_index) in order.iter().enumerate() {
+            remap[old_index] = Some(new_index);
+        }
+        let old_notes = std::mem::take(&mut self.notes);
+        self.notes = order
+            .iter()
+            .map(|&index| old_notes[index].clone())
+            .collect();
+        self.selected = self
             .selected
             .iter()
-            .filter_map(|i| self.notes.get(*i))
-            .map(|note| (note.start.to_bits(), note.midi))
+            .filter_map(|&index| remap.get(index).copied().flatten())
             .collect();
-        self.notes.sort_by(note_order);
-        self.selected.clear();
-        for (i, note) in self.notes.iter().enumerate() {
-            if selected_keys.contains(&(note.start.to_bits(), note.midi)) {
-                self.selected.insert(i);
-            }
-        }
+        self.remap_ribbon_links(&remap);
+        self.selected_ribbon = None;
         self.refresh_word_bank();
     }
+
+    fn remap_ribbon_links(&mut self, remap: &[Option<usize>]) {
+        self.ribbon_links.retain_mut(|link| {
+            let (Some(from), Some(to)) = (
+                remap.get(link.from).copied().flatten(),
+                remap.get(link.to).copied().flatten(),
+            ) else {
+                return false;
+            };
+            link.from = from;
+            link.to = to;
+            from != to
+        });
+    }
+}
+
+fn distance_to_segment(point: Pos2, start: Pos2, end: Pos2) -> f32 {
+    let segment = end - start;
+    let length_sq = segment.length_sq();
+    if length_sq <= f32::EPSILON {
+        return point.distance(start);
+    }
+    let t = ((point - start).dot(segment) / length_sq).clamp(0.0, 1.0);
+    point.distance(start + segment * t)
 }
 
 fn note_order(a: &Note, b: &Note) -> std::cmp::Ordering {
@@ -3041,6 +3324,31 @@ fn word_y_for_midi(song: &Song, midi: i32) -> f32 {
     let low = if song.high > song.low { song.low } else { 48 };
     let high = if song.high > song.low { song.high } else { 84 };
     (1.0 - (midi - low) as f32 / (high - low).max(1) as f32).clamp(0.04, 0.96)
+}
+
+fn links_from_legacy_notes(notes: &[Note]) -> Vec<RibbonLink> {
+    let mut order: Vec<usize> = (0..notes.len()).collect();
+    order.sort_by(|&a, &b| note_order(&notes[a], &notes[b]));
+    let mut links = Vec::new();
+    for pair in order.windows(2) {
+        let (from, to) = (pair[0], pair[1]);
+        let (anchor, next) = (&notes[from], &notes[to]);
+        let gap = next.start - (anchor.start + anchor.dur);
+        let limit = if anchor.ribbon.is_some() || next.ribbon.is_some() {
+            3.0
+        } else {
+            0.85
+        };
+        if gap <= limit && anchor.shares_ribbon(next) {
+            links.push(RibbonLink {
+                from,
+                to,
+                from_side: RibbonSide::Right,
+                to_side: RibbonSide::Left,
+            });
+        }
+    }
+    links
 }
 
 fn migrate_legacy_notes(
@@ -3618,6 +3926,102 @@ mod tests {
         editor.update_new_note(0, 2.0, 2.0);
         assert!((editor.notes[0].start - 2.0).abs() < 1e-9);
         assert!((editor.notes[0].dur - MIN_NOTE_DURATION).abs() < 1e-9);
+    }
+
+    #[test]
+    fn legacy_ribbon_groups_become_explicit_links() {
+        let song: Song = serde_json::from_value(serde_json::json!({
+            "id": "legacy",
+            "title": "Legacy",
+            "mapped": true,
+            "low": 48,
+            "high": 72,
+            "audio": {"backing": "backing.mp3"},
+            "notes": [
+                {"start": 1.0, "dur": 0.5, "midi": 60, "ribbon": 4},
+                {"start": 1.6, "dur": 0.5, "midi": 62, "ribbon": 4}
+            ]
+        }))
+        .expect("legacy song");
+        let initial = song.notes.clone();
+        let editor = Editor::new(song, Vec::new(), initial, 20.0);
+        assert_eq!(editor.ribbon_links.len(), 1);
+        assert_eq!(editor.ribbon_links[0].from, 0);
+        assert_eq!(editor.ribbon_links[0].to, 1);
+        assert!(editor.notes.iter().all(|note| note.ribbon.is_none()));
+    }
+
+    #[test]
+    fn independent_connectors_do_not_replace_one_another() {
+        let mut editor = editor();
+        editor.notes.push(note(1.0));
+        editor.notes.push(note(2.0));
+        editor.notes.push(note(3.0));
+        editor.ribbon_links.push(RibbonLink {
+            from: 0,
+            to: 1,
+            from_side: RibbonSide::Right,
+            to_side: RibbonSide::Left,
+        });
+        editor.ribbon_links.push(RibbonLink {
+            from: 1,
+            to: 2,
+            from_side: RibbonSide::Right,
+            to_side: RibbonSide::Left,
+        });
+        assert_eq!(editor.ribbon_links.len(), 2);
+    }
+
+    #[test]
+    fn connectors_follow_notes_when_they_are_sorted() {
+        let mut editor = editor();
+        editor.notes.push(note(3.0));
+        editor.notes.push(note(1.0));
+        editor.ribbon_links.push(RibbonLink {
+            from: 0,
+            to: 1,
+            from_side: RibbonSide::Right,
+            to_side: RibbonSide::Left,
+        });
+        editor.sort_notes();
+        assert_eq!(editor.ribbon_links.len(), 1);
+        assert_eq!(editor.ribbon_links[0].from, 1);
+        assert_eq!(editor.ribbon_links[0].to, 0);
+    }
+
+    #[test]
+    fn deleting_a_selected_connector_leaves_the_notes_alone() {
+        let mut editor = editor();
+        editor.notes.push(note(1.0));
+        editor.notes.push(note(2.0));
+        editor.ribbon_links.push(RibbonLink {
+            from: 0,
+            to: 1,
+            from_side: RibbonSide::Right,
+            to_side: RibbonSide::Left,
+        });
+        editor.selected_ribbon = Some(0);
+        editor.delete_selected();
+        assert_eq!(editor.notes.len(), 2);
+        assert!(editor.ribbon_links.is_empty());
+        assert!(editor.selected_ribbon.is_none());
+    }
+
+    #[test]
+    fn deleting_a_note_drops_its_connectors() {
+        let mut editor = editor();
+        editor.notes.push(note(1.0));
+        editor.notes.push(note(2.0));
+        editor.ribbon_links.push(RibbonLink {
+            from: 0,
+            to: 1,
+            from_side: RibbonSide::Right,
+            to_side: RibbonSide::Left,
+        });
+        editor.selected.insert(0);
+        editor.delete_selected();
+        assert_eq!(editor.notes.len(), 1);
+        assert!(editor.ribbon_links.is_empty());
     }
 
     #[test]

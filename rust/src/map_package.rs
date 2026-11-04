@@ -1,4 +1,4 @@
-use crate::model::{CustomWord, LyricLine, Note, PlacedWord, Song};
+use crate::model::{CustomWord, LyricLine, Note, PlacedWord, RibbonLink, Song};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
@@ -73,6 +73,8 @@ pub struct MapPackage {
     pub tags: Vec<String>,
     #[serde(default)]
     pub notes: Vec<Note>,
+    #[serde(rename = "ribbonLinks", default)]
+    pub ribbon_links: Vec<RibbonLink>,
     #[serde(default)]
     pub lines: Vec<LyricLine>,
     #[serde(rename = "placedWords", default)]
@@ -134,6 +136,7 @@ impl MapPackage {
             high: song.high,
             tags,
             notes: song.notes.clone(),
+            ribbon_links: song.ribbon_links.clone(),
             lines: song.lines.clone(),
             placed_words: song.placed_words.clone(),
             custom_words: song.custom_words.clone(),
@@ -149,22 +152,45 @@ impl MapPackage {
         if self.notes.is_empty() {
             return Err("This map has no notes.".into());
         }
-        let mut notes = self.notes.clone();
-        notes.sort_by(|a, b| {
+        let mut indexed: Vec<(usize, Note)> = self.notes.iter().cloned().enumerate().collect();
+        indexed.sort_by(|(_, a), (_, b)| {
             a.start
                 .partial_cmp(&b.start)
                 .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.midi.cmp(&b.midi))
         });
-        for note in &mut notes {
+        let mut remap = vec![None; indexed.len()];
+        let mut notes = Vec::with_capacity(indexed.len());
+        for (new_index, (old_index, mut note)) in indexed.into_iter().enumerate() {
+            remap[old_index] = Some(new_index);
             note.word = None;
             note.word_index = None;
             note.line = None;
+            notes.push(note);
+        }
+        let mut ribbon_links = self.ribbon_links.clone();
+        ribbon_links.retain_mut(|link| {
+            let (Some(from), Some(to)) = (
+                remap.get(link.from).copied().flatten(),
+                remap.get(link.to).copied().flatten(),
+            ) else {
+                return false;
+            };
+            link.from = from;
+            link.to = to;
+            from != to
+        });
+        if !ribbon_links.is_empty() {
+            for note in &mut notes {
+                note.ribbon = None;
+            }
         }
         song.title = self.title.clone();
         song.artist = self.artist.clone();
         song.album = self.album.clone();
         song.release_date = self.release_date.clone();
         song.notes = notes;
+        song.ribbon_links = ribbon_links;
         song.lines = self.lines.clone();
         song.placed_words = self.placed_words.clone();
         song.custom_words = self.custom_words.clone();
@@ -361,6 +387,39 @@ mod tests {
         let mut song = song();
         song.mapped = false;
         assert!(MapPackage::from_song(Path::new("."), &song, None).is_err());
+    }
+
+    #[test]
+    fn map_package_carries_independent_ribbon_links() {
+        let mut song = song();
+        song.notes.push(
+            serde_json::from_value(json!({
+                "start": 2.0,
+                "dur": 0.5,
+                "midi": 64
+            }))
+            .expect("second note"),
+        );
+        song.ribbon_links = vec![RibbonLink {
+            from: 0,
+            to: 1,
+            from_side: crate::model::RibbonSide::Right,
+            to_side: crate::model::RibbonSide::Left,
+        }];
+        let package = MapPackage::from_song(Path::new("."), &song, None).expect("export map");
+        assert_eq!(package.ribbon_links.len(), 1);
+        let value = serde_json::to_value(&package).expect("serialize map");
+        assert!(value.get("ribbonLinks").is_some());
+
+        let mut target = song;
+        target.mapped = false;
+        target.notes.clear();
+        target.ribbon_links.clear();
+        package.apply_to_song(&mut target).expect("apply map");
+        assert_eq!(target.notes.len(), 2);
+        assert_eq!(target.ribbon_links.len(), 1);
+        assert_eq!(target.ribbon_links[0].from, 0);
+        assert_eq!(target.ribbon_links[0].to, 1);
     }
 
     #[test]

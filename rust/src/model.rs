@@ -45,6 +45,33 @@ pub fn format_time(seconds: f64) -> String {
     format!("{m}:{s:02}")
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum RibbonSide {
+    Left,
+    Right,
+}
+
+/// A single connector between two notes. Links are independent edges, so
+/// A–B and B–C can both exist without replacing one another.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct RibbonLink {
+    pub from: usize,
+    pub to: usize,
+    #[serde(rename = "fromSide", default = "default_from_side")]
+    pub from_side: RibbonSide,
+    #[serde(rename = "toSide", default = "default_to_side")]
+    pub to_side: RibbonSide,
+}
+
+fn default_from_side() -> RibbonSide {
+    RibbonSide::Right
+}
+
+fn default_to_side() -> RibbonSide {
+    RibbonSide::Left
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Note {
     pub start: f64,
@@ -195,6 +222,10 @@ pub struct Song {
     /// Work in progress for an unmapped song.
     #[serde(rename = "draftNotes", default, skip_serializing_if = "Vec::is_empty")]
     pub draft_notes: Vec<Note>,
+    /// Explicit note-to-note ribbon connectors. Older charts use `Note.ribbon`
+    /// groups; those are migrated when the editor opens the song.
+    #[serde(rename = "ribbonLinks", default, skip_serializing_if = "Vec::is_empty")]
+    pub ribbon_links: Vec<RibbonLink>,
     /// Decorative lyric labels, positioned independently of the notes.
     #[serde(rename = "placedWords", default, skip_serializing_if = "Vec::is_empty")]
     pub placed_words: Vec<PlacedWord>,
